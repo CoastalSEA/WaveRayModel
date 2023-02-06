@@ -30,7 +30,7 @@ classdef WRM_RunParams < muiPropertyUI
     properties
         %Minimum of one direction, one period and one water level
         %required for model to run  
-        PeriodRange = [2 20]        %Range of Wave Periods (s)
+        PeriodRange = [4 18]        %Range of Wave Periods (s)
         nPeriod = 8                 %Number of Wave Periods
         WaterLevelRange = [-1 1]    %Range of Water Levels (mOD)
         nWaterLevel = 3             %Number of Waver Levels

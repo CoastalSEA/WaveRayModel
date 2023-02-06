@@ -17,7 +17,8 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
 %     
     properties
-        Tracks     %array of Ray objects for Nr rays, Nt periods and Nz water levels  
+        Tracks     %array of Ray objects for Nr rays, Nt periods and Nz water levels
+        tol = 0.1  %tolerance to test for angles that are multiples of pi/2 (5.7 deg)
     end
     
     methods (Access = private)
@@ -41,8 +42,7 @@ classdef RayTracks < muiDataSet
                 warndlg('Use Setup to define model input parameters');
                 return;
             end
-            muicat = mobj.Cases;
-                    
+            muicat = mobj.Cases;                    
 %--------------------------------------------------------------------------
 % Model code 
 %--------------------------------------------------------------------------
@@ -69,12 +69,12 @@ classdef RayTracks < muiDataSet
             wavegrid = struct('X',X,'Y',Y,'z',grid.z);
 
             %arrays of waver periods and water levels, 
-            %periods at log spaced intervals, 
+            %frequency at log spaced intervals, 
             T = runobj.PeriodRange;
             if length(T)>1
-                Trng = num2cell(runobj.PeriodRange);
-                T = log10(logspace(Trng{:},runobj.nPeriod))';
-                T = round(T,1); %round to one decimal place
+                frng = num2cell(1./runobj.PeriodRange); %
+                f = log10(logspace(frng{:},runobj.nPeriod))';
+                T = round(1./f,1); %round to one decimal place
             end
             %water levels at linear intervals
             zwl = runobj.WaterLevelRange;
@@ -89,44 +89,6 @@ classdef RayTracks < muiDataSet
             %get the celerity, group celerity and celeirty gradient grids
             wavegrid = celerity_grid(wavegrid,T,zwl,delta);
             
-            % hf = figure('Name','Search','Tag','PlotFig','Visible','off');
-            % ax = axes(hf);
-            % set(ax,'xgrid','on')
-            % set(ax,'ygrid','on')
-
-%             %start of Forward tracking loop
-% 
-%             %line vector of equal spaced start points
-%             [x_start,y_start] = RayTracks.getStartPoints(runobj.leftXY,...
-%                                               runobj.rightXY, runobj.nRay);
-% 
-%             %transform wave direction to grid (trigonometric) direction
-%             [~,alpha] = compass2trig(runobj.dir0TN);
-% 
-%             nr = runobj.nRay;
-%             np = length(T);
-%             nq = length(zwl);
-%             hlimit = 0.1;            
-%             rays{nr,np,nq} = Ray;
-%             parfor i=1:nr               %ray number
-%                 for j=1:np              %wave period
-%                     for k=1:nq          %water level
-%                         agrid = subSampleGrid(obj,wavegrid,j,k);
-%                         xys = [x_start(i),y_start(i)];
-%                         rayobj = Ray.setRay(agrid,xys,alpha,hlimit);
-%                         if isempty(rayobj)
-%                             rays{i,j,k}.Track.DataTable = emptytable;
-%                             continue; 
-%                         end
-%                         % hold on
-%                         % xr = rayobj.Track.xr;
-%                         % yr = rayobj.Track.yr;
-%                         % plot(ax,xr,yr,'-k')
-%                         % hold off
-%                         rays{i,j,k} = rayobj;
-%                     end
-%                 end
-%             end
             switch src.Text
                 case 'Forward Rays'
                     [rays,rownames] = forwardTrack(obj,wavegrid,T,zwl,hlimit);
@@ -150,7 +112,7 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------                        
             %assign metadata about model
             dst.Source = metaclass(obj).Name;
-            dst.MetaData = 'Any additional information to be saved';
+            dst.MetaData = modeltype;
             setDataSetRecord(obj,muicat,dst,modeltype);
             getdialog('Run complete');
         end
@@ -206,11 +168,16 @@ classdef RayTracks < muiDataSet
 
             %add the start arrows
             [~,~,delta] = getGridDimensions(gobj.RunParam.GD_GridProps);
-            plotArrow(obj,ax,delta);
+            if strcmp(obj.Data.Dataset.MetaData,'forward_model')
+                plotArrow(obj,ax,delta);
+            else
+                plotStartPoint(obj,ax)
+            end
             %add the rays
             [~,np,nq] = size(obj.Data.Dataset.xr);
             if np>1 || nq>1
                 [idp,idq] = get_selection(obj);
+                if isempty(idp), return; end    %user cancelled selection
             else
                 idp = 1; idq = 1;
             end
@@ -218,7 +185,9 @@ classdef RayTracks < muiDataSet
             %update title
             title(obj.Data.Dataset.Description);
         end
-%%
+    end 
+%%    
+    methods (Access = private)        
         function agrid = subSampleGrid(~,wavegrid,j,k)
             %select grids for give wave period (j) and water level (k)
             agrid.X = wavegrid.X;
@@ -229,9 +198,7 @@ classdef RayTracks < muiDataSet
             agrid.dcx = wavegrid.dcx(:,:,j,k);
             agrid.dcy = wavegrid.dcy(:,:,j,k);
         end
-    end 
-%%    
-    methods (Access = private)
+%%
         function [rays,rownames] = forwardTrack(obj,wavegrid,T,zwl,hlimit)
             %construct set of ray tracks for given wave direction and a set
             %of start points using forward wave ray tracing
@@ -244,10 +211,10 @@ classdef RayTracks < muiDataSet
             %transform wave direction to grid (trigonometric) direction
             [~,alpha] = compass2trig(ftrobj.dir0TN);
 
-            % hf = figure('Name','Search','Tag','PlotFig','Visible','off');
-            % ax = axes(hf);
-            % set(ax,'xgrid','on')
-            % set(ax,'ygrid','on')
+%             hf = figure('Name','Search','Tag','PlotFig');
+%             ax = axes(hf);
+%             set(ax,'xgrid','on')
+%             set(ax,'ygrid','on')
 
             nr = ftrobj.nRay;
             np = length(T);
@@ -259,16 +226,16 @@ classdef RayTracks < muiDataSet
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,wavegrid,j,k);
                         xys = [x_start(i),y_start(i)];
-                        rayobj = Ray.setRay(agrid,xys,alpha,hlimit);
+                        rayobj = Ray.setRay(agrid,xys,alpha,hlimit,obj.tol);
                         if isempty(rayobj)
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
                         end
-                        % hold on
-                        % xr = rayobj.Track.xr;
-                        % yr = rayobj.Track.yr;
-                        % plot(ax,xr,yr,'-k')
-                        % hold off
+%                         hold on
+%                         xr = rayobj.Track.xr;
+%                         yr = rayobj.Track.yr;
+%                         plot(ax,xr,yr,'-k')
+%                         hold off
                         rays{i,j,k} = rayobj;
                     end
                 end
@@ -293,7 +260,7 @@ classdef RayTracks < muiDataSet
                 dirng = num2cell(btrobj.DirectionRange);
                 phi = linspace(dirng{:},btrobj.nDirections)';  
             end  
-            rownames = round(phi,1);
+            rownames = round(phi',1);
 
             %transform wave direction to grid (trigonometric) direction
             alpha = mod(compass2trig(phi),2*pi);
@@ -306,16 +273,11 @@ classdef RayTracks < muiDataSet
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,wavegrid,j,k);
-                        rayobj = Ray.setRay(agrid,xys,alpha(i),hlimit);
+                        rayobj = Ray.setRay(agrid,xys,alpha(i),hlimit,obj.tol);
                         if isempty(rayobj)
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
                         end
-                        % hold on
-                        % xr = rayobj.Track.xr;
-                        % yr = rayobj.Track.yr;
-                        % plot(ax,xr,yr,'-k')
-                        % hold off
                         rays{i,j,k} = rayobj;
                     end
                 end
@@ -339,6 +301,16 @@ classdef RayTracks < muiDataSet
             hq.MaxHeadSize = 2.0;
             hq.LineWidth = 1.0;
             hold(ax,"off")
+        end
+%%
+        function plotStartPoint(obj,ax)
+            %plot point at start of backwardt tracking rays
+            xs = obj.Data.Dataset.xr{1,1,1}(1);
+            ys = obj.Data.Dataset.yr{1,1,1}(1);
+            hold(ax,"on")
+            plot(ax,xs,ys,'or')
+            plot(ax,xs,ys,'.g')
+            hold(ax,'off')
         end
 %%
         function plotRay(obj,ax,idp,idq)
@@ -373,7 +345,7 @@ classdef RayTracks < muiDataSet
             selection = inputgui('FigureTitle','Celerity',...
                                  'InputFields',{'Wave Period','Water level'},...
                                  'Style',{'popupmenu','popupmenu'},...
-                                 'ActionButtons', {'Select','Close'},...
+                                 'ActionButtons', {'Select','Cancel'},...
                                  'DefaultInputs',{string(T),string(zwl)},...
                                  'PromptText','Select values to use');
             if isempty(selection)

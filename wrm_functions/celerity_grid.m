@@ -26,7 +26,7 @@ function grid = celerity_grid(grid,T,zwl,delta)
 %      function can be called using an array, or vector of depths (ie h[m,1]),
 %      to get the wave celerity and group celerity
 % SEE ALSO
-%   celerity.m, refraction.m
+%   uses celerity.m, cf refraction.m
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023

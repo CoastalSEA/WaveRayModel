@@ -1,4 +1,4 @@
-function newray = arc_ray(grid,ray)
+function newray = arc_ray(grid,ray,tol)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -16,6 +16,7 @@ function newray = arc_ray(grid,ray)
 %          dcx, dcy - gradients of celerity in x and y directions
 %   ray - table of incoming ray position (xr,yr), direction, alpha, local
 %         node index, k, quadrant being entered, quad, side of element, edge
+%   tol - tolerance to test for angles that are multiples of pi/2 (5.7 deg)
 % OUTPUTS
 %   newray - table of outgoing ray position (xr,yr), direction, alpha, local
 %            node index, k, quadrant being entered, quad, side of element, edge
@@ -30,8 +31,10 @@ function newray = arc_ray(grid,ray)
 %   relative to the grid is defined in grid coordinates as xr,yr and in
 %   indices as the nearest node, k (or i,j), the quadrant, q, and the edge
 %   of the triangle, e. Where q is the trigonometric quadrant 1-4 of the 
-%   ray point, and e has a value of 1-3: e=1 if yr=yi; e-=2 if xr=zi; 
+%   ray point, and e has a value of 1-3: e=1 if yr=yi; e=2 if xr=zi; 
 %   else e=3.
+% SEE ALSO
+%   get_edge, get_quadrant, get_element and next_element 
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023
@@ -43,6 +46,7 @@ function newray = arc_ray(grid,ray)
     %variables used in function
     % alpha - angle of ray direction
     % phi - angle of normal to ray direction
+    % theta - angle from origin to ray position
     % k - index of reference grid node
     % xi,yi - position of reference grid node for local coordinates
     % xr,yr - ray position in grid coordinates
@@ -54,21 +58,25 @@ function newray = arc_ray(grid,ray)
     [row,col] = ind2sub(size(X),ray.k);
     xi = X(row,col); yi = Y(row,col);       %coordinates of start point
 
+    %get vector to start point in local grid coordinates
+    ur = (ray.xr-xi)/delta;
+    vr = (ray.yr-yi)/delta;
+
     %find which element the ray is entering
-    [uvi,quad] = next_element(ray.quad,ray.edge);
+    [uvi,quad] = next_element(ray,[ur,vr],tol);
     %transform local coordinates if start point is on edge 3 (hypotenuse)
-    if ray.edge==3
-        xi = xi+uvi(1)*delta;  %translate origin to new local origin
+    if ray.edge==3 || quad>4
+        xi = xi+uvi(1)*delta;       %translate origin to new local origin
         yi = yi+uvi(2)*delta;
+        isoutbound = checkGridBoundary(grid,[xi,yi]);
+        if isoutbound, newray = []; return; end
         k = sub2ind(size(X),row+uvi(2),col+uvi(1));
+        ur = (ray.xr-xi)/delta;     %update ray position to new origin
+        vr = (ray.yr-yi)/delta;
     else
         k = ray.k;
     end
 
-    %get vector to start point in local grid coordinates
-    ur = (ray.xr-xi)/delta;
-    vr = (ray.yr-yi)/delta;
-%     Tri = get_quadrant(quad);
     Tri = get_element(quad);
     if isempty(Tri)
         error('Ray quadrant not found, or has changed, in arc_ray')
@@ -86,14 +94,6 @@ function newray = arc_ray(grid,ray)
 
     %find intersection point of line with triangle
     [inside,outside] = intersect(Tri,xyArc); 
-    if isempty(inside)
-        [theta,~] = cart2pol(ur,vr);            %vector to start point
-        theta = mod(theta,2*pi);
-        tol = pi/1000;
-        [Tri,quad] = get_quadrant(mod(theta,2*pi));
-        [inside,outside] = intersect(Tri,xyArc); 
-    end
-
     %inside line segment coordinates returned as a two-column matrix (x,y).
     %find the common point in both vectors
     tol = 1/delta;                          %tolerance equivalent to 1m
@@ -128,8 +128,8 @@ function newray = arc_ray(grid,ray)
 
     %exit angle and edge 
     alpha =  exit_angle(phi,r,ur,vr,uvray);
-    tol = 1/1000/delta;                     %tolerance equivalent to 1mm
-    edge = get_edge(inside,idx,tol);
+    distol = 1/1000/delta;                  %tolerance equivalent to 1mm
+    edge = get_edge(inside,idx,distol);
 
     %transform new ray position from local to grid coordinates
     xr = xi+uvray(1)*delta; 
@@ -144,9 +144,9 @@ function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr)
     N = 101;                                   %number of points in Arc
     if abs(radius)>1000
         %straight line segment will suffice        
-        [ue,ve] = pol2cart(phi-pi/2,sqrt(2));  %vector from start in direction of alpha
+        [ue,ve] = pol2cart(phi-pi/2,sqrt(2));  %vector from ray point in direction of alpha
                                                %sqrt(2) ensures it crosses a boundary
-        xy_arc = [ur,vr;ur+ue,vr+ve];          %ray vector line segment
+        xy_arc = [ur-ue,vr-ve;ur,vr;ur+ue,vr+ve];  %ray vector line segment
         return;
     end
 %     arcang = 2*asin(1/radius);
@@ -191,23 +191,28 @@ function [phi,r,uc,vc] = arc_properties(grid,ur,vr,ray)
     dcry = interp2(X,Y,dcy',ray.xr,ray.yr,'linear',0);
 
     %unit normal to ray (convention is left in direction of ray is positive)
-    phi = ray.alpha+pi/2;              %angle of normal to ray direction
-    offset = 0.001;                    %offset in radians (~0.06 deg)    
-    if any(isclose(ray.alpha,[0,pi,2*pi],offset))        
-        phi = phi+sign(dcry)*offset;
-    end
+%     phi = ray.alpha+pi/2;              %angle of normal to ray direction
+%     offset = 0.001;                    %offset in radians (~0.06 deg)    
+%     if any(isclose(ray.alpha,[0,pi,2*pi],offset))        
+%         phi = phi+sign(dcry)*offset;
+%     end
+    phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction    
     [un,vn] = pol2cart(phi,1);         %normal vector in local coordinates
 
     %radius of arc
     Ndc = un*dcrx+vn*dcry;
     R = -cr/Ndc;                       %radius in grid coordinates
     r = R/delta;                       %radius in local coordinates
-    uc = ur+r*un;
-    vc = vr+r*vn;
-    [ucheck,vcheck] = pol2cart(ray.alpha-pi/2,r);
-    tol = eps(R);
-    if abs(ur-(uc+ucheck))>tol || abs(vr-(vc+vcheck))>tol
-        fprintf('Arc centre coordinates are not within %.2g in arc_properties\n',tol)
+    if abs(r)<1000
+        uc = ur+r*un;
+        vc = vr+r*vn;
+%         [ucheck,vcheck] = pol2cart(mod(phi-pi/2,2*pi),abs(r));
+%         tol = 1/delta;
+%         if abs(ur-(uc+ucheck))>tol || abs(vr-(vc+vcheck))>tol
+%             fprintf('Arc centre coordinates are not within %.2g in arc_properties\n',tol)
+%         end
+    else
+        uc = 0; vc = 0;   %radius is large so use straight line segment
     end
 end
 %%
@@ -219,66 +224,20 @@ function [hr,cr,cgr] = raypoint_properties(grid,xr,yr)
     cgr = interp2(X,Y,grid.cg',xr,yr);
 end
 %%
-function Tri = get_element(quad)
-    %define new triangular polyshape based on quadrant being entered
-    if quad==1                              %first quadrant
-        Tri = polyshape([0,0,1],[0,1,0]);
-    elseif quad==2                          %second quadrant
-        Tri = polyshape([0,0,-1],[0,1,0]);
-    elseif quad==3                          %third quadrant
-        Tri = polyshape([0,0,-1],[0,-1,0]);
-    elseif quad==4                          %fourth quadrant
-        Tri = polyshape([0,0,1],[0,-1,0]);
-    else  
-        %quadrant not found
-        Tri = [];
-        return;
-    end
-end
-%%
-function [uvi,newquad] = next_element(quad,edge)
-    %find the grid definition for the element that the ray is entering
-    %in local coordinates (ui,vi), quadrant (edge does not change)
-    pi_2 = pi/2;
-    uvi = [0,0];
-    %sign and magnitude of quadrant change for each case
-    if edge==3
-        if quad==1 ||quad==2
-            sgn = +2;
-        else
-            sgn = -2;
-        end
-    elseif (edge==1 && (quad==1 || quad==3)) || (edge==2 && (quad==2 || quad==4))
-        sgn = -1;                
-    else
-        sgn = +1;
-    end
-    %change in radians to handle 1 to 4 cross-over
-    phi = mod(quad*pi_2+sgn*pi_2,2*pi);
-    if phi==0, phi = 2*pi; end
-    newquad = int8(2*phi/pi);
 
-    %update central node coordinates if point is on edge 3
-    if edge==3
-        if quad==1
-            uvi = [+1,+1];
-        elseif quad==2
-            uvi = [-1,+1;];
-        elseif quad==3
-            uvi = [-1,-1];
-        elseif quad==4
-            uvi = [+1,-1];
-        else
-            error('New quadrant not found in next_element')
-        end
-    end
-end
 %%
 function alpha = exit_angle(phi,r,ur,vr,uvray)
     %find the angle that is tangent to the arc at the exit point
-    phi = mod(phi+pi,2*pi);                   %angle of normal from centre of arc
+    % phi,r - angle of normal and radius of arc
+    % uv,vr - ray entry point into element
+    % uvray - ray exit point out of element
+    phi = mod(phi+pi,2*pi);                    %angle of normal from centre of arc
     L = sqrt((ur-uvray(1))^2+(vr-uvray(2))^2); %arc segment length
-    theta = 2*asin(L/2/r);                     %angle between entry and exit point
+    if abs(r)<1000
+        theta = 2*asin(L/2/r);                     %angle between entry and exit point
+    else
+        theta = 0;
+    end
     alpha = phi+theta+pi/2;                    %angle of tangent to ray at exit point
     alpha = mod(alpha,2*pi);
 end
@@ -311,16 +270,17 @@ function [isdir,npt] = checkDirection(lineseg,ur,vr,alpha)
     un = lineseg(npt,1)-ur;   
     vn = lineseg(npt,2)-vr; 
     [xsi,~] = cart2pol(un,vn);            %vector to next point
-    xsi = mod(xsi,2*pi); %N
-    ub = mod(alpha+anglim,2*pi); %b  
-    lb = mod(alpha-anglim,2*pi); %a
-    if lb<ub                              %test accounts for wrap at 0-2pi
-        isdir = lb<=xsi && xsi<=ub;
-    else 
-        isdir = lb<=xsi || xsi <=ub;      
-    end
+    bound = [alpha-anglim,alpha+anglim];
+    isdir = isangletol(xsi,bound);        %check if xsi is within bound
 end
-
+%%
+function isoutbound = checkGridBoundary(grid,xye)
+    %check if point, xye, is outside grid
+    x = grid.X(1,:); y = grid.Y(:,1);
+    limxy = [x(1),y(1);x(end),y(end)];                     %limits of grid
+    isoutbound = xye(1)<limxy(1,1) || xye(1)>limxy(2,1) || ...%check x
+              xye(2)<limxy(1,2) || xye(2)>limxy(2,2);      %check y       
+end
 %%
 % function Circ = get_circle(radius,uc,vc)   
 %     %define a circle in local coordinates

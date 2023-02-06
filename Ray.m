@@ -6,7 +6,9 @@ classdef Ray < handle
 % PURPOSE
 %   Class description - Class for ray objects in the WaveRayModel app
 % NOTES
-%   This version only computes the route track. 
+%   Ray method based on Abernethy C L and Gilbert G, 1975, Refraction of 
+%   wave spectra, Report No: INT 117,pp. 1-166, Wallingford, UK.
+%   This version computes the route track and properties along track. 
 %   The table ray is used to hold ray properties. The last row of the 
 %   table is used to call arc_ray. Whilst constructing the ray the table
 %   holds xr, yr, alpha, k, quad, edge, hr, cr, cgr. Once the ray is
@@ -30,7 +32,7 @@ classdef Ray < handle
     end      
 %%
     methods (Static)                
-        function obj = setRay(grid,xys,alpha,hlimit)
+        function obj = setRay(grid,xys,alpha,hlimit,tol)
             %function to compute a single ray track
             % grid - contains X,Y,h,c,dcx,dcy
             % xys - start point grid coordinates
@@ -43,7 +45,7 @@ classdef Ray < handle
             obj = Ray;                               %Ray class instance 
 
             %get first first element intersection from the start point
-            ray = startRay(obj,grid,xys,alpha);
+            ray = startRay(obj,grid,xys,alpha,tol);
             if isempty(ray)
                 error('Ray solution not found in start_ray')
             elseif ~isa(ray,'table')
@@ -53,7 +55,8 @@ classdef Ray < handle
             %loop to get ray track to edge of grid or depth limit
             hr = interp2(grid.X,grid.Y,grid.h',ray.xr,ray.yr,'linear',0);
             while hr>hlimit
-                newray = arc_ray(grid,ray(end,:));
+                newray = arc_ray(grid,ray(end,:),tol);
+                if isempty(newray), hr = hlimit; continue; end
                 ray = [ray;newray]; %#ok<AGROW> 
                 hr = interp2(grid.X,grid.Y,grid.h',ray.xr,ray.yr,'linear',0);
             end
@@ -63,7 +66,7 @@ classdef Ray < handle
     end
 %%
     methods (Access=private)  
-        function ray = startRay(obj,grid,xys,alpha)
+        function ray = startRay(obj,grid,xys,alpha,tol)
             %compute the first element intersection from the start point
             % grid - contains X,Y,h,c,dcx,dcy
             % xys - start point grid coordinates
@@ -80,7 +83,8 @@ classdef Ray < handle
             %get vector to start point in local grid coordinates
             us = (xys(1)-xi)/delta;
             vs = (xys(2)-yi)/delta;
-            [theta,~] = cart2pol(us,vs);            %vector to start point
+            [theta,rs] = cart2pol(us,vs);           %vector to start point
+            if rs==0, theta = alpha; end            %start point is on a grid node
             theta= mod(theta,2*pi);
             
             [ue,ve] = pol2cart(alpha,sqrt(2));      %vector from start in direction of alpha
@@ -93,7 +97,8 @@ classdef Ray < handle
             if isbound, ray = NaN; return; end
 
             %define a triangle polygon for the quadrant of the start point
-            [Tri,quad] = get_quadrant(theta);
+            quad = get_quadrant(theta,tol);
+            Tri = get_element(quad);
             if isempty(Tri), ray = []; return; end
 
             % figure; plot(Tri)
@@ -106,15 +111,10 @@ classdef Ray < handle
             [inside,outside] = intersect(Tri,lineseg); 
             %inside line segment coordinates returned as a two-column matrix (x,y).
             %find the common point in both vectors
-            if isempty(inside)
-                tol = pi/1000;
-                [Tri,quad] = get_quadrant(mod(theta-tol,2*pi));
-                [inside,outside] = intersect(Tri,lineseg); 
-            end
             [~,idx] = intersect(inside,outside,'rows');
             %use coordinates of point to identify which edge it lies on
-            tol = 1/1000/delta;                     %tolerance equivalent to 1mm
-            edge = get_edge(inside,idx,tol);
+            distol = 1/1000/delta;            %tolerance equivalent to 1mm
+            edge = get_edge(inside,idx,distol);
         
             %transform new ray position from local to grid coordinates
             xr = xi+inside(idx,1)*delta; yr = yi+inside(idx,2)*delta;
@@ -144,47 +144,6 @@ classdef Ray < handle
                       xye(2)<limxy(1,2) || xye(2)>limxy(2,2);      %check y       
         end
 %%
-%        function obj = setTable(obj,table)
-%             %make the table contents of a ray a single row
-%             dst = table;
-%             dst(2:end,:) = [];
-%             varnames = table.Properties.VariableNames;
-%             for i=1:width(table)
-%                 dst.(varnames{i}) = table{:,i}';
-%             end
-%             dsp = setDSproperties(obj);
-%             obj.Track = dstable(dst,'DSproperties',dsp);
-%        end
-%%
-%         function dsp = modelDSproperties(~) 
-%             %define a dsproperties struct and add the model metadata
-%             dsp = struct('Variables',[],'Row',[],'Dimensions',[]); 
-%             %define each variable to be included in the data table and any
-%             %information about the dimensions. dstable Row and Dimensions can
-%             %accept most data types but the values in each vector must be unique
-%             
-%             %struct entries are cell arrays and can be column or row vectors
-%             dsp.Variables = struct(...                       % <<Edit metadata to suit model
-%                 'Name',{'xr','yr','alpha','k','quad','edge'},...
-%                 'Description',{'X-Position','Y-Position','Direction',...
-%                            'Grid index','Grid quadrant','Element edge'},...
-%                 'Unit',{'m','m','rad','-','-','-'},...
-%                 'Label',{'X-Position','Y-Position','Direction',...
-%                            'Grid index','Grid quadrant','Element edge'},...
-%                 'QCflag',repmat({'model'},1,6)); 
-%             dsp.Row = struct(...
-%                 'Name',{'-'},...
-%                 'Description',{'-'},...
-%                 'Unit',{'-'},...
-%                 'Label',{'-'},...
-%                 'Format',{'-'});        
-%             dsp.Dimensions = struct(...    
-%                 'Name',{'-'},...
-%                 'Description',{'-'},...
-%                 'Unit',{'-'},...
-%                 'Label',{'-'},...
-%                 'Format',{'-'});  
-%         end     
         function dsp = modelDSproperties(~) 
             %define a dsproperties struct and add the model metadata
             dsp = struct('Variables',[],'Row',[],'Dimensions',[]); 
