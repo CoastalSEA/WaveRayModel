@@ -18,12 +18,15 @@ classdef RayTracks < muiDataSet
 %     
     properties
         Tracks     %array of Ray objects for Nr rays, Nt periods and Nz water levels
-        tol = 0.1  %tolerance to test for angles that are multiples of pi/2 (5.7 deg)
+        tol        %struct: tol.angle tolerance to test for angles that are 
+                   %multiples of pi/2 and tol.dist for distances from axis
     end
     
     methods (Access = private)
         function obj = RayTracks()                
             %class constructor
+            obj.tol.angle = 0.01;    %tolerance to test for angles that are multiples of pi/2 (0.06 deg) 
+            obj.tol.dist = 0.001;    %tolerance to test for distances from axis in local coordinates
         end
     end      
 %%
@@ -64,8 +67,9 @@ classdef RayTracks < muiDataSet
             grid = getGrid(grdobj,1);
             if isempty(grid.z), return; end
 
-            [X,Y] = meshgrid(grid.x,grid.y);
+            [X,Y] = meshgrid(grid.x,grid.y);            
             delta = grid.x(2)-grid.x(1);
+            obj.tol.dist = 1/1000/delta;
             cgrid = struct('X',X,'Y',Y,'z',grid.z);
 
             %arrays of waver periods and water levels, 
@@ -211,17 +215,17 @@ classdef RayTracks < muiDataSet
             %and convert direction degTN to grid (trigonometric) direction
             [~,alpha] = compass2trig(ftrobj.dir0TN);
 
-            hf = figure('Name','Search','Tag','PlotFig');
-            ax = axes(hf);
-            set(ax,'xgrid','on')
-            set(ax,'ygrid','on')
+%             hf = figure('Name','Search','Tag','PlotFig');
+%             ax = axes(hf);
+%             set(ax,'xgrid','on')
+%             set(ax,'ygrid','on')
 
             nr = ftrobj.nRay;
             np = length(T);
             nq = length(zwl);         
             rays{nr,np,nq} = Ray;
             rownames = 1:nr;
-            for i=rownames           %ray number
+            parfor i=rownames           %ray number
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,cgrid,j,k);
@@ -231,11 +235,11 @@ classdef RayTracks < muiDataSet
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
                         end
-                        hold on
-                        xr = rayobj.Track.xr;
-                        yr = rayobj.Track.yr;
-                        plot(ax,xr,yr,'-k')
-                        hold off
+%                         hold on
+%                         xr = rayobj.Track.xr;
+%                         yr = rayobj.Track.yr;
+%                         plot(ax,xr,yr,'-k')
+%                         hold off
                         rays{i,j,k} = rayobj;
                     end
                 end
@@ -269,7 +273,7 @@ classdef RayTracks < muiDataSet
             np = length(T);
             nq = length(zwl);         
             rays{nd,np,nq} = Ray;
-            for i=1:nd               %ray direction
+            parfor i=1:nd               %ray direction
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,cgrid,j,k);
@@ -316,16 +320,49 @@ classdef RayTracks < muiDataSet
         function plotRay(obj,ax,opt)
             %plot each ray on the selected forward track
             %each ray can be a different length so plot iteratively
-            var = {'celerity','cgroup'};
+            cvar = {'celerity','cgroup'};
             nrays = height(obj.Data.Dataset);
             hold(ax,"on")
-            for i=1:nrays
-                xr = obj.Data.Dataset.xr{i,opt(1),opt(2)};
-                yr = obj.Data.Dataset.yr{i,opt(1),opt(2)};
-                cg = obj.Data.Dataset.(var{opt(3)}){i,opt(1),opt(2)};
-                scatter(ax,xr,yr,[],cg,'fill');
-                %plot(ax,xr,yr,'-k');
+            if opt(3)>1
+                for i=1:nrays
+                    xr = obj.Data.Dataset.xr{i,opt(1),opt(2)};
+                    yr = obj.Data.Dataset.yr{i,opt(1),opt(2)};
+                    plot(ax,xr,yr,'-k');
+    %                 if opt(3)==1
+    %                     plot(ax,xr,yr,'-k');
+    %                 else
+    %                     var = obj.Data.Dataset.(cvar{opt(3)-1}){i,opt(1),opt(2)}; 
+                            %need to gather point and plot as a set***
+                            %see https://uk.mathworks.com/matlabcentral/answers/101346-how-do-i-use-multiple-colormaps-in-a-single-figure-in-r2014a-and-earlier
+    %                     %create axes for the ray surfaces axes
+%                 hsax = axes;
+%                 %set visibility for axes to 'off' so it appears transparent
+%                 axis(hsax,'off')
+%                 colormap(hsax,cool);
+%                 s = scatter(hsax,xr,yr,[],var,'fill');
+%                 cbCM = colorbar(hsax,'Location','east');
+%                 %link the two overlaying axes so they match at all times to remain accurate
+%                 linkaxes([ax,hsax]);
+
+    %                     cmap = interpolate_cbrewer(cool,'linear',length(xr));
+    % 
+    %                     s.CData = cmap;
+    %                 end
+                end
+            else
+                nperiods = length(obj.Data.Dataset.Dimensions.Period);
+                nwls = length(obj.Data.Dataset.Dimensions.WaterLevel);
+                for i=1:nrays
+                    for j=1:nperiods
+                        for k=1:nwls
+                            xr = obj.Data.Dataset.xr{i,j,k};
+                            yr = obj.Data.Dataset.yr{i,j,k};
+                            plot(ax,xr,yr,'-k')
+                        end
+                    end
+                end
             end
+
             hold(ax,"off")
         end
 %%       
@@ -345,7 +382,7 @@ function options = get_selection(obj)
             %    Position        - poosition and size of figure (normalized units)
             T = obj.Data.Dataset.Dimensions.Period;
             zwl = obj.Data.Dataset.Dimensions.WaterLevel;
-            var = {'celerity','group celerity'};
+            var = {'all lines','selected line','celerity','group celerity'};
             selection = inputgui('FigureTitle','Celerity',...
                                  'InputFields',{'Wave Period','Water level'...
                                                                'Variable'},...

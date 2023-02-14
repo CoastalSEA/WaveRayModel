@@ -78,15 +78,20 @@ classdef Ray < handle
             XY = [reshape(cgrid.X,[],1),reshape(cgrid.Y,[],1)]; %x,y vectors
 
             %find nearest node to start point
-            k = dsearchn(XY,[xys(1),xys(2)]);
+            k = dsearchn(XY,xys);
             [row,col] = ind2sub(size(cgrid.X),k);
             xi = cgrid.X(row,col); yi = cgrid.Y(row,col);       %coordinates of start point
             
             %get vector to start point in local grid coordinates
             us = (xys(1)-xi)/delta;
             vs = (xys(2)-yi)/delta;
-            [theta,rs] = cart2pol(us,vs);           %vector to start point
-            if rs<distol, theta = alpha; end        %start point is on a grid node
+
+
+
+
+
+%             [theta,rs] = cart2pol(us,vs);           %vector to start point
+%             if rs<distol, theta = alpha; end        %start point is on a grid node
             
             [ue,ve] = pol2cart(alpha,sqrt(2));      %vector from start in direction of alpha
                                                     %sqrt(2) ensures it crosses a boundary
@@ -97,56 +102,78 @@ classdef Ray < handle
             isbound = checkGridBoundary(obj,cgrid,xye);       
             if isbound, ray = NaN; return; end
 
-            %define a triangle polygon for the quadrant of the start point
+            %check whether point is on grid axes and determine quad
             dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',xys(1),xys(2),'linear',0); %gradients at start point
             dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',xys(1),xys(2),'linear',0);
-            phi = mod(alpha+pi/2,2*pi);    %angle of normal to ray direction  
-            quad = get_quadrant(theta,alpha,[us,vs],[0,0],tol);
-            %check if point is on a grid node and in direction grid axis
-            if quad>4
-                if quad==41 || quad==23
-                    edge = 1;
-                else
-                    edge = 2;
-                end
-            end
+            [quad,edge,uvi] = is_axis_point(alpha,[us,vs],[0,0],tol);
 
 
-            if quad>4  && rs==0
-                xr = xi; yr = yi;
-            elseif quad>4
-                switch quad
-                    case 12
-                        xr = xi;  yr = yi+delta;
-                    case 23
-                        xr = xi-delta;  yr = yi;
-                    case 34
-                        xr = xi;  yr = yi-delta;
-                    case 41
-                        xr = xi+delta;  yr = yi;
-                end
+            if isempty(edge)
+                %find the intersection of the line segment with quad triangle
+                [uvr,edge] = get_intersection(quad,lineseg,alpha,[us,vs],tol);
+%                 %use coordinates of point to identify which edge it lies on
+%                 distol = 1/1000/delta;                  %tolerance equivalent to 1mm
+%                 if abs(uvr(2))<=distol                  %y<tol ie appox 0
+%                     edge = 1;                           %x-directed edge
+%                 elseif abs(uvr(1))<=distol              %x<tol ie appox 0
+%                     edge = 2;                           %y-directed edge
+%                 else                                    %x~=0 & y~=0
+%                     edge = 3;                           %hypotenuse
+%                 end
+                xr = xi+uvr(1)*delta; yr = yi+uvr(2)*delta;
             else
-                Tri = get_element(quad);
-                if isempty(Tri), ray = []; return; end
-
-                % figure; plot(Tri)
-                % hold on
-                % plot(us,vs,'og')
-                % plot(lineseg(:,1),lineseg(:,2))
-                % hold off
-
-                %find intersection point of line with triangle
-                [inside,outside] = intersect(Tri,lineseg);
-                %inside line segment coordinates returned as a two-column matrix (x,y).
-                %find the common point in both vectors
-                [~,idx] = intersect(inside,outside,'rows');
-                %use coordinates of point to identify which edge it lies on
-                edge = get_edge(inside,idx,distol);
-
-                %transform new ray position from local to grid coordinates
-                xr = xi+inside(idx,1)*delta;
-                yr = yi+inside(idx,2)*delta;
+                xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
             end
+
+            %define a triangle polygon for the quadrant of the start point
+            
+%             phi = mod(alpha+pi/2,2*pi);    %angle of normal to ray direction  
+%             quad = get_quadrant(theta,alpha,[us,vs],[0,0],tol);
+%             %check if point is on a grid node and in direction grid axis
+%             if quad>4
+%                 if quad==41 || quad==23
+%                     edge = 1;
+%                 else
+%                     edge = 2;
+%                 end
+%             end
+% 
+% 
+%             if quad>4  && rs==0
+%                 xr = xi; yr = yi;
+%             elseif quad>4
+%                 switch quad
+%                     case 12
+%                         xr = xi;  yr = yi+delta;
+%                     case 23
+%                         xr = xi-delta;  yr = yi;
+%                     case 34
+%                         xr = xi;  yr = yi-delta;
+%                     case 41
+%                         xr = xi+delta;  yr = yi;
+%                 end
+%             else
+%                 Tri = get_element(quad);
+%                 if isempty(Tri), ray = []; return; end
+% 
+%                 % figure; plot(Tri)
+%                 % hold on
+%                 % plot(us,vs,'og')
+%                 % plot(lineseg(:,1),lineseg(:,2))
+%                 % hold off
+% 
+%                 %find intersection point of line with triangle
+%                 [inside,outside] = intersect(Tri,lineseg);
+%                 %inside line segment coordinates returned as a two-column matrix (x,y).
+%                 %find the common point in both vectors
+%                 [~,idx] = intersect(inside,outside,'rows');
+%                 %use coordinates of point to identify which edge it lies on
+%                 edge = get_edge(inside,idx,distol);
+% 
+%                 %transform new ray position from local to grid coordinates
+%                 xr = xi+inside(idx,1)*delta;
+%                 yr = yi+inside(idx,2)*delta;
+%             end
 
             [hr,cr,cgr] = raypoint_properties(obj,cgrid,xr,yr);
             ray = table(xr,yr,alpha,k,quad,edge,hr,cr,cgr);%grid properties of ray position

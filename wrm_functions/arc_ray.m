@@ -42,7 +42,7 @@ function newray = arc_ray(cgrid,ray,tol)
 %
     X = cgrid.X; Y = cgrid.Y;
     delta = X(1,2)-X(1,1);                  %grid spacing
-    distol = 1/delta;                  %tolerance equivalent to 1m
+
 
     %variables used in function
     % alpha - angle of ray direction
@@ -66,10 +66,9 @@ function newray = arc_ray(cgrid,ray,tol)
     %find which element the ray is entering
     dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',ray.xr,ray.yr,'linear',0); %gradients at start point
     dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',ray.xr,ray.yr,'linear',0);
-    %phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction  
-    [uvi,quad] = next_element(ray,[ur,vr],[dcx,dcy],tol);
+    [quad,edge,uvi] = next_element(ray,[ur,vr],[dcx,dcy],tol);
     %transform local coordinates if start point is on edge 3 (hypotenuse)
-    if ray.edge==3 || quad>4
+    if ray.edge==3 || sum(abs(uvi))>0
         xi = xi+uvi(1)*delta;       %translate origin to new local origin
         yi = yi+uvi(2)*delta;
         isoutbound = checkGridBoundary(cgrid,[xi,yi]);
@@ -81,61 +80,91 @@ function newray = arc_ray(cgrid,ray,tol)
         k = ray.k;
     end
 
-    Tri = get_element(quad);
-    if isempty(Tri)
-        error('Ray quadrant not found, or has changed, in arc_ray')
+
+    if quad>4
+        xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
+        alpha = ray.alpha;
+
+    else
+        %get the centre of the arc that is tangential to the ray at ur,vr
+        [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray);
+        %create line vector based on defined arc
+        xyArc = get_arc(phi,r,uc,vc,ur,vr);
+%         if any(isnan(xyArc))
+%             plot_element(Tri,xyArc,ur,vr,k)
+%             error('Arc segment not found')
+%         end
+        %find the intersection of the arc segment with quad triangle
+        [uvray,edge] = get_intersection(quad,xyArc,ray.alpha,[ur,vr],tol);
+%         %use coordinates of point to identify which edge it lies on
+%         distol = 1/1000/delta;                  %tolerance equivalent to 1mm
+%         if abs(uvr(2))<=distol                  %y<tol ie appox 0
+%             edge = 1;                           %x-directed edge
+%         elseif abs(uvr(1))<=distol              %x<tol ie appox 0
+%             edge = 2;                           %y-directed edge
+%         else                                    %x~=0 & y~=0
+%             edge = 3;                           %hypotenuse
+%         end
+        xr = xi+uvray(1)*delta; yr = yi+uvray(2)*delta;
+%exit angle and edge 
+    alpha =  exit_angle(phi,r,ur,vr,uvray);  
     end
 
-    %get the centre of the arc that is tangential to the ray at ur,vr
-    [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray);
-    %create line vector based on defined arc
-    xyArc = get_arc(phi,r,uc,vc,ur,vr);
-    if any(isnan(xyArc))
-        plot_element(Tri,xyArc,ur,vr,k)
-        error('Arc segment not found')
-    end
+isoutbound = checkGridBoundary(cgrid,[xr,yr]);
+ if isoutbound 
+     newray = []; return; 
+ end
+    %phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction  
+    
+
+%     Tri = get_element(quad);
+%     if isempty(Tri)
+%         error('Ray quadrant not found, or has changed, in arc_ray')
+%     end
+
+    
     % plot_element(Tri,Arc,ur,vr,k)
 
-    %find intersection point of line with triangle
-    [inside,outside] = intersect(Tri,xyArc); 
-    %inside line segment coordinates returned as a two-column matrix (x,y).
-    %find the common point in both vectors                   
-    idx = ~ismembertol(inside,[ur,vr],distol,'ByRows',true);  %tolerance equivalent to 1m
-    inside = inside(idx,:);                 %inside points excluding entry point
-    [~,idx] = intersect(inside,outside,'rows');
+%     %find intersection point of line with triangle
+%     [inside,outside] = intersect(Tri,xyArc); 
+%     %inside line segment coordinates returned as a two-column matrix (x,y).
+%     %find the common point in both vectors                   
+%     idx = ~ismembertol(inside,[ur,vr],distol,'ByRows',true);  %tolerance equivalent to 1m
+%     inside = inside(idx,:);                 %inside points excluding entry point
+%     [~,idx] = intersect(inside,outside,'rows');
+% 
+%     if size(idx,1)>1
+%         %more than one intersection of element
+%         %find nearest point in direction of travel
+%         ok = 0;
+%         nxtpnt = inside(idx,:);
+%         while ok<1            
+%             [isdir,npt] = checkDirection(nxtpnt,ur,vr,ray.alpha);
+%             if isdir
+%                 idx = idx(npt); ok = 1;
+%             else
+%                 nxtpnt(npt,:) = [];
+%                 if isempty(nxtpnt)
+%                     %point not found
+%                     idx = []; ok = 1;
+%                 end
+%             end
+%         end
+%     end
+% 
+%     if isempty(idx)
+%         plot_element(Tri,xyArc,ur,vr,k)
+%         error('Intersection with element not found in arc_ray')
+%     end
+%     uvray = inside(idx,:);                  %local coordinates of ray exit point
 
-    if size(idx,1)>1
-        %more than one intersection of element
-        %find nearest point in direction of travel
-        ok = 0;
-        nxtpnt = inside(idx,:);
-        while ok<1            
-            [isdir,npt] = checkDirection(nxtpnt,ur,vr,ray.alpha);
-            if isdir
-                idx = idx(npt); ok = 1;
-            else
-                nxtpnt(npt,:) = [];
-                if isempty(nxtpnt)
-                    %point not found
-                    idx = []; ok = 1;
-                end
-            end
-        end
-    end
-
-    if isempty(idx)
-        plot_element(Tri,xyArc,ur,vr,k)
-        error('Intersection with element not found in arc_ray')
-    end
-    uvray = inside(idx,:);                  %local coordinates of ray exit point
-
-    %exit angle and edge 
-    alpha =  exit_angle(phi,r,ur,vr,uvray);    
-    edge = get_edge(inside,idx,distol);
-
-    %transform new ray position from local to grid coordinates
-    xr = xi+uvray(1)*delta; 
-    yr = yi+uvray(2)*delta;
+%     %exit angle and edge 
+%     alpha =  exit_angle(phi,r,ur,vr,uvray);    
+%     edge = get_edge(inside,idx,distol);
+% 
+%     %transform new ray position from local to grid coordinates
+%     xr = xi+uvray(1)*delta; 
+%     yr = yi+uvray(2)*delta;
     [hr,cr,cgr] = raypoint_properties(cgrid,xr,yr);
     newray = table(xr,yr,alpha,k,quad,edge,hr,cr,cgr);%grid properties of ray position
 end
@@ -143,7 +172,7 @@ end
 function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
-    N = 101;                                   %number of points in Arc
+    N = 1001;                                   %number of points in Arc
     if abs(radius)>1000
         %straight line segment will suffice        
         [ue,ve] = pol2cart(phi-pi/2,sqrt(2));  %vector from ray point in direction of alpha
@@ -153,7 +182,7 @@ function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr)
     end
 %     arcang = 2*asin(1/radius);
 %     arcang = 2*asin(0.5/radius);               %angle between entry and exit point
-    arcang = pi/2;
+    arcang = pi/4;
     phi = phi+pi;                              %angle of normal from centre of arc
 
     r_angl = linspace(phi+arcang,phi-arcang, N); %angles Defining Arc Segment (radians)
@@ -260,7 +289,7 @@ end
 %%
 function isintol = isclose(angle,test,tol)
     %check whether test is within tol of angle
-    isintol = abs(angle-test)<tol;
+    isintol = abs(angle-test)<tol.angle;
 end
 %%
 function [isdir,npt] = checkDirection(lineseg,ur,vr,alpha)
@@ -268,6 +297,7 @@ function [isdir,npt] = checkDirection(lineseg,ur,vr,alpha)
     % npt is nearest point to [ur,vr] and this is in the direction of alpha
     % if isdir is true
     anglim = 0.2;                         %angle limit of +/-0.2 rads (11.5 deg)
+                                          %could pass tol.angle
     npt = dsearchn(lineseg,[ur,vr]);
     un = lineseg(npt,1)-ur;   
     vn = lineseg(npt,2)-vr; 

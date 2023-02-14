@@ -26,9 +26,9 @@ function edge = get_edge(invector,idx,tol)
         edge = []; return;
     end
 
-    if abs(invector(idx,2))<=tol            %y<tol ie appox 0
+    if abs(invector(idx,2))<=tol.dist            %y<tol ie appox 0
         edge = 1;                           %x-directed edge
-    elseif abs(invector(idx,1))<=tol        %x<tol ie appox 0
+    elseif abs(invector(idx,1))<=tol.dist        %x<tol ie appox 0
         edge = 2;                           %y-directed edge
     else                                    %x~=0 & y~=0
         edge = 3;                           %hypotenuse

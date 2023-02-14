@@ -1,4 +1,4 @@
-function [uvi,newquad] = next_element(ray,uvr,dcs,tol)
+function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -20,8 +20,8 @@ function [uvi,newquad] = next_element(ray,uvr,dcs,tol)
 %   dcs - celerity gradient at start point [dcx,dcy]
 %   tol - tolerance around angles that are multiples of pi/2
 % OUTPUTS
+%   newquad - quadrant ray is entering relative to the new local origin
 %   uvi - central node coordinates relative to current [0,0] local origin
-%   newquad - quadrant ray is entering relative to the new origin
 % SEE ALSO
 %   get_edge, get_quadrant, get_element and arc_ray.
 %
@@ -29,7 +29,6 @@ function [uvi,newquad] = next_element(ray,uvr,dcs,tol)
 % CoastalSEA (c) Jan 2023
 %----------------------------------------------------------------------
 %
-    distol = tol;                         %use angle tolerance for distance tolerance 
     if ~isa(ray,'table')
         warndlg('Input must be a single row Ray table')
     end
@@ -39,30 +38,31 @@ function [uvi,newquad] = next_element(ray,uvr,dcs,tol)
 
     %resolve double quad cases
     if quad>4
+        [newquad,edge,uvi] = is_axis_point(alpha,uvr,dcs,tol);
         %find whether point lies on an axis and is travelling in the direction
         %of that axis and try to resolve quadrant
-        [ua,va] = pol2cart(alpha,1);  %unit vector in ray direction
-        [theta,rs] = cart2pol(uvr(1)+ua,uvr(2)+va);
-        if rs<distol, theta = alpha; end   %ray point is on a grid node
-        phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction  
-
-
-        newquad = get_quadrant(theta,phi,uvr,dcs,tol);
-        if newquad>4
-            switch newquad
-                case 12
-                    uvi = [0,1];
-                case 23
-                    uvi = [-1,0];
-                case 34
-                    uvi = [0,-1];
-                case 41
-                    uvi = [1,0];
-            end
-            return;
-        else
-            quad = newquad;
-        end 
+%         [ua,va] = pol2cart(alpha,1);  %unit vector in ray direction
+%         [theta,rs] = cart2pol(uvr(1)+ua,uvr(2)+va);
+%         if rs<distol, theta = alpha; end   %ray point is on a grid node
+%         phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction  
+% 
+% 
+%         newquad = get_quadrant(theta,phi,uvr,dcs,tol);
+%         if newquad>4
+%             switch newquad
+%                 case 12
+%                     uvi = [0,1];
+%                 case 23
+%                     uvi = [-1,0];
+%                 case 34
+%                     uvi = [0,-1];
+%                 case 41
+%                     uvi = [1,0];
+%             end
+%             return;
+%         else
+%             quad = newquad;
+%         end 
 
   
     else
