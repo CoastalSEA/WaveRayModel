@@ -1,4 +1,4 @@
-function newray = arc_ray(grid,ray,tol)
+function newray = arc_ray(cgrid,ray,tol)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -7,9 +7,9 @@ function newray = arc_ray(grid,ray,tol)
 %   compute the exit position and direction of a ray entering a triangular
 %   element at the position and direction defined by the incoming ray.
 % USAGE
-%   newray = arc_ray(X,Y,ray,c,dcx,dcy);
+%   newray = arc_ray(cgrid,ray,tol);
 % INPUTS
-%   grid - struct of grid array properties, including:
+%   cgrid - struct of grid array properties, including:
 %          X, Y - x and y coordinates as meshgrid matrices
 %          h - water depths
 %          c - celerity grid matrix 
@@ -40,8 +40,9 @@ function newray = arc_ray(grid,ray,tol)
 % CoastalSEA (c) Jan 2023
 %----------------------------------------------------------------------
 %
-    X = grid.X; Y = grid.Y;
+    X = cgrid.X; Y = cgrid.Y;
     delta = X(1,2)-X(1,1);                  %grid spacing
+    distol = 1/delta;                  %tolerance equivalent to 1m
 
     %variables used in function
     % alpha - angle of ray direction
@@ -63,12 +64,15 @@ function newray = arc_ray(grid,ray,tol)
     vr = (ray.yr-yi)/delta;
 
     %find which element the ray is entering
-    [uvi,quad] = next_element(ray,[ur,vr],tol);
+    dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',ray.xr,ray.yr,'linear',0); %gradients at start point
+    dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',ray.xr,ray.yr,'linear',0);
+    %phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction  
+    [uvi,quad] = next_element(ray,[ur,vr],[dcx,dcy],tol);
     %transform local coordinates if start point is on edge 3 (hypotenuse)
     if ray.edge==3 || quad>4
         xi = xi+uvi(1)*delta;       %translate origin to new local origin
         yi = yi+uvi(2)*delta;
-        isoutbound = checkGridBoundary(grid,[xi,yi]);
+        isoutbound = checkGridBoundary(cgrid,[xi,yi]);
         if isoutbound, newray = []; return; end
         k = sub2ind(size(X),row+uvi(2),col+uvi(1));
         ur = (ray.xr-xi)/delta;     %update ray position to new origin
@@ -83,7 +87,7 @@ function newray = arc_ray(grid,ray,tol)
     end
 
     %get the centre of the arc that is tangential to the ray at ur,vr
-    [phi,r,uc,vc] = arc_properties(grid,ur,vr,ray);
+    [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray);
     %create line vector based on defined arc
     xyArc = get_arc(phi,r,uc,vc,ur,vr);
     if any(isnan(xyArc))
@@ -95,9 +99,8 @@ function newray = arc_ray(grid,ray,tol)
     %find intersection point of line with triangle
     [inside,outside] = intersect(Tri,xyArc); 
     %inside line segment coordinates returned as a two-column matrix (x,y).
-    %find the common point in both vectors
-    tol = 1/delta;                          %tolerance equivalent to 1m
-    idx = ~ismembertol(inside,[ur,vr],tol,'ByRows',true);
+    %find the common point in both vectors                   
+    idx = ~ismembertol(inside,[ur,vr],distol,'ByRows',true);  %tolerance equivalent to 1m
     inside = inside(idx,:);                 %inside points excluding entry point
     [~,idx] = intersect(inside,outside,'rows');
 
@@ -127,14 +130,13 @@ function newray = arc_ray(grid,ray,tol)
     uvray = inside(idx,:);                  %local coordinates of ray exit point
 
     %exit angle and edge 
-    alpha =  exit_angle(phi,r,ur,vr,uvray);
-    distol = 1/1000/delta;                  %tolerance equivalent to 1mm
+    alpha =  exit_angle(phi,r,ur,vr,uvray);    
     edge = get_edge(inside,idx,distol);
 
     %transform new ray position from local to grid coordinates
     xr = xi+uvray(1)*delta; 
     yr = yi+uvray(2)*delta;
-    [hr,cr,cgr] = raypoint_properties(grid,xr,yr);
+    [hr,cr,cgr] = raypoint_properties(cgrid,xr,yr);
     newray = table(xr,yr,alpha,k,quad,edge,hr,cr,cgr);%grid properties of ray position
 end
 %%
@@ -182,9 +184,9 @@ function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr)
     % Arc = polyshape([uc;xy_arc(:,1)],[vc;xy_arc(:,2)]);
 end
 %%
-function [phi,r,uc,vc] = arc_properties(grid,ur,vr,ray)
+function [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray)
     %find the radius and centre of the arc that the ray follows in element
-    X = grid.X; Y = grid.Y; c = grid.c; dcx = grid.dcx; dcy = grid.dcy;
+    X = cgrid.X; Y = cgrid.Y; c = cgrid.c; dcx = cgrid.dcx; dcy = cgrid.dcy;
     delta = X(1,2)-X(1,1);             %grid spacing
     cr = interp2(X,Y,c',ray.xr,ray.yr);
     dcrx = interp2(X,Y,dcx',ray.xr,ray.yr,'linear',0);
@@ -216,12 +218,12 @@ function [phi,r,uc,vc] = arc_properties(grid,ur,vr,ray)
     end
 end
 %%
-function [hr,cr,cgr] = raypoint_properties(grid,xr,yr)
+function [hr,cr,cgr] = raypoint_properties(cgrid,xr,yr)
     %interpolate depth, celerity and group celerity at ray point
-    X = grid.X; Y = grid.Y; 
-    hr = interp2(X,Y,grid.h',xr,yr);
-    cr = interp2(X,Y,grid.c',xr,yr);
-    cgr = interp2(X,Y,grid.cg',xr,yr);
+    X = cgrid.X; Y = cgrid.Y; 
+    hr = interp2(X,Y,cgrid.h',xr,yr);
+    cr = interp2(X,Y,cgrid.c',xr,yr);
+    cgr = interp2(X,Y,cgrid.cg',xr,yr);
 end
 %%
 
@@ -274,9 +276,9 @@ function [isdir,npt] = checkDirection(lineseg,ur,vr,alpha)
     isdir = isangletol(xsi,bound);        %check if xsi is within bound
 end
 %%
-function isoutbound = checkGridBoundary(grid,xye)
+function isoutbound = checkGridBoundary(cgrid,xye)
     %check if point, xye, is outside grid
-    x = grid.X(1,:); y = grid.Y(:,1);
+    x = cgrid.X(1,:); y = cgrid.Y(:,1);
     limxy = [x(1),y(1);x(end),y(end)];                     %limits of grid
     isoutbound = xye(1)<limxy(1,1) || xye(1)>limxy(2,1) || ...%check x
               xye(2)<limxy(1,2) || xye(2)>limxy(2,2);      %check y       

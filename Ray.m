@@ -32,12 +32,13 @@ classdef Ray < handle
     end      
 %%
     methods (Static)                
-        function obj = setRay(grid,xys,alpha,hlimit,tol)
+        function obj = setRay(cgrid,xys,alpha,hlimit,tol)
             %function to compute a single ray track
-            % grid - contains X,Y,h,c,dcx,dcy
+            % cgrid - contains X,Y,h,c,dcx,dcy
             % xys - start point grid coordinates
             % alpha - start angle (radians)
             % hlimit - cutoff depth limit for ray (optional)
+            % tol - tolerance around angles that are multiples of pi/2
             if nargin<4
                 hlimit = 0.1;
             end
@@ -45,7 +46,7 @@ classdef Ray < handle
             obj = Ray;                               %Ray class instance 
 
             %get first first element intersection from the start point
-            ray = startRay(obj,grid,xys,alpha,tol);
+            ray = startRay(obj,cgrid,xys,alpha,tol);
             if isempty(ray)
                 error('Ray solution not found in start_ray')
             elseif ~isa(ray,'table')
@@ -53,12 +54,12 @@ classdef Ray < handle
             end   
 
             %loop to get ray track to edge of grid or depth limit
-            hr = interp2(grid.X,grid.Y,grid.h',ray.xr,ray.yr,'linear',0);
+            hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
             while hr>hlimit
-                newray = arc_ray(grid,ray(end,:),tol);
+                newray = arc_ray(cgrid,ray(end,:),tol);
                 if isempty(newray), hr = hlimit; continue; end
                 ray = [ray;newray]; %#ok<AGROW> 
-                hr = interp2(grid.X,grid.Y,grid.h',ray.xr,ray.yr,'linear',0);
+                hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
             end
             ray(:,4:6) = [];   %remove k, quad and edge from the ray table
             obj.Track = dstable(ray,'DSproperties',modelDSproperties(obj));
@@ -66,26 +67,26 @@ classdef Ray < handle
     end
 %%
     methods (Access=private)  
-        function ray = startRay(obj,grid,xys,alpha,tol)
+        function ray = startRay(obj,cgrid,xys,alpha,tol)
             %compute the first element intersection from the start point
             % grid - contains X,Y,h,c,dcx,dcy
             % xys - start point grid coordinates
             % alpha - start angle (radians)
             
-            delta = grid.X(1,2)-grid.X(1,1);                  %grid spacing
-            XY = [reshape(grid.X,[],1),reshape(grid.Y,[],1)]; %x,y vectors
+            delta = cgrid.X(1,2)-cgrid.X(1,1);                  %grid spacing
+            distol = 1/delta;                              %tolerance equivalent to 1m
+            XY = [reshape(cgrid.X,[],1),reshape(cgrid.Y,[],1)]; %x,y vectors
 
             %find nearest node to start point
             k = dsearchn(XY,[xys(1),xys(2)]);
-            [row,col] = ind2sub(size(grid.X),k);
-            xi = grid.X(row,col); yi = grid.Y(row,col);       %coordinates of start point
+            [row,col] = ind2sub(size(cgrid.X),k);
+            xi = cgrid.X(row,col); yi = cgrid.Y(row,col);       %coordinates of start point
             
             %get vector to start point in local grid coordinates
             us = (xys(1)-xi)/delta;
             vs = (xys(2)-yi)/delta;
             [theta,rs] = cart2pol(us,vs);           %vector to start point
-            if rs==0, theta = alpha; end            %start point is on a grid node
-            theta= mod(theta,2*pi);
+            if rs<distol, theta = alpha; end        %start point is on a grid node
             
             [ue,ve] = pol2cart(alpha,sqrt(2));      %vector from start in direction of alpha
                                                     %sqrt(2) ensures it crosses a boundary
@@ -93,52 +94,83 @@ classdef Ray < handle
 
             %check line does not go out of grid from start point                                   
             xye = [xys(1)+ue*delta,xys(2)+ve*delta];
-            isbound = checkGridBoundary(obj,grid,xye);       
+            isbound = checkGridBoundary(obj,cgrid,xye);       
             if isbound, ray = NaN; return; end
 
             %define a triangle polygon for the quadrant of the start point
-            quad = get_quadrant(theta,tol);
-            Tri = get_element(quad);
-            if isempty(Tri), ray = []; return; end
+            dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',xys(1),xys(2),'linear',0); %gradients at start point
+            dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',xys(1),xys(2),'linear',0);
+            phi = mod(alpha+pi/2,2*pi);    %angle of normal to ray direction  
+            quad = get_quadrant(theta,alpha,[us,vs],[0,0],tol);
+            %check if point is on a grid node and in direction grid axis
+            if quad>4
+                if quad==41 || quad==23
+                    edge = 1;
+                else
+                    edge = 2;
+                end
+            end
 
-            % figure; plot(Tri)
-            % hold on
-            % plot(us,vs,'og')
-            % plot(lineseg(:,1),lineseg(:,2))
-            % hold off
-            
-            %find intersection point of line with triangle
-            [inside,outside] = intersect(Tri,lineseg); 
-            %inside line segment coordinates returned as a two-column matrix (x,y).
-            %find the common point in both vectors
-            [~,idx] = intersect(inside,outside,'rows');
-            %use coordinates of point to identify which edge it lies on
-            distol = 1/1000/delta;            %tolerance equivalent to 1mm
-            edge = get_edge(inside,idx,distol);
-        
-            %transform new ray position from local to grid coordinates
-            xr = xi+inside(idx,1)*delta; yr = yi+inside(idx,2)*delta;
-            [hr,cr,cgr] = raypoint_properties(obj,grid,xr,yr);
+
+            if quad>4  && rs==0
+                xr = xi; yr = yi;
+            elseif quad>4
+                switch quad
+                    case 12
+                        xr = xi;  yr = yi+delta;
+                    case 23
+                        xr = xi-delta;  yr = yi;
+                    case 34
+                        xr = xi;  yr = yi-delta;
+                    case 41
+                        xr = xi+delta;  yr = yi;
+                end
+            else
+                Tri = get_element(quad);
+                if isempty(Tri), ray = []; return; end
+
+                % figure; plot(Tri)
+                % hold on
+                % plot(us,vs,'og')
+                % plot(lineseg(:,1),lineseg(:,2))
+                % hold off
+
+                %find intersection point of line with triangle
+                [inside,outside] = intersect(Tri,lineseg);
+                %inside line segment coordinates returned as a two-column matrix (x,y).
+                %find the common point in both vectors
+                [~,idx] = intersect(inside,outside,'rows');
+                %use coordinates of point to identify which edge it lies on
+                edge = get_edge(inside,idx,distol);
+
+                %transform new ray position from local to grid coordinates
+                xr = xi+inside(idx,1)*delta;
+                yr = yi+inside(idx,2)*delta;
+            end
+
+            [hr,cr,cgr] = raypoint_properties(obj,cgrid,xr,yr);
             ray = table(xr,yr,alpha,k,quad,edge,hr,cr,cgr);%grid properties of ray position
-            %wave properties at start point
-            [hs,cs,cgs] = raypoint_properties(obj,grid,xys(1),xys(2));
-            %duplicate row and add start point to first row
-            ray = [ray;ray];
-            ray{1,1} = xys(1); ray{1,2} = xys(2); 
-            ray{1,7} = hs; ray{1,8} = cs; ray{1,9} = cgs; 
+            if xr~=xys(1) || yr~=xys(2)
+                %wave properties at start point
+                [hs,cs,cgs] = raypoint_properties(obj,cgrid,xys(1),xys(2));
+                %duplicate row and add start point to first row
+                ray = [ray;ray];
+                ray{1,1} = xys(1); ray{1,2} = xys(2); 
+                ray{1,7} = hs; ray{1,8} = cs; ray{1,9} = cgs; 
+            end
         end
 %%
-        function [hr,cr,cgr] = raypoint_properties(~,grid,xr,yr)
+        function [hr,cr,cgr] = raypoint_properties(~,cgrid,xr,yr)
             %interpolate depth, celerity and group celerity at ray point
-            X = grid.X; Y = grid.Y; 
-            hr = interp2(X,Y,grid.h',xr,yr);
-            cr = interp2(X,Y,grid.c',xr,yr);
-            cgr = interp2(X,Y,grid.cg',xr,yr);
+            X = cgrid.X; Y = cgrid.Y; 
+            hr = interp2(X,Y,cgrid.h',xr,yr);
+            cr = interp2(X,Y,cgrid.c',xr,yr);
+            cgr = interp2(X,Y,cgrid.cg',xr,yr);
         end
 %%
-        function isbound = checkGridBoundary(~,grid,xye)
+        function isbound = checkGridBoundary(~,cgrid,xye)
             %check if point, xye, is outside grid
-            x = grid.X(1,:); y = grid.Y(:,1);
+            x = cgrid.X(1,:); y = cgrid.Y(:,1);
             limxy = [x(1),y(1);x(end),y(end)];                     %limits of grid
             isbound = xye(1)<limxy(1,1) || xye(1)>limxy(2,1) || ...%check x
                       xye(2)<limxy(1,2) || xye(2)>limxy(2,2);      %check y       

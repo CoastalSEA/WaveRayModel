@@ -1,4 +1,4 @@
-function quad = get_quadrant(theta,tol)
+function quad = get_quadrant(theta,alpha,uvs,dcs,tol)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -6,11 +6,15 @@ function quad = get_quadrant(theta,tol)
 % PURPOSE
 %    find the quadrant that the start point lies in. Once first
 %    intersection has been found subsequent quadrants are defined in
-%    next_element
+%    next_element, calling get_quadrant if ray direction is aligned to axis 
 % USAGE
-%    quad = get_quadrant(theta);
+%    quad = get_quadrant(theta,alpha,uvs,dcs,tol);
 % INPUTS
 %   theta - angle in radians from local origin to start point (0-2pi)
+%           set to ray direction, alpha, if start point is at a node
+%   alpha - angle tangential to ray direction
+%   uvs - location of start point [u,v] in local coordinates
+%   dcs - celerity gradient at start point [dcx,dcy]
 %   tol - tolerance around angles that are multiples of pi/2
 % OUTPUTS
 %   quad - trigonometric quadrant 1-4 of the right angled triangle, or
@@ -28,27 +32,24 @@ function quad = get_quadrant(theta,tol)
     if length(theta)>1
         warndlg('theta must be a scalar integer or double')
         quad = []; return;
-    end  
-
-    theta = mod(theta,2*pi);                   %ensure theta between 0-2pi
-
-    pi2 = pi/2; isdir = false(1,5);
-    for i=0:1:4                                 %check whether close to n.pi/2
-        bound =[i*pi2-tol,i*pi2+tol];
-        isdir(i+1) = isangletol(theta,bound);
     end
-    
-    if any(isdir)
-        %use theta to determine which double quadrant to use
-        if isdir(1)                            
+
+    theta = mod(theta,2*pi);              %ensure theta between 0-2pi
+    %find whether point lies on an axis and is travelling in the direction
+    %of that axis
+    [isaxispoint,theta] = is_axis_point(theta,alpha,uvs,dcs,tol);
+
+    if any(isaxispoint)
+        %use isaxispoint to determine which double quadrant to use
+        if isaxispoint(1)                            
             quad = int8(41);                    %theta close to 0
-        elseif isdir(2)
+        elseif isaxispoint(2)
             quad = int8(12);                    %theta close to pi/2
-        elseif isdir(3)
+        elseif isaxispoint(3)
             quad = int8(23);                    %theta close to pi
-        elseif isdir(4)
+        elseif isaxispoint(4)
             quad = int8(34);                    %theta close to 3pi/2
-        elseif isdir(5)
+        elseif isaxispoint(5)
             quad = int8(41);                    %theta close to 2pi
         end
     else

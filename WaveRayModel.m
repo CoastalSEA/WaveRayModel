@@ -137,12 +137,20 @@ classdef WaveRayModel < muiModelUI
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
                                 'Backward Rays','Spectral Transfer',...
                                               'Test Grid','Derive Output'};
-            menu.Run(1).Callback = repmat({@obj.runMenuOptions},[1,6]);
+            menucall = repmat({@obj.runMenuOptions},[1,6]);
+            menucall{4} = 'gcbo;';
+            menu.Run(1).Callback = menucall;
             menu.Run(1).Separator = [repmat({'off'},[1,4]),{'on','on'}];
+
+            % submenu for Spectral Transfer
+            menu.Run(2).List = {'Transfer Table','Run Timeseries'};
+            menu.Run(2).Callback = repmat({@obj.runMenuOptions},[1,2]);
+            menu.Run(2).Separator = repmat({'off'},[1,2]);
             
             %% Plot menu --------------------------------------------------  
-            menu.Analysis(1).List = {'Plots','Statistics'};
-            menu.Analysis(1).Callback = repmat({@obj.analysisMenuOptions},[1,2]);
+            menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
+            menu.Analysis(1).Callback = repmat({@obj.analysisMenuOptions},[1,4]);
+            menu.Run(2).Separator = {'off','off','on','off'};
             
             %% Help menu --------------------------------------------------
             menu.Help(1).Callback = {@obj.Help}; %make model specific?
@@ -281,12 +289,14 @@ classdef WaveRayModel < muiModelUI
                     RayTracks.runModel(obj,src); 
                 case 'Backward Rays'                    
                     RayTracks.runModel(obj,src);
-                case 'Spectral Transfer'
+                case 'Transfer Table'
 %                     [cobj,classrec] = selectCaseObj(muicat,[],gridclasses,promptxt);
 %                     if isempty(cobj), return; end
 %                     getUserTools(cobj,classrec,muicat);
                     
                     WRM_SprectralTransfer.runModel(obj);
+                case 'Run Timeseries'
+                    WRM_SprectralTransfer.runWaves(obj);
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'

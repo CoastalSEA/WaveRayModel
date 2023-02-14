@@ -1,4 +1,4 @@
-function grid = celerity_grid(grid,T,zwl,delta)
+function cgrid = celerity_grid(cgrid,T,zwl,delta)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -9,7 +9,7 @@ function grid = celerity_grid(grid,T,zwl,delta)
 % USAGE
 %    grid = celerity_grid(grid,T,zwl,delta)
 % INPUTS
-%   grid.z - [m,n] array of bed elevations relative to zero datum (m)
+%   cgrid.z - [m,n] array of bed elevations relative to zero datum (m)
 %   T - [1,p] array of wave periods (s)
 %   zwl - [1,q] water level elevations relative to zero datum (m)
 %   delta - grid scpaing interval of uniform grid (delx=dely)
@@ -32,14 +32,14 @@ function grid = celerity_grid(grid,T,zwl,delta)
 % CoastalSEA (c) Jan 2023
 %----------------------------------------------------------------------
 %
-    [nm,nn] = size(grid.z);
+    [nm,nn] = size(cgrid.z);
     np = length(T);
     nq = length(zwl);
     %loop over water levels and wave periods for each column (x) of the grid
 
     c = zeros(nm,nn,np,nq); cg = c; dcx = c; dcy = c; depth = zeros(nm,nn,nq);
     for l=1:nq
-        h = zwl(l)-grid.z;
+        h = zwl(l)-cgrid.z;
         h(h<0) = 0;
         depth(:,:,l) = h;
         for k=1:np
@@ -54,7 +54,7 @@ function grid = celerity_grid(grid,T,zwl,delta)
             end
         end
     end
-    grid.c = c; grid.cg = cg; 
-    grid.dcx = dcx; grid.dcy = dcy; 
-    grid.h = depth;
+    cgrid.c = c; cgrid.cg = cg; 
+    cgrid.dcx = dcx; cgrid.dcy = dcy; 
+    cgrid.h = depth;
 end
