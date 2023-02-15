@@ -40,6 +40,7 @@ classdef WaveRayModel < muiModelUI
             %                                        % << Edit to model and input parameters classnames 
             obj.ModelInputs.RayTracks = {'WRM_RunParams'};
             obj.ModelInputs.WRM_Bathy = {'GD_GridProps'};
+            obj.ModelInputs.SpectralTransfer = {''};
             %tabs to include in DataUIs for plotting and statistical analysis
             %select which of the options are needed and delete the rest
             %Plot options: '2D','3D','4D','2DT','3DT','4DT'
@@ -294,9 +295,9 @@ classdef WaveRayModel < muiModelUI
 %                     if isempty(cobj), return; end
 %                     getUserTools(cobj,classrec,muicat);
                     
-                    WRM_SprectralTransfer.runModel(obj);
+                    SpectralTransfer.runModel(obj);
                 case 'Run Timeseries'
-                    WRM_SprectralTransfer.runWaves(obj);
+                    SpectralTransfer.runWaves(obj);
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'
