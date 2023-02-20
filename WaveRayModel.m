@@ -41,6 +41,7 @@ classdef WaveRayModel < muiModelUI
             obj.ModelInputs.RayTracks = {'WRM_RunParams'};
             obj.ModelInputs.WRM_Bathy = {'GD_GridProps'};
             obj.ModelInputs.SpectralTransfer = {''};
+            obj.ModelInputs.WRM_WaveModel = {'WRM_RunParams'};
             %tabs to include in DataUIs for plotting and statistical analysis
             %select which of the options are needed and delete the rest
             %Plot options: '2D','3D','4D','2DT','3DT','4DT'
@@ -101,57 +102,68 @@ classdef WaveRayModel < muiModelUI
             
             %% Setup menu -------------------------------------------------
             menu.Setup(1).List = {'Input Data','Grid Parameters','Grid Tools',...
-                                  'Run Parameters','Model Constants'};                                    
+                                  'Run Parameters','Data clean-up','Model Constants'};                                    
             menu.Setup(1).Callback = [{'gcbo;'},{@obj.setupMenuOptions},...
-                              {'gcbo;'},{'gcbo;'},{@obj.setupMenuOptions}];
+                                          {'gcbo;'},{'gcbo;'},{'gcbo;'},...
+                                                 {@obj.setupMenuOptions}];
             %add separators to menu list (optional - default is off)
-            menu.Setup(1).Separator = [repmat({'off'},[1,4]),{'on'}]; %separator preceeds item
+            menu.Setup(1).Separator = [repmat({'off'},[1,5]),{'on'}]; %separator preceeds item
             
             % submenu for Import Data (if these are changed need to edit
             % loadMenuOptions to be match)
-            menu.Setup(2).List = {'Gridded Data','Timeseries'};
-            menu.Setup(2).Callback = {'gcbo;','gcbo;'};
+            menu.Setup(2).List = {'Bathymetry','Waves','Water levels','Winds'};
+            menu.Setup(2).Callback = repmat({'gcbo;'},[1,4]);
             % submenu for Gridded and Timeseries Data 
-            nitems = 2;
+            nitems = 4;
             for j=1:nitems  %add standard submenu to all import menu items
                 menu.Setup(j+2).List = {'Load','Add','Delete','Quality Control'};                                   
                 menu.Setup(j+2).Callback = repmat({@obj.loadMenuOptions},[1,4]);
             end
             % submenu for Grid Tools
-            menu.Setup(5).List = {'Translate Grid','Rotate Grid',...
+            menu.Setup(7).List = {'Translate Grid','Rotate Grid',...
                                   'Re-Grid','Sub-Grid',...
                                   'Combine Grids','Add Surface',...
                                   'To curvilinear','From curvilinear',... 
                                   'Display Dimensions','Difference Plot',...
                                   'Plot Sections','Digitise Line',...
                                   'Export xyz Grid','User Function'};                                                                         
-            menu.Setup(5).Callback = repmat({@obj.gridMenuOptions},[1,14]);
-            menu.Setup(5).Separator = [repmat({'off'},[1,6]),...
+            menu.Setup(7).Callback = repmat({@obj.gridMenuOptions},[1,14]);
+            menu.Setup(7).Separator = [repmat({'off'},[1,6]),...
                              {'on','off','on','off','off','on','on','on'}]; %separator preceeds item  
             % submenu for Run Parameters
-            menu.Setup(6).List = {'Run Conditions','Forward Tracking','Backward Tracking'};
-            menu.Setup(6).Callback = repmat({@obj.setupMenuOptions},[1,3]);
-            menu.Setup(6).Separator = repmat({'off'},[1,3]);
-
+            menu.Setup(8).List = {'Run Conditions','Forward Tracking','Backward Tracking'};
+            menu.Setup(8).Callback = repmat({@obj.setupMenuOptions},[1,3]);
+            menu.Setup(8).Separator = repmat({'off'},[1,3]);
+            % submenu for Data clean-up
+            menu.Setup(9).List = {'Concatenate two timeseries',...
+                            'Resample timeseries','Patch timeseries',...                
+                            'Trim timeseries'};
+            menu.Setup(9).Callback = repmat({@obj.datacleanup},[1,4]);
+            menu.Setup(9).Separator = {'off','off','off','off'};
             
             %% Run menu ---------------------------------------------------
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
                                 'Backward Rays','Spectral Transfer',...
                                               'Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,6]);
-            menucall{4} = 'gcbo;';
+            menucall = repmat({@obj.runMenuOptions},[1,6]); menucall{4} = 'gcbo;';            
             menu.Run(1).Callback = menucall;
             menu.Run(1).Separator = [repmat({'off'},[1,4]),{'on','on'}];
 
             % submenu for Spectral Transfer
-            menu.Run(2).List = {'Transfer Table','Run Timeseries'};
+            menu.Run(2).List = {'Create Table','Run Timeseries'};
             menu.Run(2).Callback = repmat({@obj.runMenuOptions},[1,2]);
             menu.Run(2).Separator = repmat({'off'},[1,2]);
             
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
-            menu.Analysis(1).Callback = repmat({@obj.analysisMenuOptions},[1,4]);
-            menu.Run(2).Separator = {'off','off','on','off'};
+            menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,3]),...
+                                                                {'gcbo;'}];
+            menu.Analysis(1).Separator = {'off','off','on','off'};
+            
+            %submenu for Spectral Plots
+            menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients','Animation'};
+            menu.Analysis(2).Callback = repmat({@obj.analysisMenuOptions},[1,3]);
+            menu.Analysis(2).Separator = repmat({'off'},[1,3]);
             
             %% Help menu --------------------------------------------------
             menu.Help(1).Callback = {@obj.Help}; %make model specific?
@@ -199,7 +211,11 @@ classdef WaveRayModel < muiModelUI
             %tab (src)
             switch src.Tag                                  
                 case 'Plot' 
-                     tabPlot(cobj,src,obj);
+                     if isa(cobj,'RayTracks') || isa(cobj,'SpectralTransfer')
+                        tabPlot(cobj,src,obj);
+                     else
+                        tabPlot(cobj,src);
+                     end
                 case 'Stats'                    
                     lobj = getClassObj(obj,'mUI','Stats');
                     if isempty(lobj), return; end
@@ -246,7 +262,7 @@ classdef WaveRayModel < muiModelUI
                     obj.Constants = setInput(obj.Constants);
             end
         end  
-        %%
+%%
         function gridMenuOptions(obj,src,~)
             %callback functions for grid tools options
             gridclasses = {'GD_ImportData'}; %add other classes if needed
@@ -254,13 +270,23 @@ classdef WaveRayModel < muiModelUI
             DrawMap(obj);
         end
 %%
+        function datacleanup(obj,src,~)
+            %all cleanup options call the same function
+            ct_data_cleanup(obj.Cases,src);
+            DrawMap(obj);
+        end
+%%
         function loadMenuOptions(obj,src,~)
             %callback functions to import timeseries data
             switch src.Parent.Text
-                case 'Gridded Data'
+                case 'Bathymetry'
                     classname = 'GD_ImportData';
-                case 'Timeseries'
-                    classname = 'muiUserData';
+                case 'Waves'
+                    classname = 'ctWaveData';
+                case 'Water levels'
+                    classname = 'ctWaterLevelData';
+                case 'Winds'
+                    classname = 'ctWindData';
             end
             %
             switch src.Text
@@ -279,10 +305,7 @@ classdef WaveRayModel < muiModelUI
 
         %% Run menu -------------------------------------------------------
         function runMenuOptions(obj,src,~)
-            %callback functions to run model
-            muicat = obj.Cases;   %handle to muiCatalogue
-            promptxt = 'Select a Case to use:'; 
-            gridclasses = {'GD_ImportData'};
+            %callback functions to run model            
             switch src.Text     
                 case 'Check Start Points'
                     RayTracks.checkStart(obj);
@@ -290,14 +313,10 @@ classdef WaveRayModel < muiModelUI
                     RayTracks.runModel(obj,src); 
                 case 'Backward Rays'                    
                     RayTracks.runModel(obj,src);
-                case 'Transfer Table'
-%                     [cobj,classrec] = selectCaseObj(muicat,[],gridclasses,promptxt);
-%                     if isempty(cobj), return; end
-%                     getUserTools(cobj,classrec,muicat);
-                    
+                case 'Create Table'
                     SpectralTransfer.runModel(obj);
                 case 'Run Timeseries'
-                    SpectralTransfer.runWaves(obj);
+                    WRM_WaveModel.runModel(obj);
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'
@@ -307,11 +326,28 @@ classdef WaveRayModel < muiModelUI
             
         %% Analysis menu ------------------------------------------------------
         function analysisMenuOptions(obj,src,~)
+            %callback functions for analysis menu
+            promptxt = 'Select a Case to use:'; 
             switch src.Text
                 case 'Plots'
                     obj.mUI.PlotsUI = muiPlotsUI.getPlotsUI(obj);
                 case 'Statistics'
                     obj.mUI.StatsUI = muiStatsUI.getStatsUI(obj);
+                case 'Ray Plots'                    
+                    [cobj,~] = selectCaseObj(obj.Cases,[],{'RayTracks'},promptxt);
+                    hf = figure('Name','SpecTrans','Tag','PlotFig');
+                    ax = axes(hf);
+                    tabPlot(cobj,ax,obj);
+                case 'Transfer Table'
+                    [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
+                    hf = figure('Name','SpecTrans','Tag','PlotFig');
+                    ax = axes(hf);
+                    tabPlot(cobj,ax,obj);
+                case 'Transfer Coefficients'
+                    [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
+                    coefficientsPlot(cobj,obj);
+                case 'Animation'
+                    WRM_WaveModel.runAnimation(obj);
             end            
         end
 

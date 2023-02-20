@@ -107,7 +107,7 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
     end 
 %%
     methods
-        function tabPlot(obj,src,~) %abstract class for muiDataSet
+        function tabPlot(obj,src) %abstract class for muiDataSet
             %generate plot for display on Q-Plot tab
             dst = obj.Data.Grid;
             grid = getGrid(obj,1);
@@ -119,7 +119,7 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
                 ax = tabfigureplot(obj,src,tabcb,false);
                 ax.NextPlot = 'add';
             else
-                ax = src;
+                ax = src; %user passing an axis as src rather than a uicontrol
             end
     
             %plot form as a contour plot

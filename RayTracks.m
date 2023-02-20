@@ -164,9 +164,13 @@ classdef RayTracks < muiDataSet
             caserec = caseRec(muicat,obj.RunParam.WRM_Bathy.caseid); 
             gobj = getCase(muicat,caserec);
             %set >Figure button and create axes
-            tabcb  = @(src,evdat)tabPlot(obj,src,mobj); 
-            ax = tabfigureplot(obj,src,tabcb,false);
-            ax.NextPlot = 'add';
+            if strcmp(src.Tag,'Plot') || strcmp(src.Tag,'FigButton')
+                tabcb  = @(src,evdat)tabPlot(obj,src,mobj);            
+                ax = tabfigureplot(obj,src,tabcb,false);
+                ax.NextPlot = 'add';
+            else
+                ax = src; %user passing an axis as src rather than a uicontrol
+            end
             %use tabPlot in WRM_Bathy to plot the bathymetry grid
             tabPlot(gobj,ax);
 
@@ -185,9 +189,9 @@ classdef RayTracks < muiDataSet
             else
                 options = [1,1,2];
             end
-            plotRay(obj,ax,options);
+            ax = plotRay(obj,ax,options);
             %update title
-            title(obj.Data.Dataset.Description);
+            title(ax,obj.Data.Dataset.Description);
         end
     end 
 %%    
@@ -215,10 +219,10 @@ classdef RayTracks < muiDataSet
             %and convert direction degTN to grid (trigonometric) direction
             [~,alpha] = compass2trig(ftrobj.dir0TN);
 
-%             hf = figure('Name','Search','Tag','PlotFig');
-%             ax = axes(hf);
-%             set(ax,'xgrid','on')
-%             set(ax,'ygrid','on')
+            % hf = figure('Name','Search','Tag','PlotFig');
+            % ax = axes(hf);
+            % set(ax,'xgrid','on')
+            % set(ax,'ygrid','on')
 
             nr = ftrobj.nRay;
             np = length(T);
@@ -235,11 +239,11 @@ classdef RayTracks < muiDataSet
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
                         end
-%                         hold on
-%                         xr = rayobj.Track.xr;
-%                         yr = rayobj.Track.yr;
-%                         plot(ax,xr,yr,'-k')
-%                         hold off
+                        % hold on
+                        % xr = rayobj.Track.xr;
+                        % yr = rayobj.Track.yr;
+                        % plot(ax,xr,yr,'-k')
+                        % hold off
                         rays{i,j,k} = rayobj;
                     end
                 end
@@ -249,14 +253,8 @@ classdef RayTracks < muiDataSet
         function [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit)
             %construct set of ray tracks from a point and a set inshore wave
             %directions using backward wave ray tracing
-
             btrobj = obj.RunParam.WRM_BT_Params;
             xys = btrobj.StartPoint;
-            delta = cgrid.X(1,2)-cgrid.X(1,1);
-            if all(rem(xys,delta)==0)
-                %start point is on a node so move by a small increment - 1m
-                xys = xys+1;
-            end
 
             %get the array of inshore wave directions
             phi = btrobj.DirectionRange;
@@ -317,41 +315,51 @@ classdef RayTracks < muiDataSet
             hold(ax,'off')
         end
 %%
-        function plotRay(obj,ax,opt)
+        function ax = plotRay(obj,ax,opt)
             %plot each ray on the selected forward track
             %each ray can be a different length so plot iteratively
             cvar = {'celerity','cgroup'};
             nrays = height(obj.Data.Dataset);
-            hold(ax,"on")
-            if opt(3)>1
+            
+            if opt(3)>2 
+                %delete(ax)
+                %see https://uk.mathworks.com/matlabcentral/answers/101346-how-do-i-use-multiple-colormaps-in-a-single-figure-in-r2014a-and-earlier
+                %create axes for the ray surfaces
+                hsax = axes;
+                hsax.XLim = ax.XLim;
+                hsax.YLim = ax.XLim;
+                %set visibility for axes to 'off' so it appears transparent
+                axis(hsax,'off')
+                colormap(hsax,cool);
+                
+                xr = []; yr = []; var = [];
+                for i=1:nrays
+                    xr = [xr;obj.Data.Dataset.xr{i,opt(1),opt(2)}];
+                    yr = [yr;obj.Data.Dataset.yr{i,opt(1),opt(2)}];
+                    var = [var;obj.Data.Dataset.(cvar{opt(3)-2}){i,opt(1),opt(2)}]; 
+                end
+                
+                zr = ones(size(xr))*10;
+                scatter(hsax,xr,yr,[],var,'fill');
+                
+                
+                colorbar(hsax,'Location','west');
+                clim(hsax,[min(var), max(var)]);
+                %link the two overlaying axes so they match at all times to remain accurate
+                linkaxes([ax,hsax]);
+
+            elseif opt(3)>1
+                hold(ax,"on")
                 for i=1:nrays
                     xr = obj.Data.Dataset.xr{i,opt(1),opt(2)};
                     yr = obj.Data.Dataset.yr{i,opt(1),opt(2)};
                     plot(ax,xr,yr,'-k');
-    %                 if opt(3)==1
-    %                     plot(ax,xr,yr,'-k');
-    %                 else
-    %                     var = obj.Data.Dataset.(cvar{opt(3)-1}){i,opt(1),opt(2)}; 
-                            %need to gather point and plot as a set***
-                            %see https://uk.mathworks.com/matlabcentral/answers/101346-how-do-i-use-multiple-colormaps-in-a-single-figure-in-r2014a-and-earlier
-    %                     %create axes for the ray surfaces axes
-%                 hsax = axes;
-%                 %set visibility for axes to 'off' so it appears transparent
-%                 axis(hsax,'off')
-%                 colormap(hsax,cool);
-%                 s = scatter(hsax,xr,yr,[],var,'fill');
-%                 cbCM = colorbar(hsax,'Location','east');
-%                 %link the two overlaying axes so they match at all times to remain accurate
-%                 linkaxes([ax,hsax]);
-
-    %                     cmap = interpolate_cbrewer(cool,'linear',length(xr));
-    % 
-    %                     s.CData = cmap;
-    %                 end
                 end
+                hold(ax,"off")
             else
                 nperiods = length(obj.Data.Dataset.Dimensions.Period);
                 nwls = length(obj.Data.Dataset.Dimensions.WaterLevel);
+                hold(ax,"on")
                 for i=1:nrays
                     for j=1:nperiods
                         for k=1:nwls
@@ -361,9 +369,8 @@ classdef RayTracks < muiDataSet
                         end
                     end
                 end
+                hold(ax,"off")
             end
-
-            hold(ax,"off")
         end
 %%       
 function options = get_selection(obj)

@@ -22,7 +22,8 @@ classdef WRM_RunParams < muiPropertyUI
                           'Number of Wave Periods (-)',...
                           'Range of Water Levels (mOD)',...
                           'Number of Waver Levels (-)',...
-                          'Ray cutoff depth (m)'};
+                          'Ray cutoff depth (m)',...
+                          'Shoreline angle (degTN)'};
         %abstract properties in muiPropertyUI for tab display
         TabDisplay   %structure defines how the property table is displayed 
     end
@@ -34,7 +35,8 @@ classdef WRM_RunParams < muiPropertyUI
         nPeriod = 8                 %Number of Wave Periods
         WaterLevelRange = [-1 1]    %Range of Water Levels (mOD)
         nWaterLevel = 3             %Number of Waver Levels
-        hCutOff = 0.1;              %wave ray cut-off water depth (m)
+        hCutOff = 0.1               %wave ray cut-off water depth (m)
+        ShorelineAngle              %angle of contours from north (degrees TN)
     end    
 
 %%   

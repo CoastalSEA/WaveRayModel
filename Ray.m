@@ -74,7 +74,6 @@ classdef Ray < handle
             % alpha - start angle (radians)
             
             delta = cgrid.X(1,2)-cgrid.X(1,1);                  %grid spacing
-            distol = 1/delta;                              %tolerance equivalent to 1m
             XY = [reshape(cgrid.X,[],1),reshape(cgrid.Y,[],1)]; %x,y vectors
 
             %find nearest node to start point

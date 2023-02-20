@@ -30,7 +30,7 @@ classdef SpectralTransfer < muiDataSet
         function obj = runModel(mobj)
             %function to run a simple 2D diffusion model
             obj = SpectralTransfer;                           
-            dsp = modelDSproperties(obj);
+            
             
 %             %now check that the input data has been entered
 %             %isValidModel checks the InputHandles defined in XXXMainUI <<%Edit to UI
@@ -44,109 +44,446 @@ classdef SpectralTransfer < muiDataSet
 %--------------------------------------------------------------------------
             %select back tracking ray case to use
             promptxt = 'Select Backward Ray Trace Dataset:';
-            [rayobj,rayrec] = selectCaseObj(muicat,{'backward_model'},...
+            rayobj = selectCaseObj(muicat,{'backward_model'},...
                                                     {'RayTracks'},promptxt);
+            rayrec = caseRec(muicat,rayobj.CaseIndex);
             %assign the run parameters to the model instance
             setRunParam(obj,mobj,rayrec); %input caserecs passed as varargin 
 
-            [results,indir,intable] = specTransfer(obj,rayobj);            
+            [results,indir,inprops] = specTransfer(obj,rayobj);            
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
-%--------------------------------------------------------------------------                   
-            %each variable should be an array in the 'results' cell array
-            %if model returns single variable as array of doubles, use {results}
-            dst = dstable(results{:},'RowNames',indir,'DSproperties',dsp);
-            dst.Dimensions.Period = rayobj.Data.Dataset.Dimensions.Period; 
-            dst.Dimensions.WaterLevel = rayobj.Data.Dataset.Dimensions.WaterLevel;  
+%--------------------------------------------------------------------------  
+            %inshore celerities for period and water level
+
+            inccg = inprops(4:5);
+            dspi = modelDSproperties(obj,true);
+            indst = dstable(inccg{:},'DSproperties',dspi);
+            indst.Dimensions.Period = rayobj.Data.Dataset.Dimensions.Period; 
+            indst.Dimensions.WaterLevel = rayobj.Data.Dataset.Dimensions.WaterLevel; 
+            %assign metadata about model
+            indst.Source = metaclass(obj).Name;
+            indst.MetaData = sprintf('Derived using Case ID %d',rayobj.CaseIndex);
+            indst.UserData.Location = [inprops{1},inprops{2}];
+            indst.UserData.Depths = inprops{3};
+
+            %offshore celerities for direction, period and water level
+            dspo = modelDSproperties(obj,false);
+            offdst = dstable(results{:},'RowNames',indir,'DSproperties',dspo);
+            offdst.Dimensions.Period = rayobj.Data.Dataset.Dimensions.Period; 
+            offdst.Dimensions.WaterLevel = rayobj.Data.Dataset.Dimensions.WaterLevel;                        
+            %assign metadata about model
+            offdst.Source = metaclass(obj).Name;
+            offdst.MetaData = sprintf('Derived using Case ID %d',rayobj.CaseIndex);
 %--------------------------------------------------------------------------
 % Save results
-%--------------------------------------------------------------------------                        
-            %assign metadata about model
-            dst.Source = metaclass(obj).Name;
-            dst.MetaData = sprintf('Derived using Case ID %d',rayobj.CaseIndex);
-            dst.UserData.Inshore = intable;
+%--------------------------------------------------------------------------  
+            dst.Inshore = indst;
+            dst.Offshore = offdst;
             %save results
             setDataSetRecord(obj,muicat,dst,'spectral_model');
             getdialog('Run complete');
-        end
+        end    
     end
 %%
     methods
+        function output = runWaves(obj,mobj,tsdst)
+            %run the spectral transfer model for a timeseries of offshore
+            %wave conditions and return a table of wave conditions
+            select = get_model_selection(obj); %select spectral form and data type
+            if isempty(select), return; end    %user cancelled
+
+            rayrec = caseRec(mobj.Cases,obj.RunParam.RayTracks.caseid); %ray case used
+            rayobj = getCase(mobj.Cases,rayrec);
+            nint = height(tsdst);
+            output = table();
+            inputable = tsdst.DataTable;       %needed for parallel option
+
+            parfor i=1:nint
+                %for each offshore wave get the inshore results
+                input = inputable(i,:);
+                [SGo,SGi,fri,xso] = get_inshore_spectra(obj,rayobj,input,select);    
+                output(i,:) = get_inshore_wave(obj,SGo,SGi,Dims,fri,xso,input);
+            end
+        end
+%%
+        function  [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst)
+            %run the spectral transfer model for a timeseries of offshore
+            %wave cinditions and return the spectra
+            select = get_model_selection(obj); %select spectral form and data type
+            if isempty(select), return; end    %user cancelled
+
+            rayrec = caseRec(mobj.Cases,obj.RunParam.RayTracks.caseid); %ray case used
+            rayobj = getCase(mobj.Cases,rayrec);
+            nint = height(tsdst);
+            inputable = tsdst.DataTable;       %needed for parallel option
+nint = 100;
+            for i=1:nint
+                %for each offshore wave get the inshore results
+                input = inputable(i,:);
+                [SGo,SGi,fri,xso] = get_inshore_spectra(obj,rayobj,input,select);  
+                if isempty(SGo), continue; end
+                Sot(i,:,:) = SGo;
+                Sit(i,:,:) = SGi;
+                Fri(i,:) = fri;
+                Xso(i,:) = xso;
+            end   
+            idx = find(Sot~=0,1,'first');
+            Dims.f = squeeze(Fri(idx,:));
+            Dims.xso = squeeze(Xso(idx,:));
+        end
+%% 
+        function coefficientsPlot(obj,mobj)
+            %generate data to plot the coefficents as a function of
+            %direction, period and water level
+            select = get_model_selection(obj); %select spectral form and data type
+            if isempty(select), return; end    %user cancelled
+
+            rayrec = caseRec(mobj.Cases,obj.RunParam.RayTracks.caseid); %ray case used
+            rayobj = getCase(mobj.Cases,rayrec);
+            
+            offdst= obj.Data.Offshore;         %offshore stectral transfer table
+            T = offdst.Dimensions.Period;
+            zwl = offdst.Dimensions.WaterLevel;   
+            Diri = offdst.RowNames;            %inshore ray directions
+            ndir = length(Diri);
+            nper = length(T);              
+            nwls = length(zwl);
+
+            input.Hs = 1;   %transfer coefficients for unit wave height
+            kw = zeros(ndir,nper,nwls); kt2 = kw; ktp = kw; kd = kw;
+            for i=1:ndir
+                for j=1:nper
+                    for k=1:nwls
+                        input.Dir = Diri(i);   %limit examination of mean offshore
+                        input.Tp = T(j);       %directions to inshore range
+                        input.swl = zwl(k);
+                        outable = get_inshore_wave(obj,rayobj,input,select); 
+                        kw(i,j,k) = outable.kw;
+                        kt2(i,j,k) = outable.kt2;
+                        ktp(i,j,k) = outable.ktp;
+                        kd(i,j,k) = outable.kd;
+                    end
+                end
+            end
+            output = struct('kw',kw,'kt2',kt2,'ktp',ktp,'kd',kd);
+
+            get_coefficientsPlot(obj,Diri,T,zwl,output);
+        end
+%%
+        function [SGo,SGi,fri,xso] = get_inshore_spectra(obj,rayobj,input,sp)
+            
+        
+
+            dir_int = 0.5;     %interval used to interpolate directions (deg)
+            radint = deg2rad(dir_int);
+            per_int = 0.5;     %interval uset to interpolate periods (s)
+            
+            %offshore wave conditions
+            if istable(input) && any(isnan(input{1,[1,3,5,9]}))
+                SGo = []; SGi = []; fri = []; xso = []; 
+                return;
+            end   
+            Dir0 = input.Dir;                   %mean wave direction            
+            swl = input.swl;     
+            Tpn = input.Tp;
+            Hsn = input.Hs;
+
+            %transfer tables and dimensions
+            indst = obj.Data.Inshore;
+            depths = indst.UserData.Depths;     %inshore properties water depths            
+            indst = indst.DataTable;
+
+            offdst = obj.Data.Offshore;
+            T = offdst.Dimensions.Period;
+            zwl = offdst.Dimensions.WaterLevel;
+            depi = interp1(zwl,depths,swl);     %inshore water depth at zwln
+            phi = offdst.RowNames;              %inshore directions are held in the offshore table
+            offdst = offdst.DataTable;
+
+            %check limits for valid rays based on depth and             
+            hlimit = rayobj.RunParam.WRM_RunParams.hCutOff;
+            %ShorelineAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;
+            ShorelineAngle = NaN;
+            id1 = offdst.depth<depi | offdst.depth<=hlimit;    %depth limits
+            if ~isnan(ShorelineAngle)
+                shoreang = mod(compass2trig(ShorelineAngle),2*pi);
+                bound = [shoreang,mod(shoreang+pi,2*pi)];      %shoreline limits
+                dir = compass2trig(offdst.theta);     
+                id2 = isangletol(dir,bound);
+            else
+                id2 = false(size(offdst.theta));
+            end
+
+            idx = logical(id1+id2);                            %combined limits
+            
+            theta = offdst.theta; theta(idx) = NaN; %offshore direction    
+            c0 = offdst.celerity;  c0(idx) = 0;     %offshore celerity
+            cg0 = offdst.cgroup;   cg0(idx) = 0;    %offshore group celerity
+            ci = squeeze(indst.celerity);           %inshore celerity
+            cgi = squeeze(indst.cgroup);            %inshore group celerity
+
+            %for each wave condition, Hsn, Tpn, mnTheta
+            %frequencies at freq_int period intervals
+            fri = 1./(min(T):per_int:max(T));         
+            %offshore direction at dir_int degree intervals
+            xso = mod(Dir0-90:dir_int:Dir0+90,360);
+
+            %initialise offshore conditions NB: can be for a timeseries ********      
+            %directional spreading factor for selected function
+            G = directional_spreading(Dir0,xso,sp.nspread,sp.spread);
+            % GG = trapz(deg2rad(xso),G); %check value = 1
+            % figure; plot(xso,G);
+
+            %frequency, direction and water level arrays for data   
+            f = 1./T;
+            [F,P,W] =meshgrid(f,phi,zwl);
+            %frequency, direction and water level arrays to interpolate to 
+             %var(xso,fri) for selected water level zwln
+            [Fro,Xso,Wln] = meshgrid(fri,xso,swl);
+            offdir = interp3(F,P,W,theta,Fro,Xso,Wln); %offshore directions array
+            c0fdw = interp3(F,P,W,c0,Fro,Xso,Wln,'linear',0);     %offshore celerity frequency,direction,water level array
+            cg0fdw = interp3(F,P,W,cg0,Fro,Xso,Wln,'linear',-0);  %offshore group celerity frequency,direction,water level array
+            cifw = interp2(f,zwl,ci',fri,swl);        %inshore celerity frequency,water level array
+            cgifw = interp2(f,zwl,cgi',fri,swl);      %inshore group celerity frequency,water level array
+            % check_plot(obj,1./fri,xso,offcg0,{'cg0','Wave period (s)','Offshore direction (degTN)'});
+
+            spectrum_inputs = {sp.source,Hsn,Tpn,sp.gamma};
+            %add hmin and hav for use in TMA
+            if strcmp(sp.form,'TMA shallow water')
+                hav = offdst.avdepth;  hav(idx) = 0;   %average depth along ray
+                % hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray                
+                hGav = interp3(F,P,W,hav,Fro,Xso,Wln,'linear',0);
+                % hGmn = interp3(F,P,W,hmn,Fro,Xso,Wln,'linear',0);   
+                % HGmn not used but retained for future inclusion
+            end   
+            clear id1 id2 idx
+
+            %pad the high frequencies with values from the minimum frequency
+            if min(T)>3
+                addfri = [1,0.5,0.33];
+                fri = [addfri,fri];
+                offdir = [repmat(offdir(:,1,:),1,3),offdir];
+                c0fdw = [repmat(c0fdw(:,1,:),1,3),c0fdw];
+                cg0fdw = [repmat(cg0fdw(:,1,:),1,3),cg0fdw];
+                if strcmp(sp.form,'TMA shallow water')
+                    hGav = [repmat(hGav(:,1,:),1,3),hGav];
+                    % hGmn = [repmat(hGmn(:,1,:),1,3),hGmn];;
+                    %use direction spread to find average depth on rays
+                    %based on the proportion they contribute to the spectrum
+                    hGav = trapz(radint,abs(trapz(fri,G'.*hGav,2)));%direction moment
+                    % hGmn = min([indepth,min(hGmn,[],'All','omitnan')]);
+                    %for offshore TMA spectrum use average depth along rays
+                    spectrum_inputs = {sp.source,Hsn,Tpn,sp.gamma,hGav,hGav}; 
+                end
+                cdeepwater = 9.81./addfri/pi;
+                addci = min([repmat(cifw(1),1,3);cdeepwater],[],1);
+                addcgi = min([repmat(cgifw(1),1,3);cdeepwater/2],[],1);
+                cifw = [addci,cifw];
+                cgifw = [addcgi,cgifw];
+            end
+
+            %spectral energy for seleced wave spectrum
+            S = wave_spectrum(sp.form,fri,spectrum_inputs{:});
+            % Hs = 4*sqrt(abs(trapz(fri,S))); %check = input Hsn
+            % figure; plot(fri,sf);
+
+            %calculate the shoaling coefficient ks(xso,fri)
+            ishoal = cifw.*cgifw;                   %inshore c.cg
+            oshoal = c0fdw.*cg0fdw;                 %offshore c.cg
+            shoal = oshoal./ishoal;                 %shoaling factor array            
+            clear cifw cgifw c0fdw cg0fdw oshoal ishoal
+            % check_plot(obj,1./fri,xsi,shoal,{'shoal','Wave period (s)','Offshore direction (degTN)'});            
+
+            SGo = G'*S;
+            SGsh = shoal.*SGo;
+            SGsh(isnan(SGsh)) = 0;
+            SGi = zeros(size(SGo));
+            for j=1:length(fri)
+                odir = offdir(:,j);
+                sgi = interp1(xso,SGsh(:,j),odir);
+                sgi(isnan(sgi)) = 0;
+                SGi(:,j) = SGi(:,j)+sgi;
+            end
+            clear SGsh offdir
+            % off_in_plot(obj,1./fri,xso,SGo,SGi)    
+            
+
+
+            if strcmp(sp.form,'TMA shallow water')
+                phi = kit_limit(obj,fri,depi);   %apply saturation to depth at site
+                SGi = phi.*SGi;
+            end
+
+        end
+%%
+
+        function output = get_inshore_wave(~,SGo,SGi,fri,xso)
+            %
+            if isempty(SGo)
+                varnames = {'Hsi','T2i','Diri','Tpi','Diripk','kw','kt2','ktp','kd','swl','depi'};
+                nans = num2cell(NaN(1,11));
+                output = table(nans{:},'VariableNames',varnames);
+                return;
+            end        
+            So = trapz(radint,abs(trapz(fri,SGo,2))); %integral of offshore spectrum
+            Si = trapz(radint,abs(trapz(fri,SGi,2))); %integral of inshore spectrum
+            kw = sqrt(Si/So);                %wave transfer coefficient
+            [~,idf] = max(SGi,[],'All');     %index of peak energy
+            [idir,ifrq] = ind2sub([length(xso),length(fri)],idf);
+            Diripk = xso(idir);              %direction at inshore peak
+            Tpi =1/fri(ifrq);                %period at inshore peak
+            ktp = Tpi/Tpn;                   %peak period coefficient
+
+            radxso = deg2rad(xso);
+            SGdir = trapz(radxso,abs(trapz(fri,radxso'.*SGi,2)));%direction moment
+            Diri = rad2deg(SGdir/Si);
+            kd = Diri-Dir0;
+
+            SGif2 = trapz(radint,abs(trapz(fri,(fri.^2).*SGi,2))); %inshore f^2 moment
+            T2i = sqrt(Si/SGif2);
+
+            SGof2 = trapz(radint,abs(trapz(fri,(fri.^2).*SGi,2)));  %offshore f^2 moment
+            T2o = sqrt(So/SGof2);
+            kt2 = T2i/T2o;                  %mean period coefficient
+
+            Hsi = Hsn*kw;                   %inshore wave height (Hmo)
+            % Hmi = 4*sqrt(Si);               %check of inshore Hs
+            % Hmo = 4*sqrt(So);               %check of offshore Hs
+            % disp([GG,Hs,Hmo,Hmi])
+
+            output = table(Hsi,T2i,Diri,Tpi,Diripk,kw,kt2,ktp,kd,swl,depi);
+        end
+%%
         function tabPlot(obj,src,mobj) %abstract class for muiDataSet
             %generate plot for display on Q-Plot tab
-            dst = obj.Data.Dataset;
+
+            answer = questdlg('Inshore or Offshore results?','Spectrans',...
+                                    'Inshore','Offshore','Offshore');
+            if strcmp(answer,'Inshore')
+                inshore_plot(obj,src,mobj);
+                return;
+            end
+
+            dst = obj.Data.Offshore;
 
             %set >Figure button and create axes
-            tabcb  = @(src,evdat)tabPlot(obj,src,mobj); 
-            ax = tabfigureplot(obj,src,tabcb,false);
-            ax.NextPlot = 'add';
+            if strcmp(src.Tag,'Plot') || strcmp(src.Tag,'FigButton')
+                tabcb  = @(src,evdat)tabPlot(obj,src,mobj);            
+                ax = tabfigureplot(obj,src,tabcb,false);
+                ax.NextPlot = 'add';
+            else
+                ax = src; %user passing an axis as src rather than a uicontrol
+            end
 
             %extract required data
-            ki = get_selection(obj);
+            options = get_selection(obj);
             T = dst.Dimensions.Period;
             zwl = dst.Dimensions.WaterLevel;
             phi = dst.RowNames;
-            var = dst.theta(:,:,ki);
-
-            mindir = min(var,[],'All');
-            mindir = mindir-mod(mindir,30)+30;
-            maxdir = max(var,[],'All');
-            maxdir = maxdir-mod(maxdir,30);
-            nc = mindir:30:maxdir;
-            %construct Q-Plot
-            
+            var = dst.(options.var{1})(:,:,options.ki);
+ 
+            %construct Q-Plot            
             surf(ax,T,phi,var);
             view(2);
             shading interp
-            hold on
-            [C,h] = contour3(ax,T,phi,var,nc,'-k');
-            clabel(C,h,'LabelSpacing',300,'FontSize',8)
-            hold off
+
             %add the colorbar and labels
             cb = colorbar;
-            cb.Label.String = 'Offshore direction (degTN)';
+            cb.Label.String = options.desc;
             xlabel('Wave period (s)'); 
             ylabel('Inshore direction (degTN)'); 
-            title(sprintf('%s for water level of %.2g mOD',dst.Description,zwl(ki)));
+            title(sprintf('%s for water level of %.2g mOD',dst.Description,zwl(options.ki)));
             ax.Color = [0.96,0.96,0.96];  %needs to be set after plot
+
+            if strcmp(options.var,'theta')
+                mindir = min(var,[],'All');
+                mindir = mindir-mod(mindir,30)+30;
+                maxdir = max(var,[],'All');
+                maxdir = maxdir-mod(maxdir,30);
+                nc = mindir:30:maxdir;
+                hold on
+                [C,h] = contour3(ax,T,phi,var,nc,'-k');
+                clabel(C,h,'LabelSpacing',300,'FontSize',8)
+                hold off
+            end
+        end
+%%
+        function off_in_plot(obj,T,phi,var0,vari)
+            %plot offshore and inshore spectra
+            hf = figure('Name','SpecTrans','Tag','PlotFig');
+            ax = axes(hf);
+            labeli = 'Inshore direction (degTN)';
+            label0 = 'Offshore direction (degTN)';
+            labelx = 'Wave period (s)';
+
+            s1 = subplot(2,1,1,ax);
+            check_plot(obj,T,phi,var0,{'Offshore Spectrum',labelx,label0},s1)
+            s2 = subplot(2,1,2);
+            check_plot(obj,T,phi,vari,{'Inshore Spectrum',labelx,labeli},s2)
+            s2.YLim = s1.YLim;
         end
     end 
 %%    
     methods (Access = private)
-        function [spectran,indir,intable] = specTransfer(~,rayobj)
+        function [spectran,indir,inprops] = specTransfer(~,rayobj)
             %generate the spectral transfer table of offshore directions,
             %depths and celerities
             dst = rayobj.Data.Dataset;
             
             indir = dst.RowNames;  %assign inshore ray directions
-            %use first point of frist ray to define inshore point properties
-           
-            xi = dst.xr{1,1,1}(1);
-            yi = dst.yr{1,1,1}(1);
-            hi = dst.depth{1,1,1}(1);
-            ci = dst.celerity{1,1,1}(1);
-            cgi = dst.cgroup{1,1,1}(1);
-            intable = table(xi,yi,hi,ci,cgi);  %inshore properties
-            %compile table data for offshore properties
             ndir = length(indir);
             nper = length(dst.Dimensions.Period);
             nwls = length(dst.Dimensions.WaterLevel);
+
+            %use inshore point of first ray to define inshore point properties
+            %for each period and water level combination
+            xi = dst.xr{1,1,1}(1);
+            yi = dst.yr{1,1,1}(1);
+            ci = zeros(1,nper,nwls); hi = ci; cgi = ci;
+            for j=1:nper
+                for k=1:nwls     
+                    hi(1,j,k) = dst.depth{1,j,k}(1);
+                    ci(1,j,k) = dst.celerity{1,j,k}(1);
+                    cgi(1,j,k) = dst.cgroup{1,j,k}(1);  
+                end
+            end         
+            hi = squeeze(hi(1,1,:));
+            inprops = {xi,yi,hi,ci,cgi};  %inshore properties
+            %compile table data for offshore properties
+            
             c = zeros(ndir,nper,nwls); cg = c; h = c; offdir = c; 
+            hav = c; hmn = c;
             for i=1:ndir
                 for j=1:nper
                     for k=1:nwls
                         theta = dst.alpha{i,j,k}(end);
                         offdir(i,j,k) = mod(compass2trig(theta,true),360);
                         h(i,j,k) = dst.depth{i,j,k}(end);
+                        hav(i,j,k) = mean(dst.depth{i,j,k});
+                        hmn(i,j,k) = min(dst.depth{i,j,k});
                         c(i,j,k) = dst.celerity{i,j,k}(end);
                         cg(i,j,k) = dst.cgroup{i,j,k}(end);
                     end
                 end
             end
-            spectran = {offdir,h,c,cg};
+            spectran = {offdir,h,c,cg,hav,hmn};
+        end
+%%
+        function phi = kit_limit(~,f,ds)
+            % Calculate the Kitaigorodskii limit to the spectrum at frquency f
+            % f - wave frequency (1/s)
+            % ds - water depth at site (m)
+            % phi - frquency dependent Kitaigorodskii adjustment to be applied to the 
+            % JONSWAP spectrum to take accound of depth limiting effects
+            g = 9.81;
+            omega = 2*pi*f.*sqrt(ds/g);
+            % if omega<=1 (vectorised) or omega>2
+            phi = 0.5*omega.^2.*(omega<=1) + 1.*(omega>2);        
+            phi = phi + (1 - 0.5*(2-omega).^2).*(omega>1 & omega<=2);
         end
 %%       
-function options = get_selection(obj)
+        function options = get_selection(obj)
             %get index of period, water level and variable to use in plots or model
             %   Defined using varargin for the following fields
             %    FigureTitle     - title for the UI figure
@@ -160,22 +497,137 @@ function options = get_selection(obj)
             %    SelectedVar     - index vector to define case,dataset,variable selection  
             %    ActionButtons   - text for buttons to take action based on selection
             %    Position        - poosition and size of figure (normalized units)
-            
-            zwl = obj.Data.Dataset.Dimensions.WaterLevel;
+            vardesc = obj.Data.Offshore.VariableDescriptions;
+            zwl = obj.Data.Offshore.Dimensions.WaterLevel;
             selection = inputgui('FigureTitle','Levels',...
-                                 'InputFields',{'Water level'},...
-                                 'Style',{'popupmenu'},...
+                                 'InputFields',{'Variable','Water level'},...
+                                 'Style',{'popupmenu','popupmenu'},...
                                  'ActionButtons', {'Select','Cancel'},...
-                                 'DefaultInputs',{string(zwl)},...
+                                 'DefaultInputs',{vardesc,string(zwl)},...
                                  'PromptText','Select values to use');
             if isempty(selection)
                 options = []; 
             else
-                options = selection{1};
+                options.var = obj.Data.Offshore.VariableNames(selection{1});
+                options.desc = obj.Data.Offshore.VariableLabels(selection{1});
+                options.ki = selection{2};
             end  
         end
+%%       
+        function spectra = get_model_selection(~)
+            %get index of period, water level and variable to use in plots or model
+            %   Defined using varargin as in above function
+            sp = {'JONSWAP fetch limited','TMA shallow water',...
+                   'Pierson-Moskowitz fully developed','Bretschneider open ocean'};
+            src = {'wave','wind'};
+            spr = {'SPM cosine function','Donelan secant function'};
+            nsp = string(0:1:10);
+            selection = inputgui('FigureTitle','Spectrum',...
+                                 'InputFields',{'Wave Spectra','Data type',...
+                                    'Spreading (1,0)','Spreading exponent',...
+                                     'Jonswap gamma (if req.)'},...
+                                 'Style',{'popupmenu','popupmenu',...
+                                         'popupmenu','popupmenu','edit'},...
+                                 'ActionButtons', {'Select','Cancel'},...
+                                 'DefaultInputs',{sp,src,spr,nsp,'3.3'},...%use nspread=0 if included in wave data
+                                 'PromptText','Select values to use');
+            if isempty(selection)
+                spectra = [];
+            else
+                spectra.form = sp{selection{1}};
+                spectra.source = src{selection{2}};
+                spectra.spread = spr{selection{3}};
+                spectra.nspread = str2double(nsp{selection{4}});
+                spectra.gamma = str2double(selection{5});
+            end 
+        end
 %%
-        function dsp = modelDSproperties(~) 
+        function inshore_plot(obj,src,mobj)
+            %plot the inshore spectral transfer results
+            dst = obj.Data.Inshore;
+
+            %set >Figure button and create axes
+            if strcmp(src.Tag,'Plot') || strcmp(src.Tag,'FigButton')
+                tabcb  = @(src,evdat)tabPlot(obj,src,mobj);            
+                ax = tabfigureplot(obj,src,tabcb,false);
+                ax.NextPlot = 'add';
+            else
+                ax = src; %user passing an axis as src rather than a uicontrol
+            end
+
+            answer = questdlg('Celerity of Group Celerity results?','Spectrans',...
+                                    'Celerity','Group celerity','Celerity');
+            if strcmp(answer,'Celerity')
+                var = squeeze(dst.celerity);
+            else
+                var = squeeze(dst.cgroup);
+            end
+            T = dst.Dimensions.Period;
+            zwl = dst.Dimensions.WaterLevel;
+
+            surf(ax,T,zwl,var');
+            view(2);
+            shading interp
+            %add the colorbar and labels
+            cb = colorbar;
+            cb.Label.String = sprintf('%s (m/s)',answer);
+            xlabel('Wave period (s)'); 
+            ylabel('Water Level (mOD)'); 
+            title(sprintf('%s for Case: %s',answer,dst.Description));
+            ax.Color = [0.96,0.96,0.96];  %needs to be set after plot            
+        end
+%%
+        function get_coefficientsPlot(obj,Dir,T,zwl,output)
+            %plot the coeffients for range of directions, periods and
+            %water levels
+            ki = 1;
+            while ~isempty(ki)
+                ki = inputgui('FigureTitle','Levels',...
+                                     'InputFields',{'Water level'},...
+                                     'Style',{'popupmenu','popupmenu'},...
+                                     'ActionButtons', {'Select','Cancel'},...
+                                     'DefaultInputs',{string(zwl)},...
+                                     'PromptText','Select values to use');
+                if isempty(ki), return; else, ki = ki{1}; end
+
+                figure('Name','SpecTrans','Tag','PlotFig');
+%                 ax = axes(hf);
+                labelx = 'Wave Period (s)';
+                labely = 'Direction (degTN)';
+                s1 = subplot(2,2,1);
+                var = output.kw(:,:,ki);
+                check_plot(obj,T,Dir,var,{'Transfer coefficient, kw',labelx,labely},s1);
+                s2 = subplot(2,2,2);
+                var = output.kt2(:,:,ki);
+                check_plot(obj,T,Dir,var,{'Transfer coefficient, kt2',labelx,labely},s2);
+                s3 = subplot(2,2,3);
+                var = output.ktp(:,:,ki);
+                check_plot(obj,T,Dir,var,{'Transfer coefficient, ktp',labelx,labely},s3);
+                s4 = subplot(2,2,4);
+                var = output.kd(:,:,ki);
+                check_plot(obj,T,Dir,var,{'Direction shift (deg)',labelx,labely},s4);
+                sgtitle(sprintf('Transfer Coefficients (Mean Direction, Period), wl=%g mOD',zwl(ki)));
+            end
+        end
+%%
+        function check_plot(~,T,phi,var,varname,ax)
+            %check plot for data selection
+            if nargin<6
+                hf = figure('Name','SpecTrans','Tag','PlotFig');
+                ax = axes(hf);
+            end
+            surf(ax,T,phi,var);
+            view(2);
+            shading interp
+            axis tight
+            %add the colorbar and labels
+            cb = colorbar;
+            cb.Label.String = varname{1};
+            xlabel(varname{2}); 
+            ylabel(varname{3}); 
+        end
+%%
+function dsp = modelDSproperties(~,isin) 
             %define a dsproperties struct and add the model metadata
             dsp = struct('Variables',[],'Row',[],'Dimensions',[]); 
             %define each variable to be included in the data table and any
@@ -183,26 +635,49 @@ function options = get_selection(obj)
             %accept most data types but the values in each vector must be unique
             
             %struct entries are cell arrays and can be column or row vectors
-            dsp.Variables = struct(...  
-                'Name',{'theta','depth','celerity','cgroup'},...
-                'Description',{'Offshore Direction',...
-                           'Water depth','Celerity','Group Celerity'},...
-                'Unit',{'degTN','m','m/s','m/s'},...
-                'Label',{'Offshore Direction (degTN)','Water depth (m)',...
-                                'Celerity (m/s)','Group Celerity (m/s)'},...                           
-                'QCflag',repmat({'model'},1,4)); 
-            dsp.Row = struct(...
-                'Name',{'InDir'},...
-                'Description',{'Inshore Direction'},...
-                'Unit',{'degTN'},...
-                'Label',{'Direction (degTN)'},...
-                'Format',{'-'}); 
-            dsp.Dimensions = struct(...    
-                'Name',{'Period','WaterLevel'},...
-                'Description',{'Wave Period','Water Level'},...
-                'Unit',{'m','mOD'},...
-                'Label',{'Wave Period','Water Level'},...
-                'Format',{'-','-'});  
+            if isin
+                dsp.Variables = struct(...  
+                    'Name',{'celerity','cgroup'},...
+                    'Description',{'Celerity','Group Celerity'},...
+                    'Unit',{'m/s','m/s'},...
+                    'Label',{'Celerity (m/s)','Group Celerity (m/s)'},...                           
+                    'QCflag',repmat({'model'},1,2)); 
+                dsp.Row = struct(...
+                    'Name',{'-'},...
+                    'Description',{'-'},...
+                    'Unit',{'-'},...
+                    'Label',{'-'},...
+                    'Format',{'-'}); 
+                dsp.Dimensions = struct(...    
+                    'Name',{'Period','WaterLevel'},...
+                    'Description',{'Wave Period','Water Level'},...
+                    'Unit',{'m','mOD'},...
+                    'Label',{'Wave Period','Water Level'},...
+                    'Format',{'-','-'});                  
+            else
+                dsp.Variables = struct(...  
+                    'Name',{'theta','depth','celerity','cgroup','avdepth','mindepth'},...
+                    'Description',{'Offshore Direction','Offshore depth',...
+                                   'Celerity','Group Celerity',...
+                                   'Average depth','Minimum depth'},...
+                    'Unit',{'degTN','m','m/s','m/s','m','m'},...
+                    'Label',{'Offshore Direction (degTN)','Water depth (m)',...
+                             'Celerity (m/s)','Group Celerity (m/s)',...
+                             'Water depth (m)','Water depth (m)'},...                           
+                    'QCflag',repmat({'model'},1,6)); 
+                dsp.Row = struct(...
+                    'Name',{'InDir'},...
+                    'Description',{'Inshore Direction'},...
+                    'Unit',{'degTN'},...
+                    'Label',{'Direction (degTN)'},...
+                    'Format',{'-'}); 
+                dsp.Dimensions = struct(...    
+                    'Name',{'Period','WaterLevel'},...
+                    'Description',{'Wave Period','Water Level'},...
+                    'Unit',{'m','mOD'},...
+                    'Label',{'Wave Period','Water Level'},...
+                    'Format',{'-','-'});  
+            end
         end
     end    
 end

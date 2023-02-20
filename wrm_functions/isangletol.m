@@ -9,10 +9,10 @@ function isdir = isangletol(theta,bound)
 % USAGE
 %    isdir = isangletol(theta,bound)
 % INPUTS
-%   theta - array of angles to be checked
+%   theta - array of angles to be checked in radians
 %   bound - scalar or [1x2] element vector. scalar defines a +/- tolerance 
 %           relative to theta and vector specifies the angles to be used 
-%           for the bounds 
+%           for the bounds in radians
 % OUTPUTS
 %   isdir - logical, true if angle lies between the defined bounds
 % SEE ALSO
@@ -40,8 +40,8 @@ function isdir = isangletol(theta,bound)
 
     %test whether theta lies between lower and upper bound
     if lb<ub                              %test accounts for wrap at 0-2pi
-        isdir = lb<=theta && theta<=ub;
+        isdir = lb<=theta & theta<=ub;
     else 
-        isdir = lb<=theta || theta <=ub;      
+        isdir = lb<=theta | theta<=ub;      
     end
 end

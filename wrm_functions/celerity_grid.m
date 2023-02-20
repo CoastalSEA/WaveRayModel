@@ -38,13 +38,13 @@ function cgrid = celerity_grid(cgrid,T,zwl,delta)
     %loop over water levels and wave periods for each column (x) of the grid
 
     c = zeros(nm,nn,np,nq); cg = c; dcx = c; dcy = c; depth = zeros(nm,nn,nq);
-    for l=1:nq
+    for l=1:nq                       %water levels
         h = zwl(l)-cgrid.z;
         h(h<0) = 0;
         depth(:,:,l) = h;
-        for k=1:np
+        for k=1:np                   %wave periods
             Tper = T(k);
-            parfor j=1:nn
+            parfor j=1:nn            %depths along axis of grid
                 c(:,j,k,l) = celerity(Tper,depth(:,j,l));            
                 cg_fact = 4*pi()*depth(:,j,l)./(c(:,j,k,l)*Tper);
                 cg(:,j,k,l) = c(:,j,k,l)/2.*(1+cg_fact./sinh(cg_fact));            

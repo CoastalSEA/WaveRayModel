@@ -6,13 +6,13 @@ function [dirfm,dirto] = compass2trig(theta,israd)
 % PURPOSE
 %    Convert compass directions to trigonometric angles or vice versa
 % USAGE
-%    [dirfm,dirto] = compass2trig(theta);
+%    [dirfm,dirto] = compass2trig(theta,israd);
 % INPUTS
 %   theta - direction in degrees True North, or trigonometric angle in radians
-%   israd - logical true if input is in radians
+%   israd - logical true if input is in radians (optional, default=false)
 % OUTPUTS
-%   dirfm - angle vector is "from" in radians if input is degrees and viceversa  
-%   dirto - angle vector is "to" in radians if input is degrees and viceversa
+%   dirfm - angle vector is "from" in radians if input is degrees and vice versa  
+%   dirto - angle vector is "to" in radians if input is degrees and vice versa
 % NOTES
 %   Thanks to Mayra  
 %   Matlab Forum: 383063-convert-wind-direction-in-true-north-to-math-convention?s_tid=ta_ans_results
