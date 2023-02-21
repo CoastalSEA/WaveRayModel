@@ -34,54 +34,48 @@ function wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
     pobj = muiPlots.get_muiPlots();   %create new instance          
     pobj.Plot.CurrentFig = hfig;
     pobj.Plot.FigNum = hfig.Number;
-    pobj.UIset.callTab = '3DT';
-    pobj.UIset.Polar = false;
-    pobj.UIset.Type.String = 'surf';
-    pobj.UIset.iscmap = false;         %supress option to select colormap
-    pobj.AxisLabels.X = 'Wave period (s)';
-    pobj.AxisLabels.Y = 'Direction';
-    pobj.AxisLabels.Z = 'Spectral Energy';
-    pobj.Legend = [];
+    pobj.ModelMovie = [];
     pobj.Title = sprintf('Case: %s',tsdst.Description);
 
     %extract the timeseries data and dimensions for plot
     pobj.Data.X = 1./Dims.f;
     pobj.Data.Y = Dims.xso;
     pobj.Data.Z = {SGo,SGi};
-    pobj.Data.T = tsdst.RowNames;
+    pobj.Data.T = tsdst.RowNames;    
+    pobj.Data.Waves = [tsdst.Hs,tsdst.Tp,tsdst.Dir];
 
-    %variables to store values that are modified by the function
-    t = pobj.Data.T;  %pobj.Data.T is modified by call to convertTime in new3Dplot
-    var = pobj.Data.Z;%pobj.Data.Z replaced by 3D plot calls
+%     %variables to store values that are modified by the function
+%     t = pobj.Data.T;  %pobj.Data.T is modified by call to convertTime in new3Dplot
+%     var = pobj.Data.Z;%pobj.Data.Z replaced by 3D plot calls
 
-    [s1,s2] = setupAnimation(sptobj,pobj,var);
+    [s1,s2] = setupAnimation(sptobj,pobj);
     if ~isvalid(pobj.Plot.CurrentFig), return; end
 
-    getAnimation(pobj,s1,s2,hfig,t,var);
-    pobj.Data.T = t;     %restore datetime values
-    pobj.Data.Z = var;   %restore Z values
+    getAnimation(pobj,s1,s2,hfig);
+%     pobj.Data.T = t;     %restore datetime values
+%     pobj.Data.Z = var;   %restore Z values
     s1.UserData = pobj.Data;  %store data set in UserData to
-                                %allow user to switch between plots
+                              %allow user to switch between plots
     %add replay and slider
-    setControlPanel(obj,pobj,hfig,length(t),string(t(1)));
+    setControlPanel(obj,pobj,hfig,length(pobj.Data.T),string(pobj.Data.T(1)));
 end
     %%
-function [s1,s2] = setupAnimation(obj,pobj,var)
+function [s1,s2] = setupAnimation(obj,pobj)
     %initialise 3Dplot and setup animation variables
     hfig = pobj.Plot.CurrentFig;
     figax = gca;   
-    var1 = squeeze(var{1}(1,:,:)); 
-    var2 = squeeze(var{2}(1,:,:)); 
-    pobj.Data.Z = {var1,var2};  %first time step
-    pobj.UIset.callTab = '3D';
+    var1 = squeeze(pobj.Data.Z{1}(1,:,:)); 
+    var2 = squeeze(pobj.Data.Z{2}(1,:,:)); 
+    %pobj.Data.Z = {var1,var2};  %first time step
+%     pobj.UIset.callTab = '3D';
     hfig.Visible = 'on';
     [s1,s2] = off_in_plot(obj,pobj.Data.X,pobj.Data.Y,var1,var2,figax);
-    pobj.UIset.callTab = '3DT';
+%     pobj.UIset.callTab = '3DT';
     if ~isvalid(hfig), return; end
     %assign axes properties
                 
     s1.ZLimMode = 'manual'; %fix limits of z-axis
-    s1.ZLim = minmax(var{1});   
+    s1.ZLim = minmax(pobj.Data.Z{1});   
     s1.NextPlot = 'replaceChildren';
     s1.Tag = 'PlotFigAxes1'; 
     s1surf = findobj(s1.Children,'Tag','PlotFigSurface');
@@ -89,9 +83,7 @@ function [s1,s2] = setupAnimation(obj,pobj,var)
     %not distribute the colors over the specified range. Adding a single
     %value at the maximum of the range forces this to be correct and the
     %plot is of no value because all 0. This is a trick that seems to work!
-    if all(s1surf.ZData==0,'all')
-        s1surf.ZData(1,1) = s1.ZLim(2);
-    end
+    s1surf.ZData(1,1) = s1.ZLim(2);
     %assign data source
     hp1 = s1.Children;
     hp1.ZDataSource = 'var1'; 
@@ -101,14 +93,12 @@ function [s1,s2] = setupAnimation(obj,pobj,var)
     hcb1.Limits = s1.ZLim;
 
     s2.ZLimMode = 'manual'; %fix limits of z-axis
-    s2.ZLim = minmax(var{2}); 
+    s2.ZLim = minmax(pobj.Data.Z{2}); 
     s2.NextPlot = 'replaceChildren';
     s2.Tag = 'PlotFigAxes2'; 
     s2surf = findobj(s2.Children,'Tag','PlotFigSurface');
     %correct for null first surface
-    if all(s2surf.ZData==0,'all')
-        s2surf.ZData(1,1) = s2.ZLim(2);
-    end
+    s2surf.ZData(1,1) = s2.ZLim(2);
     %assign data source
     hp2 = s2.Children;
     hp2.ZDataSource = 'var2';  
@@ -117,16 +107,21 @@ function [s1,s2] = setupAnimation(obj,pobj,var)
     hcb2.LimitsMode = 'manual'; %fix limits of contour bar
     hcb2.Limits = s2.ZLim;
     %adjust position of plots and add title
-    s1.Position = [0.13,0.60,0.70,0.34]; %make space for slider bar
-    s2.Position = [0.13,0.16,0.70,0.34]; %make space for slider bar
-    sg = sgtitle(sprintf('%s \nTime = %s\n',pobj.Title,string(pobj.Data.T(1))));
+    s1.Position = [0.13,0.58,0.70,0.34]; %make space for slider bar
+    s2.Position = [0.13,0.15,0.70,0.34]; %make space for slider bar
+
+    w = pobj.Data.Waves;
+    sg = sgtitle(sprintf('%s \nTime = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g\n',pobj.Title,...
+                     string(pobj.Data.T(1)),w(1,1),w(1,2),w(1,3)));
     sg.FontSize = 10;
     sg.Margin = 1;
     sg.Tag = 'PlotFigTitle';
 end
 %%
-function getAnimation(pobj,s1,s2,hfig,t,var)
+function getAnimation(pobj,s1,s2,hfig)
     %generate an animation for user selection.
+    t = pobj.Data.T;  
+    var = pobj.Data.Z;
     nrec = length(t);
     Mframes(nrec) = struct('cdata',[],'colormap',[]);
     Mframes(1) = getframe(gcf); %NB print function allows more control of 
@@ -137,8 +132,11 @@ function getAnimation(pobj,s1,s2,hfig,t,var)
         refreshdata(hp1,'caller')
         var2 = squeeze(var{2}(i,:,:)); %#ok<NASGU> 
         refreshdata(hp2,'caller')
+
+        w = pobj.Data.Waves;
         sg = findobj(s1.Parent.Children,'Tag','PlotFigTitle');
-        sg.String = sprintf('%s: Time = %s\n',pobj.Title,string(t(i)));
+        sg.String = sprintf('%s \nTime = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g\n',...
+                       pobj.Title,string(t(i)),w(i,1),w(i,2),w(i,3));
         drawnow;                 
         Mframes(i) = getframe(gcf); 
         %NB print function allows more control of resolution 
@@ -169,9 +167,9 @@ end
                 'Min',1,'Max',nrec,'sliderstep',[1 1]/nrec,...
                 'Callback', @(src,evt)runMovie(obj,pobj,src,evt),...
                 'HorizontalAlignment', 'center',...
-                'Units','normalized', 'Position', [0.2,0.01,0.6,0.04],...
+                'Units','normalized', 'Position', [0.2,0.015,0.6,0.04],...
                 'Tag','stepMovie');
         hm(3) = uicontrol('Parent',hfig,...
                 'Style','text','String',t0,'Units','normalized',... 
-                'Position',[0.8,0.01,0.15,0.03],'Tag','FrameTime');
+                'Position',[0.8,0.015,0.15,0.03],'Tag','FrameTime');
     end

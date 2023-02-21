@@ -163,8 +163,7 @@ classdef WRM_WaveModel < muiDataSet
                 val = ceil(src.Value);          %slider value 
                 %get figure axis, extract variable and refresh plot                
                 s1 = findobj(hfig,'Tag','PlotFigAxes1'); 
-                s2 = findobj(hfig,'Tag','PlotFigAxes2'); 
-                time = s1.UserData.T(val);   %time slice selected
+                s2 = findobj(hfig,'Tag','PlotFigAxes2');                 
                 var = s1.UserData.Z;                              
                 hp1 = s1.Children;
                 hp2 = s2.Children;    
@@ -172,8 +171,13 @@ classdef WRM_WaveModel < muiDataSet
                 refreshdata(hp1,'caller')
                 var2 = squeeze(var{2}(val,:,:)); %#ok<NASGU> 
                 refreshdata(hp2,'caller')
+
+                %update title
+                time = s1.UserData.T(val);   %time slice selected
+                w = pobj.Data.Waves;
                 sg = findobj(s1.Parent.Children,'Tag','PlotFigTitle');
-                sg.String = sprintf('%s: Time = %s\n',pobj.Title,string(time));
+                sg.String = sprintf('%s \nTime = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g\n',...
+                    pobj.Title,string(time),w(val,1),w(val,2),w(val,3));
                 drawnow;
                 %update slider selection text
                 stxt = findobj(hfig,'Tag','FrameTime');
