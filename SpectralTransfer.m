@@ -17,7 +17,7 @@ classdef SpectralTransfer < muiDataSet
         %Additional properties:     
     end
     
-    methods (Access = private)
+    methods (Access={?muiDataSet,?muiStats})
         function obj = SpectralTransfer()             
             %class constructor
         end
@@ -117,8 +117,9 @@ classdef SpectralTransfer < muiDataSet
             rayobj = getCase(mobj.Cases,rayrec);
             nint = height(tsdst);
             inputable = tsdst.DataTable;       %needed for parallel option
-nint = 100;
-            for i=1:nint
+
+            hw = waitbar(0,'Processing timeseries');
+            parfor i=1:nint
                 %for each offshore wave get the inshore results
                 input = inputable(i,:);
                 [SGo,SGi,fri,xso] = get_inshore_spectra(obj,rayobj,input,select);  
@@ -128,9 +129,11 @@ nint = 100;
                 Fri(i,:) = fri;
                 Xso(i,:) = xso;
             end   
+            waitbar(1,hw);
             idx = find(Sot~=0,1,'first');
             Dims.f = squeeze(Fri(idx,:));
             Dims.xso = squeeze(Xso(idx,:));
+            delete(hw)
         end
 %% 
         function coefficientsPlot(obj,mobj)
@@ -409,10 +412,12 @@ nint = 100;
             end
         end
 %%
-        function off_in_plot(obj,T,phi,var0,vari)
+        function [s1,s2] = off_in_plot(obj,T,phi,var0,vari,ax)
             %plot offshore and inshore spectra
-            hf = figure('Name','SpecTrans','Tag','PlotFig');
-            ax = axes(hf);
+            if nargin<6
+                hf = figure('Name','SpecTrans','Tag','PlotFig');
+                ax = axes(hf);
+            end
             labeli = 'Inshore direction (degTN)';
             label0 = 'Offshore direction (degTN)';
             labelx = 'Wave period (s)';
@@ -616,7 +621,7 @@ nint = 100;
                 hf = figure('Name','SpecTrans','Tag','PlotFig');
                 ax = axes(hf);
             end
-            surf(ax,T,phi,var);
+            surf(ax,T,phi,var,'Tag','PlotFigSurface');
             view(2);
             shading interp
             axis tight
@@ -625,6 +630,7 @@ nint = 100;
             cb.Label.String = varname{1};
             xlabel(varname{2}); 
             ylabel(varname{3}); 
+            cb.Tag = varname{1};
         end
 %%
 function dsp = modelDSproperties(~,isin) 

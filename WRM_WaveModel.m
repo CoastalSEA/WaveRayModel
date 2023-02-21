@@ -84,13 +84,15 @@ classdef WRM_WaveModel < muiDataSet
             obj = WRM_WaveModel; 
             [tsdst,~] = getInputData(obj,mobj);
             if isempty(tsdst), return; end   %user cancelled data selection
+            tsdst = getSubSet(obj,tsdst);          
+
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
             
             [SGo,SGi,Dims] = runSpectra(sptobj,mobj,tsdst);
 
-            off_in_plot(sptobj,1./Dims.f,Dims.xso,squeeze(SGo(2,:,:)),squeeze(SGi(2,:,:))) 
+            wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
         end
     end
 %%
@@ -139,6 +141,44 @@ classdef WRM_WaveModel < muiDataSet
             
             %add code to define plot format or call default tabplot using:
             tabDefaultPlot(obj,src);
+        end
+%%
+        function runMovie(~,pobj,src,~)
+            %callback function for animation figure buttons and slider
+            %modified from muiPlots to handle two subplots
+            hfig = src.Parent;
+            idm = hfig.Number==[pobj.ModelMovie{:,1}];
+            if strcmp(src.Tag,'runMovie')       %user pressed run button
+                if license('test', 'Image_Processing_Toolbox')   %tests whether product is licensed (returns 1 if it is)
+                    implay(pobj.ModelMovie{idm,2});
+                else
+                    hmf = figure('Name','Animation', 'Units','normalized', ...
+                    'Resize','on','HandleVisibility','on','Visible','on',...
+                    'Position',[0.38,0.42,0.30,0.42],'Tag','PlotFig');
+                    movie(hmf,pobj.ModelMovie{idm,2});
+                end
+            elseif strcmp(src.Tag,'saveMovie')  %user pressed save button 
+                saveanimation2file(pobj.ModelMovie{idm,2});
+            else                                %user moved slider
+                val = ceil(src.Value);          %slider value 
+                %get figure axis, extract variable and refresh plot                
+                s1 = findobj(hfig,'Tag','PlotFigAxes1'); 
+                s2 = findobj(hfig,'Tag','PlotFigAxes2'); 
+                time = s1.UserData.T(val);   %time slice selected
+                var = s1.UserData.Z;                              
+                hp1 = s1.Children;
+                hp2 = s2.Children;    
+                var1 = squeeze(var{1}(val,:,:)); %#ok<NASGU> 
+                refreshdata(hp1,'caller')
+                var2 = squeeze(var{2}(val,:,:)); %#ok<NASGU> 
+                refreshdata(hp2,'caller')
+                sg = findobj(s1.Parent.Children,'Tag','PlotFigTitle');
+                sg.String = sprintf('%s: Time = %s\n',pobj.Title,string(time));
+                drawnow;
+                %update slider selection text
+                stxt = findobj(hfig,'Tag','FrameTime');
+                stxt.String = string(time);
+            end
         end
     end 
 %%    
@@ -201,6 +241,39 @@ classdef WRM_WaveModel < muiDataSet
                 setRunParam(obj,mobj,wv_crec);
             else
                 setRunParam(obj,mobj,wv_crec,wl_crec); %input caserecs passed as varargin     
+            end
+        end
+%%
+        function subdst = getSubSet(~,tsdst)
+            %
+        %   Defined using varargin for the following fields
+            %    FigureTitle     - title for the UI figure
+            %    PromptText      - text to guide user on selection to make
+            %    InputFields     - text prompt for input fields to be displayed
+            %    Style           - uicontrols for each input field (same no. as input fields)
+            %    ControlButtons  - text for buttons to edit or update selection 
+            %    DefaultInputs   - default text or selection lists
+            %    UserData        - data assigned to UserData of uicontrol
+            %    DataObject      - data object to use for selection
+            %    SelectedVar     - index vector to define case,dataset,variable selection  
+            %    ActionButtons   - text for buttons to take action based on selection
+            %    Position        - poosition and size of figure (normalized units)
+            timerange = var2range(tsdst.RowRange);
+            selection = inputgui('FigureTitle','Levels',...
+                                 'InputFields',{'Time'},...
+                                 'Style',{'edit'},...
+                                 'ControlButtons',{'Ed'},...
+                                 'ActionButtons', {'Select','Cancel'},...
+                                 'DefaultInputs',{timerange},...
+                                 'PromptText','Select time range to use');
+
+            if isempty(selection)
+                subdst = tsdst;
+            else
+                seltime = range2var(selection{1});
+                times = tsdst.RowNames;
+                timerange = isbetween(times,seltime{:});
+                subdst = getDSTable(tsdst,'RowNames',times(timerange));
             end
         end
 %%
