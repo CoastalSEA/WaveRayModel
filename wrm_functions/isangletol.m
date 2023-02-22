@@ -16,7 +16,7 @@ function isdir = isangletol(theta,bound)
 % OUTPUTS
 %   isdir - logical, true if angle lies between the defined bounds
 % SEE ALSO
-%   get_edge, get_quadrant, next_element and arc_ray.
+%   get_quadrant, next_element and arc_ray.
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023

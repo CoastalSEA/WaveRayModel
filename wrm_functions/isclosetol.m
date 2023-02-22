@@ -15,7 +15,7 @@ function [isclose,dist] = isclosetol(pnts1,pnts2,tol)
 %   isclose - logical, true if points are within specified tolerance
 %   dist = distance between points
 % SEE ALSO
-%   get_edge, get_quadrant, next_element and arc_ray.
+%   get_quadrant, next_element and arc_ray.
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023

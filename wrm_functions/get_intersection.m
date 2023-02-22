@@ -1,7 +1,31 @@
     
 function [uvray,edge] = get_intersection(quad,lineseg,alpha,uvr,tol)
-
-
+%
+%-------function help------------------------------------------------------
+% NAME
+%   get_intersection.m
+% PURPOSE
+%    find intersection of a triangle element and a line segment that can be
+%    a straight line or an arc segment
+% USAGE
+%    [uvray,edge] = get_intersection(quad,lineseg,alpha,uvr,tol)
+% INPUTS
+%   quad - trigonometric quadrant 1-4 of the right angled triangle, or
+%          adjacent combination of triangles, 12,23,34,41.
+%   lineseg - line or arc segment to be intersected
+%   alpha - angle tangential to ray direction
+%   uvr - location of ray point [u,v] in local coordinates
+%   tol - tolerance around angles that are multiples of pi/2
+% OUTPUTS
+%   uvray - local coordinates of ray exit point
+%   edge - side of triangle that the ray intersects
+% SEE ALSO
+%   get_quadrant, next_element and arc_ray.
+%
+% Author: Ian Townend
+% CoastalSEA (c) Jan 2023
+%----------------------------------------------------------------------
+%
     Tri = get_element(quad);
     if isempty(Tri), uvray = []; return; end
 
@@ -39,7 +63,6 @@ function [uvray,edge] = get_intersection(quad,lineseg,alpha,uvr,tol)
 
     uvray = inside(idx,:);                  %local coordinates of ray exit point
     %use coordinates of point to identify which edge it lies on
-%         distol = 1/1000/delta;                  %tolerance equivalent to 1mm
     if abs(uvray(2))<=tol.dist                  %y<tol ie appox 0
         edge = 1;                           %x-directed edge
     elseif abs(uvray(1))<=tol.dist              %x<tol ie appox 0

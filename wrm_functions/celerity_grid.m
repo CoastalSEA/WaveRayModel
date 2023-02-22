@@ -7,7 +7,7 @@ function cgrid = celerity_grid(cgrid,T,zwl,delta)
 %    calculate the celerity and group celerity over a bathymetry grid for
 %    a range of wave periods and a range of water levels
 % USAGE
-%    grid = celerity_grid(grid,T,zwl,delta)
+%    cgrid = celerity_grid(grid,T,zwl,delta)
 % INPUTS
 %   cgrid.z - [m,n] array of bed elevations relative to zero datum (m)
 %   T - [1,p] array of wave periods (s)
@@ -26,7 +26,8 @@ function cgrid = celerity_grid(cgrid,T,zwl,delta)
 %      function can be called using an array, or vector of depths (ie h[m,1]),
 %      to get the wave celerity and group celerity
 % SEE ALSO
-%   uses celerity.m, cf refraction.m
+%   uses celerity.m, cf refraction.m. see test_wavemodel.m for examples of
+%   the two uses (grid and vector).
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023

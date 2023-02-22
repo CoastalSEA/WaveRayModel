@@ -29,7 +29,7 @@ function S = wave_spectrum(stype,f,varargin)
 %   ds - depths at site (m) <scalar or vector>
 %           NB: wind or wave vector data must be the same length
 % OUTPUT
-%   S - spectral energy density at specified frequencies [nrec,nf]
+%   S - spectral energy density at specified frequencies [nrec,nf] (m^2s)
 % NOTES
 %   The spectrum definitions in Carter, 1982, MIAS publication No.4 are
 %   used with additional information from Hughes, CERC-84-7 (p10-12); 
@@ -143,7 +143,7 @@ function [fp,alpha,gamma] = get_input(varargin)
     %unpack varargin for the wind and wave cases
     g = 9.81;
     switch varargin{1}
-        case 'wind'
+        case 'Wind'
             Uw = varargin{2};
             zw = varargin{3};
             Fch = varargin{4};
@@ -161,7 +161,7 @@ function [fp,alpha,gamma] = get_input(varargin)
             kp = 2*pi*U.^2./g./Lp;                %Hughes eq(24)
             alpha = 0.0078*kp.^0.49;              %Hughes eq(22)
             gamma = 2.47*kp.^0.39;                %Hughes eq(23)
-        case 'wave'
+        case 'Wave'
             Hmo = varargin{2};
             Tp = varargin{3};
             gamma = varargin{4};

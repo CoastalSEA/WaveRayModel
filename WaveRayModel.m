@@ -161,9 +161,10 @@ classdef WaveRayModel < muiModelUI
             menu.Analysis(1).Separator = {'off','off','on','off'};
             
             %submenu for Spectral Plots
-            menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients','Animation'};
-            menu.Analysis(2).Callback = repmat({@obj.analysisMenuOptions},[1,3]);
-            menu.Analysis(2).Separator = repmat({'off'},[1,3]);
+            menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients',...
+                                                    'O/I Spectrum','O/I Animation'};
+            menu.Analysis(2).Callback = repmat({@obj.analysisMenuOptions},[1,4]);
+            menu.Analysis(2).Separator = repmat({'off'},[1,4]);
             
             %% Help menu --------------------------------------------------
             menu.Help(1).Callback = {@obj.Help}; %make model specific?
@@ -346,7 +347,9 @@ classdef WaveRayModel < muiModelUI
                 case 'Transfer Coefficients'
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
                     coefficientsPlot(cobj,obj);
-                case 'Animation'
+                case 'O/I Spectrum'
+                    WRM_WaveModel.runSpectrum(obj);
+                case 'O/I Animation'
                     WRM_WaveModel.runAnimation(obj);
             end            
         end
@@ -355,13 +358,6 @@ classdef WaveRayModel < muiModelUI
         function Help(~,~,~)
             doc modelskill                             
         end
-%% ------------------------------------------------------------------------
-% Overload muiModelUI.MapTable to customise Tab display of records (if required)
-%--------------------------------------------------------------------------     
-%         function MapTable(obj,ht)
-%             %create tables for Record display tabs - called by DrawMap
-%             % ht - tab handle
-%         end
     end
 end    
     

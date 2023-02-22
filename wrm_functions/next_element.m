@@ -7,7 +7,7 @@ function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
 %    find the grid definition for the element that the ray is entering
 %    in local coordinates (ui,vi) and quadrant (edge does not change)
 % USAGE
-%    [uvi,newquad] = next_element(ray,uvr,dcs,tol)
+%    [uvi,newquad,uvi] = next_element(ray,uvr,dcs,tol)
 % INPUTS
 %   ray - table of incoming ray position (xr,yr), direction, alpha, local
 %         node index, k, quadrant being entered, quad, side of element, edge
@@ -21,9 +21,10 @@ function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
 %   tol - tolerance around angles that are multiples of pi/2
 % OUTPUTS
 %   newquad - quadrant ray is entering relative to the new local origin
+%   edge - side of triangle that ray is moving in to
 %   uvi - central node coordinates relative to current [0,0] local origin
 % SEE ALSO
-%   get_edge, get_quadrant, get_element and arc_ray.
+%   get_quadrant, get_element and arc_ray.
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023
@@ -38,33 +39,7 @@ function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
 
     %resolve double quad cases
     if quad>4
-        [newquad,edge,uvi] = is_axis_point(alpha,uvr,dcs,tol);
-        %find whether point lies on an axis and is travelling in the direction
-        %of that axis and try to resolve quadrant
-%         [ua,va] = pol2cart(alpha,1);  %unit vector in ray direction
-%         [theta,rs] = cart2pol(uvr(1)+ua,uvr(2)+va);
-%         if rs<distol, theta = alpha; end   %ray point is on a grid node
-%         phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction  
-% 
-% 
-%         newquad = get_quadrant(theta,phi,uvr,dcs,tol);
-%         if newquad>4
-%             switch newquad
-%                 case 12
-%                     uvi = [0,1];
-%                 case 23
-%                     uvi = [-1,0];
-%                 case 34
-%                     uvi = [0,-1];
-%                 case 41
-%                     uvi = [1,0];
-%             end
-%             return;
-%         else
-%             quad = newquad;
-%         end 
-
-  
+        [newquad,edge,uvi] = is_axis_point(alpha,uvr,dcs,tol);  
     else
         pi_2 = pi/2;    
         %sign and magnitude of quadrant change for each case

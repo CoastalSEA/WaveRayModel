@@ -7,9 +7,8 @@ function [quad,edge,uvi] = is_axis_point(alpha,uvr,dcs,tol)
 %    find whether point lies on an axis and is travelling in the direction
 %    of that axis
 % USAGE
-%    
+%    [quad,edge,uvi] = is_axis_point(alpha,uvr,dcs,tol)
 % INPUTS
-
 %   alpha - angle tangential to ray direction
 %   uvr - location of ray point [u,v] in local coordinates
 %   dcs - celerity gradient at start point [dcx,dcy]
@@ -93,19 +92,3 @@ function [quad,edge,uvi] = is_axis_point(alpha,uvr,dcs,tol)
         quad = get_quadrant(theta); %update quadrant based on gradient direction
     end    
 end
-
-
-
-%     pi2 = pi/2; isaxispoint = false(1,5);
-%     for i=0:1:4                           %check whether theta is close to n.pi/2
-%         bound =[i*pi2-tol,i*pi2+tol];     %and point lies on axis in that direction        
-%         isaxisdir = isangletol(theta,bound);
-%         israydir1 = isangletol(alpha,bound); %ray direction is also along axis
-%         israydir2 = isangletol(alpha+pi,bound); %ray direction is also along axis
-%         if i==0 || i==2 || i==4
-%             isonaxis = uvr(2)<distol;     %0, pi, 2pi and y~0
-%         else
-%             isonaxis = uvr(1)<distol;     %pi/2, 3pi/2 and x~0
-%         end        
-%         isaxispoint(i+1) = isaxisdir && isonaxis && (israydir1 || israydir2);
-%     end

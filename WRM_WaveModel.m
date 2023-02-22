@@ -2,21 +2,21 @@ classdef WRM_WaveModel < muiDataSet
 %
 %-------class help------------------------------------------------------
 % NAME
-%   ctWaveModel.m
+%   WRM_WaveModel.m
 % PURPOSE
-%    Class for inshore and offshore wave models to be run in CoastalTools 
-%    and other ModelUI apps
+%    Class for wave refraction using backward ray transfer function.
+%    Constructs inshore time series from an offshore timeseries. Also
+%    includes methods to plot the offshore and inshore spectra.
 % SEE ALSO
-%   muiDataSet
+%   muiDataSet, WaveRayModel, RayTracks, SpectralTransfer
 %
 % Author: Ian Townend
-% CoastalSEA (c) Jan 2021
+% CoastalSEA (c) Feb 2023
 %--------------------------------------------------------------------------
 %     
     properties
         %inherits Data, RunParam, MetaData and CaseIndex from muiDataSet
         %Additional properties:   
-        InshoreBedSlope   %bed slope as single value or vector array
     end
     
     properties (Hidden)
@@ -34,8 +34,7 @@ classdef WRM_WaveModel < muiDataSet
 % Model implementation
 %--------------------------------------------------------------------------         
         function obj = runModel(mobj)
-            %function to run the wave refraction model. isin is true for
-            %inshore waves and false for deepwater waves
+            %function to run the wave refraction model.
             obj = WRM_WaveModel;                            
             dsp = modelDSproperties(obj);
             
@@ -53,12 +52,13 @@ classdef WRM_WaveModel < muiDataSet
             %Note: getInputData calls setRunParam
             [tsdst,inputxt] = getInputData(obj,mobj);
             if isempty(tsdst), return; end   %user cancelled data selection
+            tsdst = getSubSet(obj,tsdst);    %allow user to extract a subset 
+
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
             
             results = runWaves(sptobj,mobj,tsdst);
-
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
 %--------------------------------------------------------------------------                   
@@ -77,6 +77,35 @@ classdef WRM_WaveModel < muiDataSet
             setDataSetRecord(obj,mobj.Cases,dst,'wave_model');
             getdialog('Run complete');
         end
+%--------------------------------------------------------------------------
+% Other utilities
+%--------------------------------------------------------------------------
+%%
+        function runSpectrum(mobj)
+            %create a plot of hte offshore and inshore 2-D specrum surfaces for a
+            %single wave condition
+            [off,srs] = WRM_WaveModel.getForcingConditions();   %get the input conditions
+            if isempty(off); return; end
+
+            %get the refraction transfer table
+            promptxt = 'Select a Transfer Table Case to use:'; 
+            sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
+            isout = checkWLrange(sptobj,off.swl);
+            if isout
+                warndlg('Water levels are outside the range of the Transfer Table')
+                return;
+            end
+
+            [SGo,SGi,Dims,sel] = runSpectra(sptobj,mobj,off,srs);
+            if isempty(SGo), return; end
+
+            if strcmp(srs,'Wind')
+                off = WRM_WaveModel.addWaveConditions(SGo,Dims,off);
+            end
+            ins = get_inshore_wave(sptobj,SGo,SGi,Dims,off);
+
+            getSpectrumPlot(sptobj,SGo,SGi,Dims,ins,off,sel);            
+        end
 %%
         function runAnimation(mobj)
             %create an animation of the 2-D spectrum surfaces using a
@@ -84,13 +113,25 @@ classdef WRM_WaveModel < muiDataSet
             obj = WRM_WaveModel; 
             [tsdst,~] = getInputData(obj,mobj);
             if isempty(tsdst), return; end   %user cancelled data selection
-            tsdst = getSubSet(obj,tsdst);          
+            tsdst = getSubSet(obj,tsdst);    %allow user to extract a subset     
+
+            if height(tsdst)>5000
+                answer = questdlg('Times series is over 5000 records. This could take a while to run',...
+                                  'Time','Continue','Abort','Abort');
+                if strcmp(answer,'Abort'), return; end
+            end
 
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
-            
-            [SGo,SGi,Dims] = runSpectra(sptobj,mobj,tsdst);
+            isout = checkWLrange(sptobj,tsdst.swl);
+            if isout
+                warndlg('Water levels are outside the range of the Transfer Table')
+                return;
+            end
+
+            [SGo,SGi,Dims,~] = runSpectra(sptobj,mobj,tsdst,'Wave');
+            if isempty(SGo), return; end
 
             wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
         end
@@ -338,7 +379,50 @@ classdef WRM_WaveModel < muiDataSet
                 'Unit',{''},...
                 'Label',{''},...
                 'Format',{''});  
+        end       
+    end  
+%%
+    methods (Static, Access=private)
+        function [inputs,answer] = getForcingConditions()
+            %get the user input of wave or wind conditions
+            inputs = []; 
+
+            answer = questdlg('Wind or Wave input?','Input','Wind','Wave','Wave');
+
+            if strcmp(answer,'Wave')
+                promptxt = {'Wave height (m)','Peak period (s)',...
+                                 'Wave direction (degTN)','Still water level'};
+                defaults = {'1.1','8.2','185','0.0'};
+                inpt = inputdlg(promptxt,'Input conditions',1,defaults);
+                if isempty(inpt), return; end  %user cancelled
+                inputs.Hs = str2double(inpt{1});
+                inputs.Tp = str2double(inpt{2});
+                inputs.Dir = str2double(inpt{3});
+                inputs.swl = str2double(inpt{4});
+            else
+                promptxt = {'Wind Speed (m/s)','Wind Direction (degTN)',...
+                            'Height above msl (m)','Fetch Length (m)',...
+                            'Still water level'};                                 
+                defaults = {'20.0','185','10.0','20000','0.0'};
+                inpt = inputdlg(promptxt,'Input conditions',1,defaults);
+                if isempty(inpt), return; end  %user cancelled
+                inputs.AvSpeed = str2double(inpt{1});
+                inputs.Dir = str2double(inpt{2});
+                inputs.zW = str2double(inpt{3});
+                inputs.Fetch = str2double(inpt{4});
+                inputs.swl = str2double(inpt{5});
+            end
         end
-        
-    end    
+%%
+        function off = addWaveConditions(SGo,Dims,off)
+            %when using wind input define the offshore wave conditions
+            g = 9.81;
+            off.Tp = 0.54*g^-0.77*off.AvSpeed.^0.54.*off.Fetch.^0.23;
+
+            dir_int = 0.5;     %interval used to interpolate directions (deg)
+            radint = deg2rad(dir_int);
+            So = trapz(radint,abs(trapz(Dims.f,SGo,2))); %integral of offshore spectrum
+            off.Hs = 4*sqrt(So);
+        end
+    end
 end    

@@ -18,7 +18,7 @@ function wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
 %   animation figure
 % SEE ALSO
 %   code derived from muiPlots.newAnimation and implemented to show 2
-%   subplots in ana animation
+%   subplots in an animation
 % NOTES
 %   obj is a data class instance and pobj is a plot class muiPlots instance
 %
@@ -44,33 +44,24 @@ function wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
     pobj.Data.T = tsdst.RowNames;    
     pobj.Data.Waves = [tsdst.Hs,tsdst.Tp,tsdst.Dir];
 
-%     %variables to store values that are modified by the function
-%     t = pobj.Data.T;  %pobj.Data.T is modified by call to convertTime in new3Dplot
-%     var = pobj.Data.Z;%pobj.Data.Z replaced by 3D plot calls
-
     [s1,s2] = setupAnimation(sptobj,pobj);
     if ~isvalid(pobj.Plot.CurrentFig), return; end
 
     getAnimation(pobj,s1,s2,hfig);
-%     pobj.Data.T = t;     %restore datetime values
-%     pobj.Data.Z = var;   %restore Z values
     s1.UserData = pobj.Data;  %store data set in UserData to
                               %allow user to switch between plots
     %add replay and slider
     setControlPanel(obj,pobj,hfig,length(pobj.Data.T),string(pobj.Data.T(1)));
 end
     %%
-function [s1,s2] = setupAnimation(obj,pobj)
+function [s1,s2] = setupAnimation(sptobj,pobj)
     %initialise 3Dplot and setup animation variables
     hfig = pobj.Plot.CurrentFig;
     figax = gca;   
     var1 = squeeze(pobj.Data.Z{1}(1,:,:)); 
     var2 = squeeze(pobj.Data.Z{2}(1,:,:)); 
-    %pobj.Data.Z = {var1,var2};  %first time step
-%     pobj.UIset.callTab = '3D';
     hfig.Visible = 'on';
-    [s1,s2] = off_in_plot(obj,pobj.Data.X,pobj.Data.Y,var1,var2,figax);
-%     pobj.UIset.callTab = '3DT';
+    [s1,s2] = off_in_plot(sptobj,pobj.Data.X,pobj.Data.Y,var1,var2,figax);
     if ~isvalid(hfig), return; end
     %assign axes properties
                 
@@ -88,7 +79,7 @@ function [s1,s2] = setupAnimation(obj,pobj)
     hp1 = s1.Children;
     hp1.ZDataSource = 'var1'; 
     %set limits of colorbar    
-    hcb1 = findobj(s1.Parent,'Type','colorbar','Tag','Offshore Spectrum');
+    hcb1 = findobj(s1.Parent,'Type','colorbar','Tag','Off');
     hcb1.LimitsMode = 'manual'; %fix limits of contour bar
     hcb1.Limits = s1.ZLim;
 
@@ -103,7 +94,7 @@ function [s1,s2] = setupAnimation(obj,pobj)
     hp2 = s2.Children;
     hp2.ZDataSource = 'var2';  
     %set limits of colorbar    
-    hcb2 = findobj(s2.Parent,'Type','colorbar','Tag','Inshore Spectrum');
+    hcb2 = findobj(s2.Parent,'Type','colorbar','Tag','In');
     hcb2.LimitsMode = 'manual'; %fix limits of contour bar
     hcb2.Limits = s2.ZLim;
     %adjust position of plots and add title

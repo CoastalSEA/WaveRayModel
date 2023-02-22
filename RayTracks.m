@@ -318,6 +318,8 @@ classdef RayTracks < muiDataSet
         function ax = plotRay(obj,ax,opt)
             %plot each ray on the selected forward track
             %each ray can be a different length so plot iteratively
+            % Note: the order of setting axis off and positioning colorbar
+            % is important for plot overlay with different color maps to work.
             cvar = {'celerity','cgroup'};
             nrays = height(obj.Data.Dataset);
             
@@ -327,27 +329,28 @@ classdef RayTracks < muiDataSet
                 %create axes for the ray surfaces
                 hsax = axes;
                 hsax.XLim = ax.XLim;
-                hsax.YLim = ax.XLim;
-                %set visibility for axes to 'off' so it appears transparent
-                axis(hsax,'off')
+                hsax.YLim = ax.YLim;                
                 colormap(hsax,cool);
                 
                 xr = []; yr = []; var = [];
                 for i=1:nrays
-                    xr = [xr;obj.Data.Dataset.xr{i,opt(1),opt(2)}];
-                    yr = [yr;obj.Data.Dataset.yr{i,opt(1),opt(2)}];
-                    var = [var;obj.Data.Dataset.(cvar{opt(3)-2}){i,opt(1),opt(2)}]; 
+                    xr = [xr;obj.Data.Dataset.xr{i,opt(1),opt(2)}]; %#ok<AGROW> 
+                    yr = [yr;obj.Data.Dataset.yr{i,opt(1),opt(2)}]; %#ok<AGROW> 
+                    var = [var;obj.Data.Dataset.(cvar{opt(3)-2}){i,opt(1),opt(2)}]; %#ok<AGROW> 
                 end
-                
-                zr = ones(size(xr))*10;
                 scatter(hsax,xr,yr,[],var,'fill');
                 
                 
-                colorbar(hsax,'Location','west');
-                clim(hsax,[min(var), max(var)]);
-                %link the two overlaying axes so they match at all times to remain accurate
-                linkaxes([ax,hsax]);
-
+                %set visibility for axes to 'off' so it appears transparent
+                axis(hsax,'off')
+                linkaxes([ax,hsax]);      %link the two overlaying axes 
+                hsax.Position = ax.Position;
+                %colormap(hsax,flipud(colormap(hsax)))
+                cb = colorbar(hsax,'Color',[1,1,1]);
+                cb.Position = [0.20,0.15,0.03,0.5];
+                cb.Label.String = cvar{opt(3)-2};      
+                cb.FontWeight = 'bold';
+                clim(hsax,[min(var), max(var)]*1.05);
             elseif opt(3)>1
                 hold(ax,"on")
                 for i=1:nrays

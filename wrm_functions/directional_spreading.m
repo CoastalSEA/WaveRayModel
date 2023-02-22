@@ -6,7 +6,7 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 % PURPOSE
 %	sample a directional spreading function at selected direction intervals
 % USAGE
-%   Gspread = directional_spreading(dir,nint,nspread,iscos)
+%   [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 % INPUTS
 %   dir - mean wave direction (degTN)
 %   nint - number of directions to sample from spreading function (degTN) 
@@ -16,6 +16,7 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 %           false uses Donelan ie secant function;
 % OUTPUT
 %   Gspread - direction distribution for given mean direction
+%   theta = the angles used to define the function (degTN)
 % NOTES
 %   Donelan, Hamilton and Hui, R.Soc, 1985, A315, 509-562
 %   US Army Corps, Shore Protection Manual, 1984
