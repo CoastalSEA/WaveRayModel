@@ -4,7 +4,7 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
 % NAME
 %   WRM_RunParams.m
 % PURPOSE
-%   Generate idelaised bathymetries using a linear slope or Dean's profile
+%   Generate idealised bathymetries using a linear slope or Dean's profile
 %   on a linear or crenulate shoreline. Also option for a mound on a linear
 %   slope
 % USAGE

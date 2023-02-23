@@ -3,9 +3,9 @@ classdef SpectralTransfer < muiDataSet
 % NAME
 %   SpectralTransfer.m
 % PURPOSE
-%   Class description - Builds the offshore and inshore Tranfer Tables from
+%   Class description - Builds the offshore and inshore Transfer Tables from
 %   a backward ray tracking data set (class RayTracks) for use in
-%   WRM_WaveModel. Als has a method to create plots of the transfer
+%   WRM_WaveModel. Also has a method to create plots of the transfer
 %   coefficients for a unit wave height.
 %
 % SEE ALSO

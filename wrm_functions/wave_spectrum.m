@@ -5,7 +5,9 @@ function S = wave_spectrum(stype,f,varargin)
 %   wave_spectrum.m
 % PURPOSE
 %   Calculate the spectral energy at a number of frequencies using a
-%   selection of spectrum definitions
+%   selection of spectrum definitions (Bretschneider open ocean, 
+%   Pierson-Moskowitz fully developed, JONSWAP fetch limited, and 
+%   TMA shallow water).
 % USAGE
 %   S = wave_spectrum(stype,f,varargin)
 % INPUTS

@@ -4,7 +4,8 @@ classdef WRM_FT_Params < muiPropertyUI
 % NAME
 %   WRM_RunParams.m
 % PURPOSE
-%   Class for run parameters to the WaveRayModel
+%   Class for parameters to define initial positions and direction of 
+%   forward tracking rays
 % NOTE
 %   
 % USAGE

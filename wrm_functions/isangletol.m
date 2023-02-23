@@ -5,7 +5,7 @@ function isdir = isangletol(theta,bound)
 %   isangletol.m
 % PURPOSE
 %    boolean check of whether an angle lies between upper and lower bounds
-%    defined as specific angles or a tolereance
+%    defined as specific angles, or a tolerance
 % USAGE
 %    isdir = isangletol(theta,bound)
 % INPUTS

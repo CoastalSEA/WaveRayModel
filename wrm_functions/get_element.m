@@ -4,7 +4,7 @@ function Tri = get_element(quad)
 % NAME
 %   get_element.m
 % PURPOSE
-%    define triangular polyshape based on quadrant being entered
+%    define triangular polyshape based on quadrant being entered by ray
 % USAGE
 %    Tri = get_element(quad);
 % INPUTS

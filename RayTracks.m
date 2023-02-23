@@ -5,7 +5,7 @@ classdef RayTracks < muiDataSet
 % PURPOSE
 %   Class description - Class for constructing array of wave ray tracks 
 %   as a function of wave direction, wave period and water level, working 
-%   in forward or backward ray tring mode. Used in the WaveRayodel app
+%   in forward or backward ray tracking mode. Used in the WaveRayodel app
 % NOTES
 %   Method is based on Abernethy C L and Gilbert G, 1975, Refraction of 
 %   wave spectra, Report No: INT 117,pp. 1-166, Wallingford, UK.

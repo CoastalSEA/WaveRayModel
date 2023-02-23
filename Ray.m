@@ -15,7 +15,7 @@ classdef Ray < handle
 %   complete k, quad, edge are removed from the table before assigning the
 %   reultant ray table to the Track property.
 % SEE ALSO
-%   WaveRayModel.m, RayTrack.m, and arc_ray.m
+%   WaveRayModel.m, RayTracks.m, and arc_ray.m
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023

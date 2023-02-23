@@ -4,7 +4,7 @@ function edge = get_edge(invector,idx,tol)
 % NAME
 %   get_edge.m
 % PURPOSE
-%    use coordinates of intesection point to identify which side or edge
+%    use coordinates of intersection point to identify which side or edge
 %    of a triangle the point lies on
 % USAGE
 %    edge = get_edge(invector,idx,tol)

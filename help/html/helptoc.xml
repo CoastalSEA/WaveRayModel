@@ -3,7 +3,7 @@
 <toc version="2.0">
 <!-- First tocitem specifies top level in Help browser Contents pane -->
 <!-- This can be a roadmap page, as shown below, or a content page -->
-    <tocitem target="modelui.html">ModelUI
+    <tocitem target="waveraymodel.html">WaveRayModel
         <!-- Nest tocitems to create hierarchical entries in  Contents-->
         <!-- To include icons, use the following syntax for tocitems: -->
         <!-- <tocitem target="foo.html" image="HelpIcon.NAME"> -->
@@ -20,11 +20,20 @@
         <!-- Inside category, list its functions alphabetically -->
 
         <!-- User Guide comes next -->
-        <tocitem target="modelui_guide.html" 
-            image="HelpIcon.USER_GUIDE">ModelUI User Guide
-            <tocitem target="modelui_menus.html">Menu options</tocitem>    
-            <tocitem target="modelui_tabs.html">Tab options</tocitem>    
-            <tocitem target="modelui_examples.html">ModelUI examples</tocitem>  
+        <tocitem target="wrm_guide.html" 
+            image="HelpIcon.USER_GUIDE">WaveRayModel User Guide
+            <tocitem target="wrm_menus.html">Menu options</tocitem>    
+            <tocitem target="wrm_tabs.html">Tab options</tocitem>    
+            <tocitem target="wrm_classes.html">Classes and Functions</tocitem>
+            <tocitem target="wrm_example.html">WaveRayModel example</tocitem>  
+        </tocitem>
+        <!-- Developers Guide comes next -->
+        <tocitem target="wrm_dev_guide.html"
+            image="HelpIcon.USER_GUIDE">WaveRayModel Developers Guide
+            <tocitem target="wrm_classes.html">WaveRayModel classes and functions</tocitem>
+            <tocitem target="grid_class_fcns.html">Grid classes and functions</tocitem>
+            <tocitem target="fgdinterface.html">FGDinterface abstract class</tocitem>
+            <tocitem target="gdinterface.html">GDinterface abstract class</tocitem>
         </tocitem>
     </tocitem>    
         <!-- Optional List of Examples, with hyperlinks to examples in other files -->
