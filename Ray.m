@@ -50,7 +50,7 @@ classdef Ray < handle
             if isempty(ray)
                 error('Ray solution not found in start_ray')
             elseif ~isa(ray,'table')
-                error('Ray start positiion outside grid domain')
+                error('Ray start position outside grid domain')
             end   
 
             %loop to get ray track to edge of grid or depth limit
@@ -61,7 +61,7 @@ classdef Ray < handle
                 ray = [ray;newray]; %#ok<AGROW> 
                 hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
             end
-            ray(:,4:6) = [];   %remove k, quad and edge from the ray table
+            ray(:,4:7) = [];   %remove k, quad and edge from the ray table 888888
             obj.Track = dstable(ray,'DSproperties',modelDSproperties(obj));
         end
     end
@@ -88,6 +88,7 @@ classdef Ray < handle
             [ue,ve] = pol2cart(alpha,sqrt(2));      %vector from start in direction of alpha
                                                     %sqrt(2) ensures it crosses a boundary
             lineseg = [us,vs;us+ue,vs+ve];          %ray vector line segment
+            r = inf;                                %dummy radius
 
             %check line does not go out of grid from start point                                   
             xye = [xys(1)+ue*delta,xys(2)+ve*delta];
@@ -95,28 +96,54 @@ classdef Ray < handle
             if isbound, ray = NaN; return; end
 
             %check whether point is on grid axes and determine quad
-            dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',xys(1),xys(2),'linear',0); %gradients at start point
-            dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',xys(1),xys(2),'linear',0);
-            [quad,edge,uvi] = is_axis_point(alpha,[us,vs],[0,0],tol);
+%             dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',xys(1),xys(2),'linear',0); %gradients at start point
+%             dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',xys(1),xys(2),'linear',0);
+%             [quad,edge,uvi] = is_axis_point(alpha,[us,vs],ray,tol);
 
-
-            if isempty(edge)
+            ray = table(alpha,k,r);
+            [ison,uvi] = is_axis_point(ray,[us,vs],tol);
+            quad = get_quadrant(ray,[us,vs],ison);
+%             if isempty(edge)
+%             if ison(1)==0
+%                 [theta,rs] = cart2pol(us,vs);           %vector to start point
+%                 if rs==0, theta = alpha; end
+                
                 %find the intersection of the line segment with quad triangle
+%                 [uvr,edge] = get_intersection(quad,lineseg,alpha,[us,vs],tol);
+%                 xr = xi+uvr(1)*delta; yr = yi+uvr(2)*delta;
+%             else
+% 
+%                 xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
+%             end
+
+            if ison(1)<1 || ison(1)>2
+                %not on axis (in element or on a diagonal)
                 [uvr,edge] = get_intersection(quad,lineseg,alpha,[us,vs],tol);
                 xr = xi+uvr(1)*delta; yr = yi+uvr(2)*delta;
             else
+                %on an axis and directed along axis
+                edge = get_edge(obj,ison);
                 xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
-            end
+            end            
 
             [hr,cr,cgr] = raypoint_properties(obj,cgrid,xr,yr);
-            ray = table(xr,yr,alpha,k,quad,edge,hr,cr,cgr);%grid properties of ray position
+            ray = table(xr,yr,alpha,k,quad,edge,r,hr,cr,cgr);%grid properties of ray position
             if xr~=xys(1) || yr~=xys(2)
                 %wave properties at start point
                 [hs,cs,cgs] = raypoint_properties(obj,cgrid,xys(1),xys(2));
                 %duplicate row and add start point to first row
                 ray = [ray;ray];
                 ray{1,1} = xys(1); ray{1,2} = xys(2); 
-                ray{1,7} = hs; ray{1,8} = cs; ray{1,9} = cgs; 
+                ray{1,8} = hs; ray{1,9} = cs; ray{1,10} = cgs; 
+            end
+        end
+%%
+        function edge = get_edge(~,ison)
+            %assign and edge when directed along axis
+            if ison(2)==1 || ison(2)==3
+                edge = 2;
+            else 
+                edge = 1;
             end
         end
 %%

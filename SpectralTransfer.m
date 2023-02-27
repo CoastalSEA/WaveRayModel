@@ -159,14 +159,11 @@ classdef SpectralTransfer < muiDataSet
             nper = length(T);              
             nwls = length(zwl);
 
-            input.Hs = 1;   %transfer coefficients for unit wave height
             kw = zeros(ndir,nper,nwls); kt2 = kw; ktp = kw; kd = kw;
-            for i=1:ndir
+            parfor i=1:ndir
                 for j=1:nper
                     for k=1:nwls
-                        input.Dir = Diri(i);   %limit examination of mean offshore
-                        input.Tp = T(j);       %directions to inshore range
-                        input.swl = zwl(k);
+                        input = getloopinput(obj,Diri,T,zwl,i,j,k);
                         [SGo,SGi,Dims] = get_inshore_spectra(obj,rayobj,input,select);                                                         
                         outable = get_inshore_wave(obj,SGo,SGi,Dims,input);
                         kw(i,j,k) = outable.kw;
@@ -177,9 +174,17 @@ classdef SpectralTransfer < muiDataSet
                 end
             end
             output = struct('kw',kw,'kt2',kt2,'ktp',ktp,'kd',kd);
-
+        
             get_coefficientsPlot(obj,Diri,T,zwl,output,select);
         end
+%%
+        function input = getloopinput(~,Diri,T,zwl,i,j,k)
+            %define input from arrays for use in parfor loop
+            input.Hs = 1.0;       %transfer coefficients for unit wave height
+            input.Dir = Diri(i);  %limit examination of mean offshore
+            input.Tp = T(j);      %directions to inshore range
+            input.swl = zwl(k);
+        end       
 %%
         function [SGo,SGi,Dims] = get_inshore_spectra(obj,rayobj,input,sp)
             %construc the offshore and inshore spectra for given wave conditions

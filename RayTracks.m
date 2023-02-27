@@ -25,8 +25,10 @@ classdef RayTracks < muiDataSet
     methods (Access = private)
         function obj = RayTracks()                
             %class constructor
-            obj.tol.angle = 0.01;    %tolerance to test for angles that are multiples of pi/2 (0.06 deg) 
-            obj.tol.dist = 0.001;    %tolerance to test for distances from axis in local coordinates
+            obj.tol = 0.001;
+%             obj.tol.angle = 0.0001;    %tolerance to test for angles that are multiples of pi/2 (0.06 deg) 
+%             obj.tol.dist = 0.0001;     %tolerance to test for distances from axis in local coordinates
+            %depends on grid size and is set in runModel, line 72
         end
     end      
 %%
@@ -52,8 +54,8 @@ classdef RayTracks < muiDataSet
             promptxt = 'Select grid to use for wave model'; 
             gridclasses = {'WRM_Bathy','GD_ImportData'};
             grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
-            grdrec = caseRec(muicat,grdobj.CaseIndex);
             if isempty(grdobj), return; end
+            grdrec = caseRec(muicat,grdobj.CaseIndex);            
             %assign the run parameters to the model instance
             switch src.Text
                 case 'Forward Rays'
@@ -61,31 +63,34 @@ classdef RayTracks < muiDataSet
                 case 'Backward Rays'
                     mobj.ModelInputs.RayTracks = {'WRM_RunParams','WRM_BT_Params'};
             end
-            setRunParam(obj,mobj,grdrec); %input caserecs passed as varargin 
+            setRunParam(obj,mobj,grdrec);      %input caserecs passed as varargin 
 
             grid = getGrid(grdobj,1);
             if isempty(grid.z), return; end
 
             [X,Y] = meshgrid(grid.x,grid.y);            
             delta = grid.x(2)-grid.x(1);
-            obj.tol.dist = 1/1000/delta;
+            setTolerances(obj,delta); %adjust tolerance to local coordinates
+%             obj.tol.dist = obj.tol.dist/delta;
             cgrid = struct('X',X,'Y',Y,'z',grid.z);
 
-            %arrays of waver periods and water levels, 
-            %frequency at log spaced intervals, 
+            %arrays of waver periods and water levels            
             T = runobj.PeriodRange;
             if length(T)>1
+                %frequency at log spaced intervals, 
                 frng = num2cell(1./runobj.PeriodRange); %
                 f = log10(logspace(frng{:},runobj.nPeriod))';
                 T = round(1./f,1); %round to one decimal place
             end
-            %water levels at linear intervals
+            
             zwl = runobj.WaterLevelRange;
             if length(zwl)>1
+                %water levels at linear intervals
                 WLrng = num2cell(runobj.WaterLevelRange);
                 zwl = linspace(WLrng{:},runobj.nWaterLevel)';  
                 zwl = round(zwl,1);
             end   
+
             %cutoff depth for wave ray tracing
             hlimit = runobj.hCutOff;
 
@@ -100,13 +105,12 @@ classdef RayTracks < muiDataSet
                     [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit);
                     modeltype = 'backward_model';
             end
-            % hf.Visible = 'on';
+            
             raytable = setTable(obj,rays);
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
 %--------------------------------------------------------------------------                   
-            %each variable should be an array in the 'results' cell array
-            %if model returns single variable as array of doubles, use {results}
+            %each variable is an array in the 'results' cell array
             dsp = modelDSproperties(obj,modeltype);
             dst = dstable(raytable,'RowNames',rownames','DSproperties',dsp);
             dst.Dimensions.Period = T;           %wave period range
@@ -120,6 +124,9 @@ classdef RayTracks < muiDataSet
             setDataSetRecord(obj,muicat,dst,modeltype);
             getdialog('Run complete');
         end
+%--------------------------------------------------------------------------
+% End of runModel
+%--------------------------------------------------------------------------
 %%
         function checkStart(mobj)
             %create a plot of the start points on the selected bathymetry
@@ -195,7 +202,17 @@ classdef RayTracks < muiDataSet
         end
     end 
 %%    
-    methods (Access = private)        
+    methods (Access = private)   
+        function setTolerances(obj,delta)
+            %set the distance, radius and angle tolerances based on grid
+            %size
+            atol = obj.tol;  %constructor dimension setting of tolerance
+            obj.tol = [];
+            obj.tol.dist = atol/delta;
+            obj.tol.angle = atan(obj.tol.dist);
+            obj.tol.radius = 0.2865/obj.tol.angle;            
+        end
+%%
         function agrid = subSampleGrid(~,cgrid,j,k)
             %select grids for give wave period (j) and water level (k)
             agrid.X = cgrid.X;
@@ -229,7 +246,7 @@ classdef RayTracks < muiDataSet
             nq = length(zwl);         
             rays{nr,np,nq} = Ray;
             rownames = 1:nr;
-            parfor i=rownames           %ray number
+            for i=rownames              %ray number
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,cgrid,j,k);
@@ -392,7 +409,7 @@ function options = get_selection(obj)
             %    Position        - poosition and size of figure (normalized units)
             T = obj.Data.Dataset.Dimensions.Period;
             zwl = obj.Data.Dataset.Dimensions.WaterLevel;
-            var = {'all lines','selected line','celerity','group celerity'};
+            var = {'all cases','selected case','celerity','group celerity'};
             selection = inputgui('FigureTitle','Celerity',...
                                  'InputFields',{'Wave Period','Water level'...
                                                                'Variable'},...

@@ -1,4 +1,4 @@
-function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
+function [newquad,edge,uvi] = next_element(ray,uvr,tol)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -17,7 +17,6 @@ function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
 %         edge - the side of the triangle that the ray intersects and has a 
 %                value of 1-3: edge=1 if yr=yi; edge=2 if xr=zi; else edge=3.
 %   uvr - location of ray point [u,v] in local coordinates
-%   dcs - celerity gradient at start point [dcx,dcy]
 %   tol - tolerance around angles that are multiples of pi/2
 % OUTPUTS
 %   newquad - quadrant ray is entering relative to the new local origin
@@ -39,7 +38,7 @@ function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
 
     %resolve double quad cases
     if quad>4
-        [newquad,edge,uvi] = is_axis_point(alpha,uvr,dcs,tol);  
+        [newquad,edge,uvi] = resolve_quad(ray,uvr,tol);  
     else
         pi_2 = pi/2;    
         %sign and magnitude of quadrant change for each case
@@ -75,5 +74,33 @@ function [newquad,edge,uvi] = next_element(ray,uvr,dcs,tol)
         otherwise
             error('New quadrant not found in next_element')
         end
+    end
+end
+%%
+function [quad,edge,uvi] = resolve_quad(ray,uvr,tol)
+    %ray is along axis try using radius to resolve
+        [ison,uvi] = is_axis_point(ray,uvr,tol);
+        %quadrant based on the celerity gradient radius
+        if abs(ray.r)<tol.radius               %matches tol.angle tolerance 
+            %check if theta in same direction as ray to determine gradient sign     
+            ray.alpha = ra.alpha+sign(ray.r)*2*tol.angle;
+            quad = get_quadrant(ray,uvr,ison); %update quadrant based on gradient direction
+            if quad>4
+                edge = ray.edge;
+            else
+                edge = get_edge(ison);
+            end
+        else
+            %directed along axis with radius~=straight line, no change
+            quad = ray.quad; edge = ray.edge;
+        end
+end
+%%
+function edge = get_edge(ison)
+    %assign and edge when directed along axis
+    if ison(2)==1 || ison(2)==3
+        edge = 2;
+    else 
+        edge = 1;
     end
 end

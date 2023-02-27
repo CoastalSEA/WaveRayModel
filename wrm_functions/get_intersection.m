@@ -43,7 +43,7 @@ function [uvray,edge] = get_intersection(quad,lineseg,alpha,uvr,tol)
         ok = 0;
         nxtpnt = inside(idx,:);
         while ok<1            
-            [isdir,npt] = checkDirection(nxtpnt,uvr,alpha,tol.angle);
+            [isdir,npt] = checkDirection(nxtpnt,uvr,alpha);
             if isdir
                 idx = idx(npt); ok = 1;
             else
@@ -63,20 +63,20 @@ function [uvray,edge] = get_intersection(quad,lineseg,alpha,uvr,tol)
 
     uvray = inside(idx,:);                  %local coordinates of ray exit point
     %use coordinates of point to identify which edge it lies on
-    if abs(uvray(2))<=tol.dist                  %y<tol ie appox 0
-        edge = 1;                           %x-directed edge
-    elseif abs(uvray(1))<=tol.dist              %x<tol ie appox 0
-        edge = 2;                           %y-directed edge
+    if abs(uvray(2))<=tol.dist              %y<tol ie appox 0
+        edge = 1;                               %x-directed edge
+    elseif abs(uvray(1))<=tol.dist          %x<tol ie appox 0
+        edge = 2;                               %y-directed edge
     else                                    %x~=0 & y~=0
-        edge = 3;                           %hypotenuse
+        edge = 3;                               %hypotenuse
     end
 end
 %%
-function [isdir,npt] = checkDirection(lineseg,uvr,alpha,angtol)
+function [isdir,npt] = checkDirection(lineseg,uvr,alpha)
     %check the direction of a vector relative to direction given by alpha
     % npt is nearest point to [ur,vr] and this is in the direction of alpha
     % if isdir is true
-    angtol = 0.2;                         %angle limit of +/-0.2 rads (11.5 deg)
+    angtol = 1.0;                         %angle limit of +/-1.0 rads (57.3 deg)
     npt = dsearchn(lineseg,uvr);
     un = lineseg(npt,1)-uvr(1);   
     vn = lineseg(npt,2)-uvr(2); 
