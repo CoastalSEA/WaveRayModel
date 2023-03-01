@@ -57,6 +57,7 @@ classdef WRM_WaveModel < muiDataSet
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
+            if isempty(sptobj), return; end  %user cancelled selection
             
             results = runWaves(sptobj,mobj,tsdst);
 %--------------------------------------------------------------------------

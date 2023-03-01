@@ -13,9 +13,9 @@ function quad = get_quadrant(ray,uvr,ison)
 %   ray - table of incoming ray position (xr,yr), direction, alpha, local
 %         node index, k, quadrant being entered, quad, side of element, edge
 %   uvr - location of ray point [u,v] in local coordinates
-% ison(1) 0=not on axis; 1=on x-axis, 2=on y-axis,
-%         3=on forward axis-diagonal, 4=on backward axis-diagonal;
-% ison(2) direction of ray if on axis: 1=pi/2,2=pi,3=3pi/2,4=0|2pi  
+%   ison(1) 0=not on axis; 1=on x-axis, 2=on y-axis,
+%           3=on forward axis-diagonal, 4=on backward axis-diagonal;
+%   ison(2) direction of ray if on axis: 1=pi/2,2=pi,3=3pi/2,4=0|2pi  
 % OUTPUTS
 %   quad - trigonometric quadrant 1-4 of the right angled triangle, or
 %          adjacent combination of double triangles, 12,23,34,41.
@@ -31,15 +31,15 @@ function quad = get_quadrant(ray,uvr,ison)
 %
     [theta,rs] = cart2pol(uvr(1),uvr(2));           %vector to start point
     if rs==0, theta = ray.alpha; end    
-    theta = mod(theta,2*pi);              %ensure theta between 0-2pi
+    theta = mod(theta,2*pi);                %ensure theta between 0-2pi
 
     
-    if ison(1)==0                          %not on axis
+    if ison(1)==0                           %not on axis
         quad = getQuad(theta);
-    elseif ison(1)>2                       %along diagonal
+    elseif ison(1)>2                        %along diagonal
         quad = int8(ison(2));
     else
-        quad = getAxisQuad(ison);          %along x or y axis
+        quad = getAxisQuad(ison);           %along x or y axis
     end
 end
 %%
@@ -49,7 +49,7 @@ function quad = getQuad(theta)
         quad = int8(1);
     elseif theta>=pi/2 && theta<pi          %second quadrant
         quad = int8(2);
-    elseif theta>=pi && theta<3*pi/2        %third quadrant);
+    elseif theta>=pi && theta<3*pi/2        %third quadrant
         quad = int8(3);
     elseif theta>=3*pi/2 && theta<2*pi      %fourth quadrant
         quad = int8(4);

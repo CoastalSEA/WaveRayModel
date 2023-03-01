@@ -55,7 +55,8 @@ function cgrid = celerity_grid(cgrid,T,zwl,delta)
             end
         end
     end
-    cgrid.c = c; cgrid.cg = cg; 
-    cgrid.dcx = dcx; cgrid.dcy = dcy; 
-    cgrid.h = depth;
+    cgrid.c = c;           cgrid.h = depth;
+    cg(isnan(cg)) = 0;     dcx(isnan(dcx)) = 0;    dcy(isnan(dcy)) = 0; 
+    cgrid.cg = cg;         cgrid.dcx = dcx;        cgrid.dcy = dcy; 
+    
 end

@@ -17,18 +17,14 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
 %     
     properties
-        Tracks     %array of Ray objects for Nr rays, Nt periods and Nz water levels
-        tol        %struct: tol.angle tolerance to test for angles that are 
-                   %multiples of pi/2 and tol.dist for distances from axis
+        tol = 1e-2   %distance tolerance (m) scaled in setTolerances to 
+                     %create struct for angle, radius and distance tolerances 
+                     %dependent on the model grid size
     end
     
     methods (Access = private)
         function obj = RayTracks()                
-            %class constructor
-            obj.tol = 0.001;
-%             obj.tol.angle = 0.0001;    %tolerance to test for angles that are multiples of pi/2 (0.06 deg) 
-%             obj.tol.dist = 0.0001;     %tolerance to test for distances from axis in local coordinates
-            %depends on grid size and is set in runModel, line 72
+            %class constructor 
         end
     end      
 %%
@@ -71,7 +67,6 @@ classdef RayTracks < muiDataSet
             [X,Y] = meshgrid(grid.x,grid.y);            
             delta = grid.x(2)-grid.x(1);
             setTolerances(obj,delta); %adjust tolerance to local coordinates
-%             obj.tol.dist = obj.tol.dist/delta;
             cgrid = struct('X',X,'Y',Y,'z',grid.z);
 
             %arrays of waver periods and water levels            
@@ -149,9 +144,10 @@ classdef RayTracks < muiDataSet
             tabPlot(grdobj,src)
             %add start line points to figure
             ax = findobj(hf.Children,'Type','axes');
+            axis tight
             hold on
             plot (ax,x_start,y_start,'-ok')
-            hold off
+            hold off            
             %add start direction to figure 
             RayTracks.plotWaveDirection(ax,x_start,y_start,alpha);   
         end
@@ -168,8 +164,13 @@ classdef RayTracks < muiDataSet
 
             muicat = mobj.Cases;
             %retrieve bathymetry grid and plot
-            caserec = caseRec(muicat,obj.RunParam.WRM_Bathy.caseid); 
+            if isfield(obj.RunParam,'WRM_Bathy')
+                caserec = caseRec(muicat,obj.RunParam.WRM_Bathy.caseid); 
+            else
+                caserec = caseRec(muicat,obj.RunParam.GD_ImportData.caseid); 
+            end
             gobj = getCase(muicat,caserec);
+
             %set >Figure button and create axes
             if strcmp(src.Tag,'Plot') || strcmp(src.Tag,'FigButton')
                 tabcb  = @(src,evdat)tabPlot(obj,src,mobj);            
@@ -182,7 +183,9 @@ classdef RayTracks < muiDataSet
             tabPlot(gobj,ax);
 
             %add the start arrows
-            [~,~,delta] = getGridDimensions(gobj.RunParam.GD_GridProps);
+            grid = getGrid(gobj);
+            delta = abs(grid.x(2)-grid.x(1));
+
             if strcmp(obj.Data.Dataset.MetaData,'forward_model')
                 plotArrow(obj,ax,delta);
             else
@@ -207,7 +210,7 @@ classdef RayTracks < muiDataSet
             %set the distance, radius and angle tolerances based on grid
             %size
             atol = obj.tol;  %constructor dimension setting of tolerance
-            obj.tol = [];
+            obj.tol = []; 
             obj.tol.dist = atol/delta;
             obj.tol.angle = atan(obj.tol.dist);
             obj.tol.radius = 0.2865/obj.tol.angle;            
@@ -236,17 +239,19 @@ classdef RayTracks < muiDataSet
             %and convert direction degTN to grid (trigonometric) direction
             [~,alpha] = compass2trig(ftrobj.dir0TN);
 
+            %check plot - comment out when using parfor in loop
             % hf = figure('Name','Search','Tag','PlotFig');
             % ax = axes(hf);
             % set(ax,'xgrid','on')
             % set(ax,'ygrid','on')
+            %--------------------------------------------------------------
 
             nr = ftrobj.nRay;
             np = length(T);
             nq = length(zwl);         
             rays{nr,np,nq} = Ray;
             rownames = 1:nr;
-            for i=rownames              %ray number
+            parfor i=rownames           %ray number
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,cgrid,j,k);
@@ -256,11 +261,13 @@ classdef RayTracks < muiDataSet
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
                         end
+                        %check plot - comment out when using parfor in loop
                         % hold on
                         % xr = rayobj.Track.xr;
                         % yr = rayobj.Track.yr;
                         % plot(ax,xr,yr,'-k')
                         % hold off
+                        %--------------------------------------------------
                         rays{i,j,k} = rayobj;
                     end
                 end
@@ -283,12 +290,19 @@ classdef RayTracks < muiDataSet
 
             %transform wave direction to grid (trigonometric) direction
             alpha = mod(compass2trig(phi),2*pi);
+            
+            %check plot - comment out when using parfor in loop
+            % hf = figure('Name','Search','Tag','PlotFig');
+            % ax = axes(hf);
+            % set(ax,'xgrid','on')
+            % set(ax,'ygrid','on')
+            %--------------------------------------------------------------
 
             nd = btrobj.nDirections;
             np = length(T);
             nq = length(zwl);         
             rays{nd,np,nq} = Ray;
-            parfor i=1:nd               %ray direction
+            for i=1:nd               %ray direction
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,cgrid,j,k);
@@ -297,11 +311,17 @@ classdef RayTracks < muiDataSet
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
                         end
+                        %check plot - comment out when using parfor in loop
+                        % hold on
+                        % xr = rayobj.Track.xr;
+                        % yr = rayobj.Track.yr;
+                        % plot(ax,xr,yr,'-k')
+                        % hold off   
+                        %--------------------------------------------------
                         rays{i,j,k} = rayobj;
                     end
                 end
             end
-
         end
 %%
         function plotArrow(obj,ax,delta)
@@ -340,15 +360,14 @@ classdef RayTracks < muiDataSet
             cvar = {'celerity','cgroup'};
             nrays = height(obj.Data.Dataset);
             
-            if opt(3)>2 
-                %delete(ax)
+            if opt(3)>2    
                 %see https://uk.mathworks.com/matlabcentral/answers/101346-how-do-i-use-multiple-colormaps-in-a-single-figure-in-r2014a-and-earlier
                 %create axes for the ray surfaces
-                hsax = axes;
+                hsax = axes(ax.Parent);
                 hsax.XLim = ax.XLim;
                 hsax.YLim = ax.YLim;                
                 colormap(hsax,cool);
-                
+
                 xr = []; yr = []; var = [];
                 for i=1:nrays
                     xr = [xr;obj.Data.Dataset.xr{i,opt(1),opt(2)}]; %#ok<AGROW> 
@@ -356,19 +375,19 @@ classdef RayTracks < muiDataSet
                     var = [var;obj.Data.Dataset.(cvar{opt(3)-2}){i,opt(1),opt(2)}]; %#ok<AGROW> 
                 end
                 scatter(hsax,xr,yr,[],var,'fill');
-                
-                
+      
                 %set visibility for axes to 'off' so it appears transparent
                 axis(hsax,'off')
                 linkaxes([ax,hsax]);      %link the two overlaying axes 
                 hsax.Position = ax.Position;
+              
                 %colormap(hsax,flipud(colormap(hsax)))
                 cb = colorbar(hsax,'Color',[1,1,1]);
                 cb.Position = [0.20,0.15,0.03,0.5];
                 cb.Label.String = cvar{opt(3)-2};      
                 cb.FontWeight = 'bold';
                 clim(hsax,[min(var), max(var)]*1.05);
-            elseif opt(3)>1
+            elseif opt(3)==1
                 hold(ax,"on")
                 for i=1:nrays
                     xr = obj.Data.Dataset.xr{i,opt(1),opt(2)};
@@ -409,7 +428,7 @@ function options = get_selection(obj)
             %    Position        - poosition and size of figure (normalized units)
             T = obj.Data.Dataset.Dimensions.Period;
             zwl = obj.Data.Dataset.Dimensions.WaterLevel;
-            var = {'all cases','selected case','celerity','group celerity'};
+            var = {'selected case','all cases','celerity','group celerity'};
             selection = inputgui('FigureTitle','Celerity',...
                                  'InputFields',{'Wave Period','Water level'...
                                                                'Variable'},...
@@ -450,7 +469,7 @@ function options = get_selection(obj)
                     newtable = [newtable;raytable]; %#ok<AGROW> 
                 end
             end
-        end       
+      end       
 %%
         function dsp = modelDSproperties(~,modeltype) 
             %define a dsproperties struct and add the model metadata

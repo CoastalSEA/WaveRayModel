@@ -39,8 +39,8 @@ classdef SpectralTransfer < muiDataSet
 %--------------------------------------------------------------------------
             %select back tracking ray case to use
             promptxt = 'Select Backward Ray Trace Dataset:';
-            rayobj = selectCaseObj(muicat,{'backward_model'},...
-                                                    {'RayTracks'},promptxt);
+            rayobj = selectCaseObj(muicat,{'backward_model'},[],promptxt);                                                    
+            if isempty(rayobj), return; end
             rayrec = caseRec(muicat,rayobj.CaseIndex);
             %assign the run parameters to the model instance
             setRunParam(obj,mobj,rayrec); %input caserecs passed as varargin 
@@ -219,7 +219,11 @@ classdef SpectralTransfer < muiDataSet
             offdst = obj.Data.Offshore;         %offshore properties  
             T = offdst.Dimensions.Period;       %wave periods used in ray model
             zwl = offdst.Dimensions.WaterLevel; %water levels used in ray model
-            Dims.depi = interp1(zwl,depths,swl);%inshore water depth at zwln
+            if isscalar(zwl)
+                Dims.depi = zwl;
+            else
+                Dims.depi = interp1(zwl,depths,swl);%inshore water depth at zwln
+            end
             phi = offdst.RowNames;              %inshore directions are held in the offshore table
             offdst = offdst.DataTable;
 
@@ -276,9 +280,10 @@ classdef SpectralTransfer < muiDataSet
                 offdir = [repmat(offdir(:,1,:),1,3),offdir];
                 c0fdw = [repmat(c0fdw(:,1,:),1,3),c0fdw];
                 cg0fdw = [repmat(cg0fdw(:,1,:),1,3),cg0fdw];
+
                 if strcmp(sp.form,'TMA shallow water')
                     hGav = [repmat(hGav(:,1,:),1,3),hGav];
-                    % hGmn = [repmat(hGmn(:,1,:),1,3),hGmn];;
+                    hGmn = [repmat(hGmn(:,1,:),1,3),hGmn];
                     %use direction spread to find average depth on rays
                     %based on the proportion they contribute to the spectrum
                     hGav = trapz(radint,abs(trapz(fri,G'.*hGav,2)));%direction moment
@@ -375,9 +380,9 @@ function output = get_inshore_wave(~,SGo,SGi,Dims,inp)
             %generate plot for display on Q-Plot tab
 
             answer = questdlg('Inshore or Offshore results?','Spectrans',...
-                                    'Inshore','Offshore','Offshore');
+                                         'Inshore','Offshore','Offshore');
             if strcmp(answer,'Inshore')
-                inshore_plot(obj,src,mobj);
+                inshore_tt_plot(obj,src,mobj);
                 return;
             end
 
@@ -397,31 +402,14 @@ function output = get_inshore_wave(~,SGo,SGi,Dims,inp)
             T = dst.Dimensions.Period;
             zwl = dst.Dimensions.WaterLevel;
             phi = dst.RowNames;
-            var = dst.(options.var{1})(:,:,options.ki);
- 
-            %construct Q-Plot            
-            surf(ax,T,phi,var);
-            view(2);
-            shading interp
 
-            %add the colorbar and labels
-            cb = colorbar;
-            cb.Label.String = options.desc;
-            xlabel('Wave period (s)'); 
-            ylabel('Inshore direction (degTN)'); 
-            title(sprintf('%s for water level of %.2g mOD',dst.Description,zwl(options.ki)));
-            ax.Color = [0.96,0.96,0.96];  %needs to be set after plot
-
-            if strcmp(options.var,'theta')
-                mindir = min(var,[],'All');
-                mindir = mindir-mod(mindir,30)+30;
-                maxdir = max(var,[],'All');
-                maxdir = maxdir-mod(maxdir,30);
-                nc = mindir:30:maxdir;
-                hold on
-                [C,h] = contour3(ax,T,phi,var,nc,'-k');
-                clabel(C,h,'LabelSpacing',300,'FontSize',8)
-                hold off
+            %construct Q-Plot      
+            if isscalar(T) || isscalar(phi)
+                var = dst.(options.var)(:,:,:);
+                scalar_tt_plot(obj,ax,T,zwl,phi,var,options); 
+            else
+                var = dst.(options.var)(:,:,options.ki);
+                surface_tt_plot(obj,ax,T,zwl,phi,var,options); 
             end
         end
 %%
@@ -573,8 +561,9 @@ function [idx,bound] = checkLimits(~,rayobj,offdst,Dims)
             if isempty(selection)
                 options = []; 
             else
-                options.var = obj.Data.Offshore.VariableNames(selection{1});
-                options.desc = obj.Data.Offshore.VariableLabels(selection{1});
+                options.var = obj.Data.Offshore.VariableNames{selection{1}};
+                options.desc = obj.Data.Offshore.VariableDescriptions{selection{1}};
+                options.lab = obj.Data.Offshore.VariableLabels{selection{1}};
                 options.ki = selection{2};
             end  
         end
@@ -614,7 +603,7 @@ function spectra = get_model_selection(~,iswind)
             end 
         end
 %%
-        function inshore_plot(obj,src,mobj)
+        function inshore_tt_plot(obj,src,mobj)
             %plot the inshore spectral transfer results
             dst = obj.Data.Inshore;
 
@@ -636,17 +625,111 @@ function spectra = get_model_selection(~,iswind)
             end
             T = dst.Dimensions.Period;
             zwl = dst.Dimensions.WaterLevel;
+            if isscalar(zwl) && isscalar(T)
+                if isgraphics(ax.Parent,'figure')
+                    delete(ax.Parent)
+                end
+                msgbox(sprintf('%s %0.2f (m/s)',answer,var));
+                return;
+            elseif isscalar(zwl) 
+                plot(ax,T,var);
+                ylabel(sprintf('%s (m/s)',answer)); 
+                xlabel('Wave period (s)'); 
+            elseif isscalar(T)
+                plot(ax,zwl,var);
+                ylabel(sprintf('%s (m/s)',answer)); 
+                xlabel('Water Level (mOD)'); 
+            else
+                surf(ax,T,zwl,var');
+                view(2);
+                shading interp
+                %add the colorbar and labels
+                cb = colorbar;
+                cb.Label.String = sprintf('%s (m/s)',answer);    
+                xlabel('Wave period (s)'); 
+                ylabel('Water Level (mOD)');                
+            end            
 
-            surf(ax,T,zwl,var');
-            view(2);
-            shading interp
-            %add the colorbar and labels
-            cb = colorbar;
-            cb.Label.String = sprintf('%s (m/s)',answer);
-            xlabel('Wave period (s)'); 
-            ylabel('Water Level (mOD)'); 
             title(sprintf('%s for Case: %s',answer,dst.Description));
             ax.Color = [0.96,0.96,0.96];  %needs to be set after plot            
+        end
+
+%%
+        function scalar_tt_plot(obj,ax,T,zwl,phi,var,options)
+            %offshore transfer table data plot when only a single case such that 
+            %T, zwl or phi are scalar
+            dst = obj.Data.Offshore;
+            if isscalar(zwl) && isscalar(T) && isscalar(phi)
+                if isgraphics(ax.Parent,'figure')
+                    delete(ax.Parent)
+                end
+                msgbox(sprintf('%s %0.2f',options.desc,var));
+                return;
+            elseif isscalar(zwl) && isscalar(T) 
+                plot(ax,phi,var);
+                ylabel(options.lab); 
+                xlabel('Direction (degTN)'); 
+            elseif isscalar(T) && isscalar(phi) 
+                plot(ax,zwl,var);
+                ylabel(options.lab); 
+                xlabel('Water Level (mOD)'); 
+            elseif isscalar(zwl) && isscalar(phi)    
+                plot(ax,T,var);
+                ylabel(options.lab); 
+                xlabel('Wave period (s)');
+%             elseif isscalar(zwl) 
+%                 surface_tt_plot(obj,ax,T,zwl,phi,var,options)             
+            elseif isscalar(T) 
+                var = squeeze(dst.(options.var)(:,:,:));
+                surf(ax,zwl,phi,var); 
+                view(2);
+                shading interp                
+                cb = colorbar;
+                cb.Label.String = options.lab;    
+                xlabel('Water Level (mOD)'); 
+                ylabel('Inshore Direction (degTN)');
+            elseif isscalar(phi)      
+                var = squeeze(dst.(options.var)(:,:,:));
+                surf(ax,T,zwl,var);
+                view(2);
+                shading interp
+                cb = colorbar;
+                cb.Label.String = options.lab; 
+                xlabel('Wave period (s)'); 
+                ylabel('Water Level (mOD)');                
+            end
+
+            title(sprintf('%s for Case: %s',options.desc,dst.Description));
+            ax.Color = [0.96,0.96,0.96];  %needs to be set after plot  
+        end
+%%
+        function surface_tt_plot(obj,ax,T,zwl,phi,var,options)
+            %offhsore transfer table data plot when only a single case such that 
+            %T, zwl or phi are scalar
+            dst = obj.Data.Offshore;
+            surf(ax,T,phi,var);
+            view(2);
+            shading interp
+
+            %add the colorbar and labels
+            cb = colorbar;
+            cb.Label.String = options.lab;
+            xlabel('Wave period (s)'); 
+            ylabel('Inshore direction (degTN)'); 
+            title(sprintf('%s for water level of %.2g mOD',dst.Description,zwl(options.ki)));
+            ax.Color = [0.96,0.96,0.96];  %needs to be set after plot
+
+            if strcmp(options.var,'theta')
+                mindir = min(var,[],'All');
+                mindir = mindir-mod(mindir,30)+30;
+                maxdir = max(var,[],'All');
+                maxdir = maxdir-mod(maxdir,30);
+                nc = mindir:30:maxdir;
+                hold on
+                [C,h] = contour3(ax,T,phi,var,nc,'-k');
+                clabel(C,h,'LabelSpacing',300,'FontSize',8)
+                hold off
+            end
         end
 %%
         function get_coefficientsPlot(obj,Dir,T,zwl,output,sel)
@@ -740,7 +823,7 @@ function dsp = modelDSproperties(~,isin)
                                    'Celerity','Group Celerity',...
                                    'Average depth','Minimum depth'},...
                     'Unit',{'degTN','m','m/s','m/s','m','m'},...
-                    'Label',{'Offshore Direction (degTN)','Water depth (m)',...
+                    'Label',{'Direction (degTN)','Water depth (m)',...
                              'Celerity (m/s)','Group Celerity (m/s)',...
                              'Water depth (m)','Water depth (m)'},...                           
                     'QCflag',repmat({'model'},1,6)); 

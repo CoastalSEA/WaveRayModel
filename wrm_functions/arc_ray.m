@@ -63,8 +63,6 @@ function newray = arc_ray(cgrid,ray,tol)
     vr = (ray.yr-yi)/delta;
 
     %find which element the ray is entering
-    dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',ray.xr,ray.yr,'linear',0); %gradients at start point
-    dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',ray.xr,ray.yr,'linear',0);
     [quad,edge,uvi] = next_element(ray,[ur,vr],tol);
     %transform local coordinates if start point is on edge 3 (hypotenuse)
     if ray.edge==3 || sum(abs(uvi))>0
@@ -79,13 +77,12 @@ function newray = arc_ray(cgrid,ray,tol)
         k = ray.k;                  %no change in origin
     end
 
+    %get the centre of the arc that is tangential to the ray at ur,vr
+    [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray);
     if quad>4                       %assign values for ray along an axis
         xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
         alpha = ray.alpha;
-        r = inf;
     else
-        %get the centre of the arc that is tangential to the ray at ur,vr
-        [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray);
         %create line vector based on defined arc
         xyArc = get_arc(phi,r,uc,vc,ur,vr);
         if any(isnan(xyArc))
@@ -97,7 +94,7 @@ function newray = arc_ray(cgrid,ray,tol)
             newray = []; return;
         end
         %find the intersection of the arc segment with quad triangle
-        [uvray,edge] = get_intersection(quad,xyArc,ray.alpha,[ur,vr],tol);
+        [uvray,edge] = get_intersection(quad,xyArc,ray,[ur,vr],tol);
         xr = xi+uvray(1)*delta; yr = yi+uvray(2)*delta;
         %get exit angle
         alpha =  exit_angle(phi,r,ur,vr,uvray);  
@@ -119,20 +116,21 @@ end
 function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
-    N = 1001;                                    %number of points in Arc
-    if abs(radius)>1000 
+    N = 101;                                    %number of points in Arc
+    rad = abs(radius);
+    if rad>1000 
         %straight line segment will suffice        
-        [ue,ve] = pol2cart(phi-pi/2,sqrt(2));    %vector from ray point in direction of alpha
-                                                 %sqrt(2) ensures it crosses a boundary
+        [ue,ve] = pol2cart(phi-pi/2,2);          %vector from ray point in direction of alpha
+                                                 %use 2 to ensure line crosses a boundary
+                                                 %max element length is sqrt(2)
         xy_arc = [ur-ue,vr-ve;ur,vr;ur+ue,vr+ve];%ray vector line segment
         return;
-    elseif abs(radius)<0.001
+    elseif rad<0.001
         xy_arc = []; return;
     end
-    % arcang = 2*asin(1/radius);                 %angle between entry and exit point
-    % arcang = 2*asin(0.5/radius);
-    arcang = pi/2;
+
     phi = phi+pi;                                %angle of normal from centre of arc
+    arcang = 2/rad;                              %set arc segment based on radius
 
     r_angl = linspace(phi+arcang,phi-arcang, N); %angles Defining Arc Segment (radians)
     %abstract Circle Function For Angles In Radians
@@ -185,9 +183,9 @@ function alpha = exit_angle(phi,r,ur,vr,uvray)
     phi = mod(phi+pi,2*pi);                    %angle of normal from centre of arc
     L = sqrt((ur-uvray(1))^2+(vr-uvray(2))^2); %arc segment length
     if abs(r)<1000
-        theta = 2*asin(L/2/r);                     %angle between entry and exit point
+        theta = 2*asin(L/2/r);                 %angle between entry and exit point
     else
-        theta = 0;
+        theta = 0;                             %straight line no change in direction
     end
     alpha = phi+theta+pi/2;                    %angle of tangent to ray at exit point
     alpha = mod(alpha,2*pi);
@@ -212,35 +210,6 @@ function isoutbound = checkGridBoundary(cgrid,xye)
     x = cgrid.X(1,:); y = cgrid.Y(:,1);
     limxy = [x(1),y(1);x(end),y(end)];                     %limits of grid
     isoutbound = xye(1)<limxy(1,1) || xye(1)>limxy(2,1) || ...%check x
-              xye(2)<limxy(1,2) || xye(2)>limxy(2,2);      %check y       
+              xye(2)<limxy(1,2) || xye(2)>limxy(2,2);         %check y       
 end
-%%
-% function isintol = isclose(angle,test,tol)
-%     %check whether test is within tol of angle
-%     isintol = abs(angle-test)<tol.angle;
-% end
-%%
-% function [isdir,npt] = checkDirection(lineseg,ur,vr,alpha)
-%     %check the direction of a vector relative to direction given by alpha
-%     % npt is nearest point to [ur,vr] and this is in the direction of alpha
-%     % if isdir is true
-%     anglim = 0.2;                         %angle limit of +/-0.2 rads (11.5 deg)
-%                                           %could pass tol.angle
-%     npt = dsearchn(lineseg,[ur,vr]);
-%     un = lineseg(npt,1)-ur;   
-%     vn = lineseg(npt,2)-vr; 
-%     [xsi,~] = cart2pol(un,vn);            %vector to next point
-%     bound = [alpha-anglim,alpha+anglim];
-%     isdir = isangletol(xsi,bound);        %check if xsi is within bound
-% end
-
-%%
-% function Circ = get_circle(radius,uc,vc)   
-%     %define a circle in local coordinates
-%     n = 50;                                  %number of points in circle
-%     phi = (0:n-1)*(2*pi/n);                  %angle increments
-%     u = uc + radius*cos(phi);                %coordinates of circle
-%     v = vc + radius*sin(phi);
-%     Circ = polyshape(u,v);
-% end
 

@@ -7,7 +7,7 @@ function [newquad,edge,uvi] = next_element(ray,uvr,tol)
 %    find the grid definition for the element that the ray is entering
 %    in local coordinates (ui,vi) and quadrant (edge does not change)
 % USAGE
-%    [uvi,newquad,uvi] = next_element(ray,uvr,dcs,tol)
+%    [newquad,edge,uvi] = next_element(ray,uvr,tol)
 % INPUTS
 %   ray - table of incoming ray position (xr,yr), direction, alpha, local
 %         node index, k, quadrant being entered, quad, side of element, edge
@@ -34,11 +34,17 @@ function [newquad,edge,uvi] = next_element(ray,uvr,tol)
     end
     uvi = [0,0];
 
-    quad = ray.quad; edge = ray.edge; alpha = ray.alpha;  %element being exited
+    quad = ray.quad; edge = ray.edge; %element being exited
 
     %resolve double quad cases
     if quad>4
         [newquad,edge,uvi] = resolve_quad(ray,uvr,tol);  
+    elseif edge==0
+        newquad = find_diag_quad(ray);
+        diagquad = int8(mod(quad+1,4)+1);
+        if newquad~=diagquad
+            fprintf('Direction quad %d and Diagonal quad %d\n',newquad,diagquad)
+        end
     else
         pi_2 = pi/2;    
         %sign and magnitude of quadrant change for each case
@@ -79,11 +85,12 @@ end
 %%
 function [quad,edge,uvi] = resolve_quad(ray,uvr,tol)
     %ray is along axis try using radius to resolve
-        [ison,uvi] = is_axis_point(ray,uvr,tol);
+        
         %quadrant based on the celerity gradient radius
-        if abs(ray.r)<tol.radius               %matches tol.angle tolerance 
+        if abs(ray.r)<1000               %matches tol.angle tolerance 
             %check if theta in same direction as ray to determine gradient sign     
-            ray.alpha = ra.alpha+sign(ray.r)*2*tol.angle;
+            ray.alpha = ray.alpha+sign(ray.r)*2*tol.angle;
+            [ison,uvi] = is_axis_point(ray,uvr,tol);
             quad = get_quadrant(ray,uvr,ison); %update quadrant based on gradient direction
             if quad>4
                 edge = ray.edge;
@@ -92,7 +99,7 @@ function [quad,edge,uvi] = resolve_quad(ray,uvr,tol)
             end
         else
             %directed along axis with radius~=straight line, no change
-            quad = ray.quad; edge = ray.edge;
+            quad = ray.quad; edge = ray.edge; uvi = [0,0];
         end
 end
 %%
@@ -102,5 +109,24 @@ function edge = get_edge(ison)
         edge = 2;
     else 
         edge = 1;
+    end
+end
+%%
+function quad = find_diag_quad(ray)
+    %use the ray direction to find the quad being enetered as ray passes
+    %through or close to the origin
+    alpha = ray.alpha;
+    if alpha>=0 && alpha<pi/2               %first quadrant
+        quad = int8(1);
+    elseif alpha>=pi/2 && alpha<pi          %second quadrant
+        quad = int8(2);
+    elseif alpha>=pi && alpha<3*pi/2        %third quadrant
+        quad = int8(3);
+    elseif alpha>=3*pi/2 && alpha<2*pi      %fourth quadrant
+        quad = int8(4);
+    else  
+        %quadrant not found
+        quad = [];
+        return;
     end
 end

@@ -53,12 +53,23 @@ classdef Ray < handle
                 error('Ray start position outside grid domain')
             end   
 
+            %check plot for finding ray errors - comment out when not required
+            % hf = figure('Name','Search','Tag','PlotFig');
+            % ax = axes(hf);
+            % plot(ax,ray.xr(1),ray.yr(1),'ob')
+            %--------------------------------------------------------------
+
             %loop to get ray track to edge of grid or depth limit
             hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
             while hr>hlimit
                 newray = arc_ray(cgrid,ray(end,:),tol);
                 if isempty(newray), hr = hlimit; continue; end
                 ray = [ray;newray]; %#ok<AGROW> 
+                %check plot for finding ray errors - comment out when not required
+                % hold on
+                % plot(ax,newray.xr,newray.yr,'+k')
+                % hold off   
+                %----------------------------------------------------------
                 hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
             end
             ray(:,4:7) = [];   %remove k, quad and edge from the ray table 888888
@@ -85,10 +96,10 @@ classdef Ray < handle
             us = (xys(1)-xi)/delta;
             vs = (xys(2)-yi)/delta;
 
-            [ue,ve] = pol2cart(alpha,sqrt(2));      %vector from start in direction of alpha
+            [ue,ve] = pol2cart(alpha,2);      %vector from start in direction of alpha
                                                     %sqrt(2) ensures it crosses a boundary
             lineseg = [us,vs;us+ue,vs+ve];          %ray vector line segment
-            r = inf;                                %dummy radius
+            r = inf;                                %intial radius
 
             %check line does not go out of grid from start point                                   
             xye = [xys(1)+ue*delta,xys(2)+ve*delta];
@@ -96,29 +107,13 @@ classdef Ray < handle
             if isbound, ray = NaN; return; end
 
             %check whether point is on grid axes and determine quad
-%             dcx = interp2(cgrid.X,cgrid.Y,cgrid.dcx',xys(1),xys(2),'linear',0); %gradients at start point
-%             dcy = interp2(cgrid.X,cgrid.Y,cgrid.dcy',xys(1),xys(2),'linear',0);
-%             [quad,edge,uvi] = is_axis_point(alpha,[us,vs],ray,tol);
-
             ray = table(alpha,k,r);
             [ison,uvi] = is_axis_point(ray,[us,vs],tol);
             quad = get_quadrant(ray,[us,vs],ison);
-%             if isempty(edge)
-%             if ison(1)==0
-%                 [theta,rs] = cart2pol(us,vs);           %vector to start point
-%                 if rs==0, theta = alpha; end
-                
-                %find the intersection of the line segment with quad triangle
-%                 [uvr,edge] = get_intersection(quad,lineseg,alpha,[us,vs],tol);
-%                 xr = xi+uvr(1)*delta; yr = yi+uvr(2)*delta;
-%             else
-% 
-%                 xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
-%             end
 
             if ison(1)<1 || ison(1)>2
                 %not on axis (in element or on a diagonal)
-                [uvr,edge] = get_intersection(quad,lineseg,alpha,[us,vs],tol);
+                [uvr,edge] = get_intersection(quad,lineseg,ray,[us,vs],tol);
                 xr = xi+uvr(1)*delta; yr = yi+uvr(2)*delta;
             else
                 %on an axis and directed along axis

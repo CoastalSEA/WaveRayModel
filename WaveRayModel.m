@@ -122,13 +122,13 @@ classdef WaveRayModel < muiModelUI
             % submenu for Grid Tools
             menu.Setup(7).List = {'Translate Grid','Rotate Grid',...
                                   'Re-Grid','Sub-Grid',...
-                                  'Combine Grids','Add Surface',...
+                                  'Combine Grids','Add Surface','Infill Surface',...
                                   'To curvilinear','From curvilinear',... 
                                   'Display Dimensions','Difference Plot',...
                                   'Plot Sections','Digitise Line',...
                                   'Export xyz Grid','User Function'};                                                                         
-            menu.Setup(7).Callback = repmat({@obj.gridMenuOptions},[1,14]);
-            menu.Setup(7).Separator = [repmat({'off'},[1,6]),...
+            menu.Setup(7).Callback = repmat({@obj.gridMenuOptions},[1,15]);
+            menu.Setup(7).Separator = [repmat({'off'},[1,7]),...
                              {'on','off','on','off','off','on','on','on'}]; %separator preceeds item  
             % submenu for Run Parameters
             menu.Setup(8).List = {'Run Conditions','Forward Tracking','Backward Tracking'};
@@ -143,17 +143,12 @@ classdef WaveRayModel < muiModelUI
             
             %% Run menu ---------------------------------------------------
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
-                                'Backward Rays','Spectral Transfer',...
-                                              'Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,6]); menucall{4} = 'gcbo;';            
+                                'Backward Rays','Transfer Table',...
+                                'Run Timeseries','Test Grid','Derive Output'};
+            menucall = repmat({@obj.runMenuOptions},[1,7]);            
             menu.Run(1).Callback = menucall;
-            menu.Run(1).Separator = [repmat({'off'},[1,4]),{'on','on'}];
+            menu.Run(1).Separator = [repmat({'off'},[1,3]),{'on','off','on','on'}];
 
-            % submenu for Spectral Transfer
-            menu.Run(2).List = {'Create Table','Run Timeseries'};
-            menu.Run(2).Callback = repmat({@obj.runMenuOptions},[1,2]);
-            menu.Run(2).Separator = repmat({'off'},[1,2]);
-            
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,3]),...
@@ -314,7 +309,7 @@ classdef WaveRayModel < muiModelUI
                     RayTracks.runModel(obj,src); 
                 case 'Backward Rays'                    
                     RayTracks.runModel(obj,src);
-                case 'Create Table'
+                case 'Transfer Table'
                     SpectralTransfer.runModel(obj);
                 case 'Run Timeseries'
                     WRM_WaveModel.runModel(obj);
