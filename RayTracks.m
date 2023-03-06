@@ -17,7 +17,7 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
 %     
     properties
-        tol = 1e-2   %distance tolerance (m) scaled in setTolerances to 
+        tol = 1e-6   %distance tolerance (m) scaled in setTolerances to 
                      %create struct for angle, radius and distance tolerances 
                      %dependent on the model grid size
     end
@@ -181,7 +181,14 @@ classdef RayTracks < muiDataSet
             end
             %use tabPlot in WRM_Bathy to plot the bathymetry grid
             tabPlot(gobj,ax);
-
+            %use the YlGnBu colormap generated in cbrewer. This then needs
+            %to be interpolated to get a smooth surface plot
+            ax = gca;
+            cmap = cmap_selection(20);       
+            [interpcmap]=interpolate_cbrewer(cmap, 'spline', 200);            
+            colormap(ax,interpcmap)
+            shading interp
+            
             %add the start arrows
             grid = getGrid(gobj);
             delta = abs(grid.x(2)-grid.x(1));
@@ -302,11 +309,17 @@ classdef RayTracks < muiDataSet
             np = length(T);
             nq = length(zwl);         
             rays{nd,np,nq} = Ray;
-            for i=1:nd               %ray direction
+            logtxt{nd,np,nq} = [];
+            nrec = nd*np*nq;
+            hpw = PoolWaitbar(nrec, 'Processing Rays');
+            parfor i=1:nd               %ray direction
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,cgrid,j,k);
                         rayobj = Ray.setRay(agrid,xys,alpha(i),hlimit,obj.tol);
+                        increment(hpw);
+                        npt = height(rayobj.Track.DataTable);
+                        logtxt{i,j,k} = sprintf('Ray dir %d, period %d, level %d points %d\n',i,j,k,npt);                        
                         if isempty(rayobj)
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
@@ -322,6 +335,8 @@ classdef RayTracks < muiDataSet
                     end
                 end
             end
+            filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_hh-mm"));
+            writecell(squeeze(reshape(logtxt,nrec,1,1)),filename)
         end
 %%
         function plotArrow(obj,ax,delta)

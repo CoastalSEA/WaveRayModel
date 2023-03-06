@@ -54,9 +54,9 @@ classdef Ray < handle
             end   
 
             %check plot for finding ray errors - comment out when not required
-            % hf = figure('Name','Search','Tag','PlotFig');
-            % ax = axes(hf);
-            % plot(ax,ray.xr(1),ray.yr(1),'ob')
+%             hf = figure('Name','Search','Tag','PlotFig');
+%             ax = axes(hf);
+%             plot(ax,ray.xr(1),ray.yr(1),'ob')
             %--------------------------------------------------------------
 
             %loop to get ray track to edge of grid or depth limit
@@ -66,9 +66,9 @@ classdef Ray < handle
                 if isempty(newray), hr = hlimit; continue; end
                 ray = [ray;newray]; %#ok<AGROW> 
                 %check plot for finding ray errors - comment out when not required
-                % hold on
-                % plot(ax,newray.xr,newray.yr,'+k')
-                % hold off   
+%                 hold on
+%                 plot(ax,newray.xr,newray.yr,'+k')
+%                 hold off   
                 %----------------------------------------------------------
                 hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
             end
@@ -98,7 +98,7 @@ classdef Ray < handle
 
             [ue,ve] = pol2cart(alpha,2);      %vector from start in direction of alpha
                                                     %sqrt(2) ensures it crosses a boundary
-            lineseg = [us,vs;us+ue,vs+ve];          %ray vector line segment
+            lineseg = [us-ue,vs-ve;us+ue,vs+ve];    %ray vector line segment
             r = inf;                                %intial radius
 
             %check line does not go out of grid from start point                                   

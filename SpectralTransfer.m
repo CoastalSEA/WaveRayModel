@@ -265,13 +265,15 @@ classdef SpectralTransfer < muiDataSet
             
             %add hmin and hav for use in TMA
             if strcmp(sp.form,'TMA shallow water')
+                hof = offdst.depth;    hof(idx) = 0;   %offshore depth of ray
                 hav = offdst.avdepth;  hav(idx) = 0;   %average depth along ray
-                hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray                
+                hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray    
+                hGof = interp3(F,P,W,hof,Fro,Xso,Wln,'linear',0);
                 hGav = interp3(F,P,W,hav,Fro,Xso,Wln,'linear',0);
                 hGmn = interp3(F,P,W,hmn,Fro,Xso,Wln,'linear',0);   
                 % HGmn not used but retained for future inclusion
             end   
-            clear idx
+            clear idx hof hav hmn
 
             %pad the high frequencies with values from the minimum frequency
             if min(T)>3
@@ -282,15 +284,19 @@ classdef SpectralTransfer < muiDataSet
                 cg0fdw = [repmat(cg0fdw(:,1,:),1,3),cg0fdw];
 
                 if strcmp(sp.form,'TMA shallow water')
+                    hGof = [repmat(hGof(:,1,:),1,3),hGof];
                     hGav = [repmat(hGav(:,1,:),1,3),hGav];
                     hGmn = [repmat(hGmn(:,1,:),1,3),hGmn];
                     %use direction spread to find average depth on rays
                     %based on the proportion they contribute to the spectrum
-                    hGav = trapz(radint,abs(trapz(fri,G'.*hGav,2)));%direction moment
-                    %offshore spectrum uses average depth over dominant rays
-                    spectrum_inputs = [spectrum_inputs,{hGav,hGav}]; 
+                    hGof = trapz(radint,abs(trapz(fri,G'.*hGof,2)));%offshore depth
+                    hGav = trapz(radint,abs(trapz(fri,G'.*hGav,2)));%average depth
+                    %for wind inputs offshore spectrum uses average depth 
+                    %over dominant rays to compute Lp and offshore depth 
+                    %for saturation limit of offshore spectrum
+                    spectrum_inputs = [spectrum_inputs,{hGav,hGof}]; 
                     %for saturation limit use site or dominant rays min depth
-                    hGmn = trapz(radint,abs(trapz(fri,G'.*hGmn,2)));%direction moment
+                    hGmn = trapz(radint,abs(trapz(fri,G'.*hGmn,2)));%minimum depth
                     Dims.depi = min([Dims.depi,min(hGmn,[],'All','omitnan')]);
                 end
                 cdeepwater = 9.81./addfri/pi;
@@ -450,13 +456,13 @@ function output = get_inshore_wave(~,SGo,SGi,Dims,inp)
             sgtitle(sgtxt,'FontSize',12,'Margin',1);
 
             if strcmp(sel.source,'Wave')
-                title(s1,sprintf('Hso=%.2f; Tp=%.1f; Dir=%.3g swl=%.2f',...
+                title(s1,sprintf('Hso=%.2f m; Tp=%.1f s; Dir=%.3g degTN; swl=%.2f mOD',...
                                 off.Hs,off.Tp,off.Dir,off.swl),'Margin',1);             
             else
-                title(s1,sprintf('Uw=%.2f; Fetch=%0.0f; swl=%.2f\nHso=%.2f; Tp=%.1f; Dir=%.3g',...
+                title(s1,sprintf('Uw=%.2f m/s; Fetch=%0.0f m; swl=%.2f mOD\nHso=%.2f m; Tp=%.1f s; Dir=%.3g degTN',...
                       off.AvSpeed,off.Fetch,off.swl,off.Hs,off.Tp,off.Dir),'Margin',1);
             end
-            title(s2,sprintf('Hsi=%.2f; Tp=%.1f; Dir=%.3g hmin=%.2f',...
+            title(s2,sprintf('Hsi=%.2f m; Tp=%.1f s; Dir=%.3g degTN; hmin=%.2f m',...
                             ins.Hsi,ins.Tpi,ins.Diri,ins.depi),'Margin',1);
         end
     end 

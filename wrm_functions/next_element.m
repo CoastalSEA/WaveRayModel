@@ -41,10 +41,22 @@ function [newquad,edge,uvi] = next_element(ray,uvr,tol)
         [newquad,edge,uvi] = resolve_quad(ray,uvr,tol);  
     elseif edge==0
         newquad = find_diag_quad(ray);
+        auv = abs(uvr);
+        if auv(1)>auv(2)
+            edge = 1;
+        else
+            edge = 2;
+        end
         diagquad = int8(mod(quad+1,4)+1);
         if newquad~=diagquad
             fprintf('Direction quad %d and Diagonal quad %d\n',newquad,diagquad)
         end
+    elseif edge<0
+        %point passes through distal node of the element - 
+        newquad = find_diag_quad(ray);
+        edge = -edge;
+        uvi = round(uvr);                   %make this point the new origin
+        fprintf('Moved to distal point and from quad %d to quad %d\n',quad,newquad)
     else
         pi_2 = pi/2;    
         %sign and magnitude of quadrant change for each case
@@ -88,8 +100,8 @@ function [quad,edge,uvi] = resolve_quad(ray,uvr,tol)
         
         %quadrant based on the celerity gradient radius
         if abs(ray.r)<1000               %matches tol.angle tolerance 
-            %check if theta in same direction as ray to determine gradient sign     
-            ray.alpha = ray.alpha+sign(ray.r)*2*tol.angle;
+            %check if theta in same direction as ray to determine gradient sign    
+            ray.alpha = mod(ray.alpha+sign(ray.r)*asin(2*tol.dist/1),2*pi);
             [ison,uvi] = is_axis_point(ray,uvr,tol);
             quad = get_quadrant(ray,uvr,ison); %update quadrant based on gradient direction
             if quad>4
@@ -130,3 +142,12 @@ function quad = find_diag_quad(ray)
         return;
     end
 end
+%%
+% function uvi = get_distal_node(uvr,tol)
+%     %point passes through distal node of the element - make this the new origin
+%     %for function to be called position must be some combination of [0,1]
+%     uvr
+% 
+% end
+
+
