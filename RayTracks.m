@@ -61,6 +61,10 @@ classdef RayTracks < muiDataSet
             end
             setRunParam(obj,mobj,grdrec);      %input caserecs passed as varargin 
 
+            answer = questdlg('Write log to file?','Rays','Yes','No','No');
+            islog = false;
+            if strcmp(answer,'Yes'), islog = true; end
+
             grid = getGrid(grdobj,1);
             if isempty(grid.z), return; end
 
@@ -94,10 +98,10 @@ classdef RayTracks < muiDataSet
             
             switch src.Text
                 case 'Forward Rays'
-                    [rays,rownames] = forwardTrack(obj,cgrid,T,zwl,hlimit);
+                    [rays,rownames] = forwardTrack(obj,cgrid,T,zwl,hlimit,islog);
                     modeltype = 'forward_model';
                 case 'Backward Rays'
-                    [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit);
+                    [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog);
                     modeltype = 'backward_model';
             end
             
@@ -234,7 +238,7 @@ classdef RayTracks < muiDataSet
             agrid.dcy = cgrid.dcy(:,:,j,k);
         end
 %%
-        function [rays,rownames] = forwardTrack(obj,cgrid,T,zwl,hlimit)
+        function [rays,rownames] = forwardTrack(obj,cgrid,T,zwl,hlimit,islog)
             %construct set of ray tracks for given wave direction and a set
             %of start points using forward wave ray tracing
             
@@ -257,13 +261,19 @@ classdef RayTracks < muiDataSet
             np = length(T);
             nq = length(zwl);         
             rays{nr,np,nq} = Ray;
+            logtxt{nr,np,nq} = [];
             rownames = 1:nr;
+            nrec = nr*np*nq;
+            hpw = PoolWaitbar(nrec, 'Processing Rays');
             parfor i=rownames           %ray number
                 for j=1:np              %wave period
                     for k=1:nq          %water level
                         agrid = subSampleGrid(obj,cgrid,j,k);
                         xys = [x_start(i),y_start(i)];
                         rayobj = Ray.setRay(agrid,xys,alpha,hlimit,obj.tol);
+                        increment(hpw);
+                        npt = height(rayobj.Track.DataTable);
+                        logtxt{i,j,k} = sprintf('Ray No %d, period %d, level %d points %d\n',i,j,k,npt); 
                         if isempty(rayobj)
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
@@ -275,13 +285,18 @@ classdef RayTracks < muiDataSet
                         % plot(ax,xr,yr,'-k')
                         % hold off
                         %--------------------------------------------------
-                        rays{i,j,k} = rayobj;
+                        rays{i,j,k} = rayobj;                        
                     end
                 end
             end
+            delete(hpw)
+            if islog
+                filename = sprintf('Forwardtrack_log_%s.txt',char(datetime,"ddMMMyy_hh-mm"));
+                writecell(squeeze(reshape(logtxt,nrec,1,1)),filename)
+            end
         end
 %%
-        function [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit)
+        function [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog)
             %construct set of ray tracks from a point and a set inshore wave
             %directions using backward wave ray tracing
             btrobj = obj.RunParam.WRM_BT_Params;
@@ -335,8 +350,11 @@ classdef RayTracks < muiDataSet
                     end
                 end
             end
-            filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_hh-mm"));
-            writecell(squeeze(reshape(logtxt,nrec,1,1)),filename)
+            delete(hpw)
+            if islog
+                filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_hh-mm"));
+                writecell(squeeze(reshape(logtxt,nrec,1,1)),filename)
+            end
         end
 %%
         function plotArrow(obj,ax,delta)
@@ -372,7 +390,7 @@ classdef RayTracks < muiDataSet
             %each ray can be a different length so plot iteratively
             % Note: the order of setting axis off and positioning colorbar
             % is important for plot overlay with different color maps to work.
-            cvar = {'celerity','cgroup'};
+            cvar = {'celerity','cgroup','depth'};
             nrays = height(obj.Data.Dataset);
             
             if opt(3)>2    
@@ -389,7 +407,7 @@ classdef RayTracks < muiDataSet
                     yr = [yr;obj.Data.Dataset.yr{i,opt(1),opt(2)}]; %#ok<AGROW> 
                     var = [var;obj.Data.Dataset.(cvar{opt(3)-2}){i,opt(1),opt(2)}]; %#ok<AGROW> 
                 end
-                scatter(hsax,xr,yr,[],var,'fill');
+                scatter(hsax,xr,yr,var,var,'fill');
       
                 %set visibility for axes to 'off' so it appears transparent
                 axis(hsax,'off')
@@ -443,7 +461,7 @@ function options = get_selection(obj)
             %    Position        - poosition and size of figure (normalized units)
             T = obj.Data.Dataset.Dimensions.Period;
             zwl = obj.Data.Dataset.Dimensions.WaterLevel;
-            var = {'selected case','all cases','celerity','group celerity'};
+            var = {'selected case','all cases','celerity','group celerity','depth'};
             selection = inputgui('FigureTitle','Celerity',...
                                  'InputFields',{'Wave Period','Water level'...
                                                                'Variable'},...

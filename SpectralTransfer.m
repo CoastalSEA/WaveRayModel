@@ -116,25 +116,32 @@ classdef SpectralTransfer < muiDataSet
             if isa(tsdst,'dstable')                %time series of data
                 nint = height(tsdst);
                 inputable = tsdst.DataTable;       %needed for parallel option
-    
-                hw = waitbar(0,'Processing timeseries');
+                hpw = PoolWaitbar(nint, 'Processing timeseries');
+                errflag = zeros(1,nint);
                 parfor i=1:nint
                     %for each offshore wave get the inshore results
                     input = inputable(i,:);
                     [SGo,SGi,dims] = get_inshore_spectra(obj,rayobj,input,select);  
-                    if isempty(SGo), continue; end
+                    if isempty(SGo), errflag(i) = i; continue; end                         
                     Sot(i,:,:) = SGo;
                     Sit(i,:,:) = SGi;
                     Fri(i,:) = dims.f;
                     Xso(i,:) = dims.xso;
                     Depi(i) = dims.depi;
+                    increment(hpw);
                 end   
-                waitbar(1,hw);
-                idx = find(Sot~=0,1,'first');   %find first non-null result
+
+                if any(errflag>0)
+                    times = tsdst.RowNames(errflag>0);
+                    warndlg(sprintf('Offshore spectra undefined for %s\n',string(times)))   
+                    Sot = []; return; 
+                end 
+                
+                idx = find(Fri(:,1)~=0,1,'first');   %find first non-null result
                 Dims.f = squeeze(Fri(idx,:));   %dimensions used for run
                 Dims.xso = squeeze(Xso(idx,:));
                 Dims.depi = Depi(idx);
-                delete(hw)
+                delete(hpw)
             else                                   %single case, tsdst is inputs struct
                 [Sot,Sit,Dims] = get_inshore_spectra(obj,rayobj,tsdst,select);                                                      
             end
@@ -222,7 +229,7 @@ classdef SpectralTransfer < muiDataSet
             if isscalar(zwl)
                 Dims.depi = zwl;
             else
-                Dims.depi = interp1(zwl,depths,swl);%inshore water depth at zwln
+                Dims.depi = interp1(zwl,depths,swl);%inshore water depth
             end
             phi = offdst.RowNames;              %inshore directions are held in the offshore table
             offdst = offdst.DataTable;
@@ -513,19 +520,20 @@ function output = get_inshore_wave(~,SGo,SGi,Dims,inp)
         end
 %%
 function [idx,bound] = checkLimits(~,rayobj,offdst,Dims)
-            %
+            %find indices of nodes with depths that are too shallow or
+            %offshore directions that are travelling shoreward
             hlimit = rayobj.RunParam.WRM_RunParams.hCutOff;
-            id1 = offdst.depth<Dims.depi | offdst.depth<=hlimit;    %depth limits
+            id1 = offdst.depth<=hlimit; %depth limits
             ShorelineAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;            
-            if ~isnan(ShorelineAngle)                          %to exclude this limit use NaN
+            if ~isnan(ShorelineAngle)                            %to exclude this limit use NaN
                 shoreang = mod(compass2trig(ShorelineAngle),2*pi);
-                bound = [shoreang,mod(shoreang+pi,2*pi)];      %shoreline limits
+                bound = [shoreang,mod(shoreang+pi,2*pi)];        %shoreline limits
                 dir = compass2trig(offdst.theta);     
                 id2 = isangletol(dir,bound);
             else
                 id2 = false(size(offdst.theta));
             end
-            idx = logical(id1+id2);                            %combined limits
+            idx = logical(id1+id2);                              %combined limits
             bound = mod(compass2trig(bound,1),360);
         end
 %%

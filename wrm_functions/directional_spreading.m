@@ -35,7 +35,7 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
         angles = linspace(0,pi/2,nint/2); 
         angles = [fliplr(-angles),angles(2:end)]; %ensures range centred on 0
     else
-        angles = deg2rad(nint-dir);               %user defined intervals
+        angles = deg2rad(nint-dir);               %user defined intervals        
     end
     
     if iscos        
@@ -48,4 +48,10 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
     Gspread = G./trapz(angles,G);                 %normalise by function integral
 
     theta = mod(rad2deg(angles)+dir,360);
+
+    if ~isscalar(nint)
+        bound = [-pi/2,pi/2];
+        idx = isangletol(angles,bound);           %only use angles within +/-pi/2 of dir
+        Gspread(~idx) = 0;
+    end
 end

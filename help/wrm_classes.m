@@ -30,8 +30,10 @@
 % * _isangletol_ – boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.
 % * _isclosetol_ – boolean check of whether an x,y point lies close to another x,y point
 % * _next_element_ – find the grid definition for the element that the ray is entering in local coordinates (ui,vi) and quadrant (edge does not change)
+% * _PoolWaitbar_ - initiallises and updates a waitbar when running a loop using parfor, Matlab(TM) Forum: Edric Ellis, 2019
 % * _wave_spectrum_ – calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).
 % * _wrm_animation_ - animation of model spectra timeseries.
+
 
 %% Additional Coastal Classes
 % In the folder ../muiAppCoastalClasses.

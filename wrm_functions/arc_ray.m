@@ -116,29 +116,27 @@ end
 function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
-    N = 50;                                    %number of points in half-Arc
+    N = 50;                                       %number of points in half-Arc
     rt2 = sqrt(2);
     rad = abs(radius);
     if rad>1000 
         %straight line segment will suffice        
-        [ue,ve] = pol2cart(phi-pi/2,rt2);          %vector from ray point in direction of alpha
-                                                 %use 2 to ensure line crosses a boundary
-                                                 %max element length is sqrt(2)
-        xy_arc = [ur-ue,vr-ve;ur+ue,vr+ve];%ray vector line segment
+        [ue,ve] = pol2cart(phi-pi/2,rt2);         %vector from ray point in direction of alpha
+                                                  %use 2 to ensure line crosses a boundary
+                                                  %max element length is sqrt(2)
+        xy_arc = [ur-ue,vr-ve;ur+ue,vr+ve];       %ray vector line segment
         return;
     elseif rad<0.001
         xy_arc = []; return;
     end
 
-    phi = phi+pi;                                %angle of normal from centre of arc
+    phi = phi+pi;                                  %angle of normal from centre of arc
     arcang = rt2/rad;                              %set arc segment based on radius
 
-    r_angl = linspace(phi-arcang,phi-tol.angle, N); %angles Defining left Arc Segment (radians)
-    r_angr = linspace(phi+tol.angle,phi+arcang, N); %angles Defining right Arc Segment (radians)
+    r_angl = linspace(phi-arcang,phi-tol.angle, N);%angles Defining left Arc Segment (radians)
+    r_angr = linspace(phi+tol.angle,phi+arcang, N);%angles Defining right Arc Segment (radians)
     %abstract Circle Function For Angles In Radians
     circr = @(radius,angle)  [radius*cos(angle)+uc,  radius*sin(angle)+vc];  
-%     r_angl = linspace(phi-arcang,phi+arcang, N);
-%     xy_arc = circr(radius,r_angl');              %matrix (Nx2) of (x,y) coordinates
     %ensure that current position is on arc
     xy_arc = [circr(radius,r_angl');circr(radius,r_angr')];
 

@@ -114,11 +114,13 @@ classdef WRM_WaveModel < muiDataSet
             obj = WRM_WaveModel; 
             [tsdst,~] = getInputData(obj,mobj);
             if isempty(tsdst), return; end   %user cancelled data selection
-            tsdst = getSubSet(obj,tsdst);    %allow user to extract a subset     
+            tsdst = getSubSet(obj,tsdst);    %allow user to extract a subset    
+            tsdst.DataTable = rmmissing(tsdst.DataTable);%remove nans
 
             if height(tsdst)>5000
-                answer = questdlg('Times series is over 5000 records. This could take a while to run',...
-                                  'Time','Continue','Abort','Abort');
+                promptxt = sprintf('Times series contains %d records\nThis could take a while to run and genearte large file\nUse time sub-selection to extract shorter time period',...
+                                                            height(tsdst));
+                answer = questdlg(promptxt,'Time','Continue','Abort','Abort');                                  
                 if strcmp(answer,'Abort'), return; end
             end
 
