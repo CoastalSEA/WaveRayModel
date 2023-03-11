@@ -143,11 +143,12 @@ classdef WaveRayModel < muiModelUI
             
             %% Run menu ---------------------------------------------------
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
-                                'Backward Rays','Transfer Table',...
-                                'Run Timeseries','Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,7]);            
+                                'Check Start Depth','Backward Rays',...
+                                'Transfer Table','Run Timeseries',...
+                                'Test Grid','Derive Output'};
+            menucall = repmat({@obj.runMenuOptions},[1,8]);            
             menu.Run(1).Callback = menucall;
-            menu.Run(1).Separator = [repmat({'off'},[1,3]),{'on','off','on','on'}];
+            menu.Run(1).Separator = [repmat({'off'},[1,4]),{'on','off','on','on'}];
 
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
@@ -307,6 +308,8 @@ classdef WaveRayModel < muiModelUI
                     RayTracks.checkStart(obj);
                 case 'Forward Rays'
                     RayTracks.runModel(obj,src); 
+                case 'Check Start Depth'
+                    RayTracks.startDepth(obj);
                 case 'Backward Rays'                    
                     RayTracks.runModel(obj,src);
                 case 'Transfer Table'

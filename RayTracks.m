@@ -102,9 +102,9 @@ classdef RayTracks < muiDataSet
                     modeltype = 'forward_model';
                     modelprop = obj.RunParam.WRM_FT_Params.dir0TN;
                 case 'Backward Rays'
-                    [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog);                    
+                    [rays,rownames,depths] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog);                    
                     modeltype = 'backward_model';
-                    modelprop = mean(rays.depth,'omitnan');
+                    modelprop = mean(depths,'omitnan');
             end
             
             raytable = setTable(obj,rays);
@@ -158,6 +158,25 @@ classdef RayTracks < muiDataSet
             %add start direction to figure 
             RayTracks.plotWaveDirection(ax,x_start,y_start,alpha);   
         end
+%%
+        function startDepth(mobj)
+            %check the depths of the bacakward ray start point for the range of
+            %water levels specified
+                promptxt = 'Select grid to use for wave model'; 
+                gridclasses = {'WRM_Bathy','GD_ImportData'};
+                grdobj = selectCaseObj(mobj.Cases,[],gridclasses,promptxt);
+                if isempty(grdobj), return; end
+                grid = getGrid(grdobj,1);
+                if isempty(grid.z), return; end
+    
+                spnt = mobj.Inputs.WRM_BT_Params.StartPoint;
+                [X,Y] = meshgrid(grid.x,grid.y);
+                bed = interp2(X,Y,grid.z',spnt(1),spnt(2),'linear');
+                wls =  mobj.Inputs.WRM_RunParams.WaterLevelRange;
+                msgtxt = sprintf('Water depths at start point: min=%.2f m; max=%0.2f m',...
+                                                   wls(1)-bed,wls(2)-bed);
+                msgbox(msgtxt)
+        end    
     end
 %%
     methods
@@ -307,7 +326,7 @@ classdef RayTracks < muiDataSet
             delete(hpw)
         end
 %%
-        function [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog)
+        function [rays,rownames,depths] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog)
             %construct set of ray tracks from a point and a set inshore wave
             %directions using backward wave ray tracing
             btrobj = obj.RunParam.WRM_BT_Params;
@@ -336,6 +355,7 @@ classdef RayTracks < muiDataSet
             np = length(T);
             nq = length(zwl);         
             rays{nd,np,nq} = Ray;
+            depths = zeros(nd,np,nq);
             nrec = nd*np*nq;
             hpw = PoolWaitbar(nrec, 'Processing Rays');
             parfor i=1:nd               %ray direction
@@ -345,6 +365,7 @@ classdef RayTracks < muiDataSet
                         rayobj = Ray.setRay(agrid,xys,alpha(i),hlimit,obj.tol);
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
+                        depths(i,j,k) = rayobj.Track.DataTable.depth(1);
                         if islog
                             lines = sprintf('Ray dir %d, period %d, level %d points %d',i,j,k,npt);
                             writelines(lines,filename,WriteMode="append")
