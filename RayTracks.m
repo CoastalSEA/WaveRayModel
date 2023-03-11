@@ -17,8 +17,8 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
 %     
     properties
-        tol = 1e-6   %distance tolerance (m) scaled in setTolerances to 
-                     %create struct for angle, radius and distance tolerances 
+        tol = 1e-9   %distance tolerance (m) scaled in setTolerances to 
+                     %create struct for angle and distance tolerances 
                      %dependent on the model grid size
     end
     
@@ -100,9 +100,11 @@ classdef RayTracks < muiDataSet
                 case 'Forward Rays'
                     [rays,rownames] = forwardTrack(obj,cgrid,T,zwl,hlimit,islog);
                     modeltype = 'forward_model';
+                    modelprop = obj.RunParam.WRM_FT_Params.dir0TN;
                 case 'Backward Rays'
-                    [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog);
+                    [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog);                    
                     modeltype = 'backward_model';
+                    modelprop = mean(rays.depth,'omitnan');
             end
             
             raytable = setTable(obj,rays);
@@ -120,6 +122,7 @@ classdef RayTracks < muiDataSet
             %assign metadata about model
             dst.Source = metaclass(obj).Name;
             dst.MetaData = modeltype;
+            dst.UserData.prop = modelprop; %direction or av. depth of point
             setDataSetRecord(obj,muicat,dst,modeltype);
             getdialog('Run complete');
         end
@@ -212,7 +215,15 @@ classdef RayTracks < muiDataSet
             end
             ax = plotRay(obj,ax,options);
             %update title
-            title(ax,obj.Data.Dataset.Description);
+            if options(3)~=2
+                T = obj.Data.Dataset.Dimensions.Period(options(1));
+                zwl = obj.Data.Dataset.Dimensions.WaterLevel(options(2));
+                ttxt = sprintf('Rays for %s, period %.3g s; swl %.3g mOD',...
+                                   obj.Data.Dataset.Description,T,zwl);
+            else
+                ttxt = sprintf('Rays for %s',obj.Data.Dataset.Description);
+            end
+            title(ax,ttxt);
         end
     end 
 %%    
@@ -224,7 +235,7 @@ classdef RayTracks < muiDataSet
             obj.tol = []; 
             obj.tol.dist = atol/delta;
             obj.tol.angle = atan(obj.tol.dist);
-            obj.tol.radius = 0.2865/obj.tol.angle;            
+            %obj.tol.radius = 0.2865/obj.tol.angle;            
         end
 %%
         function agrid = subSampleGrid(~,cgrid,j,k)
@@ -250,6 +261,7 @@ classdef RayTracks < muiDataSet
             %and convert direction degTN to grid (trigonometric) direction
             [~,alpha] = compass2trig(ftrobj.dir0TN);
 
+            filename = sprintf('Forwardtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));       
             %check plot - comment out when using parfor in loop
             % hf = figure('Name','Search','Tag','PlotFig');
             % ax = axes(hf);
@@ -261,7 +273,6 @@ classdef RayTracks < muiDataSet
             np = length(T);
             nq = length(zwl);         
             rays{nr,np,nq} = Ray;
-            logtxt{nr,np,nq} = [];
             rownames = 1:nr;
             nrec = nr*np*nq;
             hpw = PoolWaitbar(nrec, 'Processing Rays');
@@ -273,7 +284,11 @@ classdef RayTracks < muiDataSet
                         rayobj = Ray.setRay(agrid,xys,alpha,hlimit,obj.tol);
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
-                        logtxt{i,j,k} = sprintf('Ray No %d, period %d, level %d points %d\n',i,j,k,npt); 
+                        if islog
+                            lines = sprintf('Ray dir %d, period %d, level %d points %d',i,j,k,npt);
+                            writelines(lines,filename,WriteMode="append")
+                        end
+                        
                         if isempty(rayobj)
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
@@ -290,10 +305,6 @@ classdef RayTracks < muiDataSet
                 end
             end
             delete(hpw)
-            if islog
-                filename = sprintf('Forwardtrack_log_%s.txt',char(datetime,"ddMMMyy_hh-mm"));
-                writecell(squeeze(reshape(logtxt,nrec,1,1)),filename)
-            end
         end
 %%
         function [rays,rownames] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog)
@@ -312,7 +323,8 @@ classdef RayTracks < muiDataSet
 
             %transform wave direction to grid (trigonometric) direction
             alpha = mod(compass2trig(phi),2*pi);
-            
+
+            filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));                       
             %check plot - comment out when using parfor in loop
             % hf = figure('Name','Search','Tag','PlotFig');
             % ax = axes(hf);
@@ -324,7 +336,6 @@ classdef RayTracks < muiDataSet
             np = length(T);
             nq = length(zwl);         
             rays{nd,np,nq} = Ray;
-            logtxt{nd,np,nq} = [];
             nrec = nd*np*nq;
             hpw = PoolWaitbar(nrec, 'Processing Rays');
             parfor i=1:nd               %ray direction
@@ -334,7 +345,11 @@ classdef RayTracks < muiDataSet
                         rayobj = Ray.setRay(agrid,xys,alpha(i),hlimit,obj.tol);
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
-                        logtxt{i,j,k} = sprintf('Ray dir %d, period %d, level %d points %d\n',i,j,k,npt);                        
+                        if islog
+                            lines = sprintf('Ray dir %d, period %d, level %d points %d',i,j,k,npt);
+                            writelines(lines,filename,WriteMode="append")
+                        end
+                                                
                         if isempty(rayobj)
                             rays{i,j,k}.Track.DataTable = [];
                             continue; 
@@ -351,10 +366,6 @@ classdef RayTracks < muiDataSet
                 end
             end
             delete(hpw)
-            if islog
-                filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_hh-mm"));
-                writecell(squeeze(reshape(logtxt,nrec,1,1)),filename)
-            end
         end
 %%
         function plotArrow(obj,ax,delta)
@@ -396,7 +407,7 @@ classdef RayTracks < muiDataSet
             if opt(3)>2    
                 %see https://uk.mathworks.com/matlabcentral/answers/101346-how-do-i-use-multiple-colormaps-in-a-single-figure-in-r2014a-and-earlier
                 %create axes for the ray surfaces
-                hsax = axes(ax.Parent);
+                hsax = axes(ax.Parent); %assign new axes to same figure or tab
                 hsax.XLim = ax.XLim;
                 hsax.YLim = ax.YLim;                
                 colormap(hsax,cool);
@@ -407,13 +418,16 @@ classdef RayTracks < muiDataSet
                     yr = [yr;obj.Data.Dataset.yr{i,opt(1),opt(2)}]; %#ok<AGROW> 
                     var = [var;obj.Data.Dataset.(cvar{opt(3)-2}){i,opt(1),opt(2)}]; %#ok<AGROW> 
                 end
-                scatter(hsax,xr,yr,var,var,'fill');
+                stnorm = scalevariable(var,'Normalised');
+                sze = ceil(stnorm-2*min(stnorm));
+                scatter(hsax,xr,yr,sze,var,'fill');
       
                 %set visibility for axes to 'off' so it appears transparent
                 axis(hsax,'off')
                 linkaxes([ax,hsax]);      %link the two overlaying axes 
                 hsax.Position = ax.Position;
-              
+                axis tight
+
                 %colormap(hsax,flipud(colormap(hsax)))
                 cb = colorbar(hsax,'Color',[1,1,1]);
                 cb.Position = [0.20,0.15,0.03,0.5];

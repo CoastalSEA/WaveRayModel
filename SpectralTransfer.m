@@ -227,7 +227,7 @@ classdef SpectralTransfer < muiDataSet
             T = offdst.Dimensions.Period;       %wave periods used in ray model
             zwl = offdst.Dimensions.WaterLevel; %water levels used in ray model
             if isscalar(zwl)
-                Dims.depi = zwl;
+                Dims.depi = depths;             %depth at inshore point
             else
                 Dims.depi = interp1(zwl,depths,swl);%inshore water depth
             end
@@ -249,37 +249,58 @@ classdef SpectralTransfer < muiDataSet
             %use the smallest window based on shoreline and mean direction
             % mindir = max(Dir0-90,bound(1)); maxdir = min(Dir0+90,bound(2)); %needs more checking****
             % xso = mod(mindir:dir_int:maxdir,360);
-            xso = mod(bound(1):dir_int:bound(2),360);
+            xso = mod(bound(1):dir_int:bound(2),360);  %range determined by shoreline angle
     
             %directional spreading factor for selected function
             G = directional_spreading(Dir0,xso,sp.nspread,sp.spread);
-            % GG = trapz(deg2rad(xso),G); %check value = 1
             % figure; plot(xso,G);
 
             %frequency, direction and water level arrays for data 
             f = 1./T;
-            [F,P,W] =meshgrid(f,phi,zwl);
-            %frequency, direction and water level arrays to interpolate to 
-            %var(xso,fri) for selected water level zwln
-            [Fro,Xso,Wln] = meshgrid(fri,xso,swl);
-            offdir = interp3(F,P,W,theta,Fro,Xso,Wln);           %offshore directions array
-            c0fdw = interp3(F,P,W,c0,Fro,Xso,Wln,'linear',0);    %offshore celerity frequency,direction,water level array
-            cg0fdw = interp3(F,P,W,cg0,Fro,Xso,Wln,'linear',0);  %offshore group celerity frequency,direction,water level array
-            cifw = interp2(f,zwl,ci',fri,swl);                   %inshore celerity frequency,water level array
-            cgifw = interp2(f,zwl,cgi',fri,swl);                 %inshore group celerity frequency,water level array
-            % check_plot(obj,1./fri,xso,offcg0,{'cg0','Wave period (s)','Offshore direction (degTN)'});
 
-            
-            %add hmin and hav for use in TMA
-            if strcmp(sp.form,'TMA shallow water')
-                hof = offdst.depth;    hof(idx) = 0;   %offshore depth of ray
-                hav = offdst.avdepth;  hav(idx) = 0;   %average depth along ray
-                hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray    
-                hGof = interp3(F,P,W,hof,Fro,Xso,Wln,'linear',0);
-                hGav = interp3(F,P,W,hav,Fro,Xso,Wln,'linear',0);
-                hGmn = interp3(F,P,W,hmn,Fro,Xso,Wln,'linear',0);   
-                % HGmn not used but retained for future inclusion
-            end   
+            if isscalar(zwl)
+                [F,P] =meshgrid(f,phi);
+                %frequency, direction and water level arrays to interpolate to 
+                %var(xso,fri) for selected water level zwln
+                [Fro,Xso] = meshgrid(fri,xso);                   
+                offdir = interp2(F,P,theta,Fro,Xso);           %offshore directions array
+                c0fdw = interp2(F,P,c0,Fro,Xso,'linear',0);    %offshore celerity frequency,direction,water level array
+                cg0fdw = interp2(F,P,cg0,Fro,Xso,'linear',0);  %offshore group celerity frequency,direction,water level array
+                cifw = interp1(f,ci',fri);                     %inshore celerity frequency,water level array
+                cgifw = interp1(f,cgi',fri);                   %inshore group celerity frequency,water level array
+                % check_plot(obj,1./fri,xso,offcg0,{'cg0','Wave period (s)','Offshore direction (degTN)'});
+
+                %add hmin and hav for use in TMA
+                if strcmp(sp.form,'TMA shallow water')
+                    hof = offdst.depth;    hof(idx) = 0;   %offshore depth of ray
+                    hav = offdst.avdepth;  hav(idx) = 0;   %average depth along ray
+                    hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray    
+                    hGof = interp2(F,P,hof,Fro,Xso,'linear',0);
+                    hGav = interp2(F,P,hav,Fro,Xso,'linear',0);
+                    hGmn = interp2(F,P,hmn,Fro,Xso,'linear',0);   
+                end 
+            else
+                [F,P,W] =meshgrid(f,phi,zwl);
+                %frequency, direction and water level arrays to interpolate to 
+                %var(xso,fri) for selected water level zwln
+                [Fro,Xso,Wln] = meshgrid(fri,xso,swl);                   
+                offdir = interp3(F,P,W,theta,Fro,Xso,Wln);           %offshore directions array
+                c0fdw = interp3(F,P,W,c0,Fro,Xso,Wln,'linear',0);    %offshore celerity frequency,direction,water level array
+                cg0fdw = interp3(F,P,W,cg0,Fro,Xso,Wln,'linear',0);  %offshore group celerity frequency,direction,water level array
+                cifw = interp2(f,zwl,ci',fri,swl);                   %inshore celerity frequency,water level array
+                cgifw = interp2(f,zwl,cgi',fri,swl);                 %inshore group celerity frequency,water level array
+                % check_plot(obj,1./fri,xso,offcg0,{'cg0','Wave period (s)','Offshore direction (degTN)'});
+
+                %add hmin and hav for use in TMA
+                if strcmp(sp.form,'TMA shallow water')
+                    hof = offdst.depth;    hof(idx) = 0;   %offshore depth of ray
+                    hav = offdst.avdepth;  hav(idx) = 0;   %average depth along ray
+                    hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray    
+                    hGof = interp3(F,P,W,hof,Fro,Xso,Wln,'linear',0);
+                    hGav = interp3(F,P,W,hav,Fro,Xso,Wln,'linear',0);
+                    hGmn = interp3(F,P,W,hmn,Fro,Xso,Wln,'linear',0);   
+                end              
+            end
             clear idx hof hav hmn
 
             %pad the high frequencies with values from the minimum frequency
@@ -519,11 +540,11 @@ function output = get_inshore_wave(~,SGo,SGi,Dims,inp)
             spectran = {offdir,h,c,cg,hav,hmn};
         end
 %%
-function [idx,bound] = checkLimits(~,rayobj,offdst,Dims)
+function [idx,bound] = checkLimits(~,rayobj,offdst,Dims) %#ok<INUSD> 
             %find indices of nodes with depths that are too shallow or
             %offshore directions that are travelling shoreward
             hlimit = rayobj.RunParam.WRM_RunParams.hCutOff;
-            id1 = offdst.depth<=hlimit; %depth limits
+            id1 = offdst.depth<=hlimit; %depth limits *************NEEDS more WORK************
             ShorelineAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;            
             if ~isnan(ShorelineAngle)                            %to exclude this limit use NaN
                 shoreang = mod(compass2trig(ShorelineAngle),2*pi);
@@ -727,7 +748,7 @@ function spectra = get_model_selection(~,iswind)
 
             %add the colorbar and labels
             cb = colorbar;
-            cb.Label.String = options.lab;
+            cb.Label.String = options.desc;
             xlabel('Wave period (s)'); 
             ylabel('Inshore direction (degTN)'); 
             title(sprintf('%s for water level of %.2g mOD',dst.Description,zwl(options.ki)));
@@ -747,38 +768,47 @@ function spectra = get_model_selection(~,iswind)
         end
 %%
         function get_coefficientsPlot(obj,Dir,T,zwl,output,sel)
-            %plot the coeffients for range of directions, periods and
-            %water levels
+            %interactive selection to plot the coefficients for range of
+            %directions, periods and water levels
             ki = 1;
-            while ~isempty(ki)
-                ki = inputgui('FigureTitle','Levels',...
-                                     'InputFields',{'Water level'},...
-                                     'Style',{'popupmenu','popupmenu'},...
-                                     'ActionButtons', {'Select','Cancel'},...
-                                     'DefaultInputs',{string(zwl)},...
-                                     'PromptText','Select values to use');
-                if isempty(ki), return; else, ki = ki{1}; end
-
-                figure('Name','SpecTrans','Tag','PlotFig');
-                labelx = 'Wave Period (s)';
-                labely = 'Direction (degTN)';
-                s1 = subplot(2,2,1);
-                var = output.kw(:,:,ki);
-                check_plot(obj,T,Dir,var,{'Transfer coefficient, kw',labelx,labely},s1);
-                s2 = subplot(2,2,2);
-                var = output.kt2(:,:,ki);
-                check_plot(obj,T,Dir,var,{'Transfer coefficient, kt2',labelx,labely},s2);
-                s3 = subplot(2,2,3);
-                var = output.ktp(:,:,ki);
-                check_plot(obj,T,Dir,var,{'Transfer coefficient, ktp',labelx,labely},s3);
-                s4 = subplot(2,2,4);
-                var = output.kd(:,:,ki);
-                check_plot(obj,T,Dir,var,{'Direction shift (deg)',labelx,labely},s4);
-                sg1 = sprintf('Transfer Coefficients(Mean Direction, Period) for swl=%g mOD',zwl(ki));
-                sgtxt = sprintf('%s\n%s with n=%d, gamma=%.2g and %s',sg1,sel.form,...
-                                        sel.nspread,sel.gamma,sel.spread);
-                sgtitle(sgtxt,'FontSize',12,'Margin',1);
+            if length(zwl)>1
+                while ~isempty(ki)
+                    ki = inputgui('FigureTitle','Levels',...
+                                         'InputFields',{'Water level'},...
+                                         'Style',{'popupmenu','popupmenu'},...
+                                         'ActionButtons', {'Select','Cancel'},...
+                                         'DefaultInputs',{string(zwl)},...
+                                         'PromptText','Select values to use');
+                    if isempty(ki), return; else, ki = ki{1}; end
+                    coefficients_plot(obj,Dir,T,zwl,output,sel,ki);
+                end
+            else
+                coefficients_plot(obj,Dir,T,zwl,output,sel,ki);
             end
+        end
+%%
+        function coefficients_plot(obj,Dir,T,zwl,output,sel,ki)
+            %plot the coefficients for range of directions, periods and
+            %water levels
+            figure('Name','SpecTrans','Tag','PlotFig');
+            labelx = 'Wave Period (s)';
+            labely = 'Direction (degTN)';
+            s1 = subplot(2,2,1);
+            var = output.kw(:,:,ki);
+            check_plot(obj,T,Dir,var,{'Transfer coefficient, kw',labelx,labely},s1);
+            s2 = subplot(2,2,2);
+            var = output.kt2(:,:,ki);
+            check_plot(obj,T,Dir,var,{'Transfer coefficient, kt2',labelx,labely},s2);
+            s3 = subplot(2,2,3);
+            var = output.ktp(:,:,ki);
+            check_plot(obj,T,Dir,var,{'Transfer coefficient, ktp',labelx,labely},s3);
+            s4 = subplot(2,2,4);
+            var = output.kd(:,:,ki);
+            check_plot(obj,T,Dir,var,{'Direction shift (deg)',labelx,labely},s4);
+            sg1 = sprintf('Transfer Coefficients(Mean Direction, Period) for swl=%g mOD',zwl(ki));
+            sgtxt = sprintf('%s\n%s with n=%d, gamma=%.2g and %s',sg1,sel.form,...
+                                    sel.nspread,sel.gamma,sel.spread);
+            sgtitle(sgtxt,'FontSize',12,'Margin',1);
         end
 %%
         function check_plot(~,T,phi,var,varname,ax)

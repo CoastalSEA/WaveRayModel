@@ -73,7 +73,9 @@ classdef WRM_WaveModel < muiDataSet
             %assign metadata about model            
             dst.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
                                                          obj.ModelType);
-            dst.MetaData = inputxt;            
+            dst.MetaData = inputxt;   
+            %add depths of inshore point for which there are backward rays
+            dst.UserData = sptobj.Data.Inshore.UserData.Depths;
             %save results
             setDataSetRecord(obj,mobj.Cases,dst,'wave_model');
             getdialog('Run complete');

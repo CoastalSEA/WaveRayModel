@@ -34,7 +34,8 @@ function [uvray,edge] = get_intersection(quad,lineseg,ray,uvr,tol)
     uvray = InterX(tri',lineseg')';
     if isempty(uvray) 
         plot_element(Tri,lineseg,uvr,quad,ray.alpha)
-        error('Intersection with element not found in get_intersection 1')
+        errtxt = sprintf('quad %d uv [%.3g %.3g] with direction %.3g',quad,uvr(1),uvr(2),ray.alpha);
+        error('Intersection with element not found in get_intersection 1\n%s\n',errtxt)
     end    
     entrypoint = ismembertol(uvray,uvr,tol.dist, 'DataScale', 1,'ByRows',true);  %tolerance 
     uvray(entrypoint,:) = [];
@@ -42,7 +43,7 @@ function [uvray,edge] = get_intersection(quad,lineseg,ray,uvr,tol)
     %initially tried to use intersect to find the points in the triangular 
     %polyshape, Tri, and a line segment. This varioiusly missed the initial
     %point or the exit point and finding memebers was sensitive the
-    %tolerance set (some requireing narrow and otherc cases a much larger
+    %tolerance set (some requiring narrow and other cases a much larger
     %tolerance). Reverted to InterX which seems less sensitive.
     % [inside,outside] = intersect(Tri,lineseg); 
     % outside(isnan(outside(:,1)),:) = [];
@@ -74,7 +75,8 @@ function [uvray,edge] = get_intersection(quad,lineseg,ray,uvr,tol)
 
     if isempty(uvray)
         plot_element(Tri,lineseg,uvr,quad,ray.alpha)
-        error('Intersection with element not found in get_intersection 2')
+        errtxt = sprintf('quad %d uv [%.3g %.3g] with direction %.3g',quad,uvr(1),uvr(2),ray.alpha);
+        error('Intersection with element not found in get_intersection 2\n%s\n',errtxt)
     end      
 
     %use coordinates of point to identify which edge it lies on

@@ -316,7 +316,7 @@ classdef WaveRayModel < muiModelUI
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'
-                    obj.mUI.Manip = muiManipUI.getManipUI(obj);
+                    obj.mUI.ManipUI = muiManipUI.getManipUI(obj);
             end            
         end               
             

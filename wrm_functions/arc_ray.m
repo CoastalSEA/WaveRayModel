@@ -116,7 +116,7 @@ end
 function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
-    N = 50;                                       %number of points in half-Arc
+    N = 20;                                       %number of points in half-Arc
     rt2 = sqrt(2);
     rad = abs(radius);
     if rad>1000 
