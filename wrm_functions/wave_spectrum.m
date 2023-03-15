@@ -16,7 +16,7 @@ function S = wave_spectrum(stype,f,varargin)
 %           or 'TMA shallow water'
 %   f - frequencies at which the spectrum is to be defined <scalar or vector>
 %   varargin - depends on use. When deriving the spectrum using wind speed
-%              and fetch the order is 'wind',Uw,zw,Fch as defined bleow. 
+%              and fetch the order is 'wind',Uw,zw,Fch as defined below. 
 %              When using wave records the order is 'wave',Hmo,Tp,gamma
 %   For wind input (JONSWAP and TMA only)
 %       Uw - wind speed (m/s) <scalar or vector>
@@ -64,7 +64,7 @@ end
 %%
 function S = bretschneider(f,varargin)
     %construct the Bretschneider spectrum
-    if ~strcmp(varargin{1},'wave')
+    if ~strcmp(varargin{1},'Wave')
         warndlg('Bretschneider option only available with wave type input')
         return;
     end
@@ -80,7 +80,7 @@ end
 %%
 function S = pierson_moskowitz(f,varargin)
     %construct the Pierson-Moskowitz spectrum
-    if ~strcmp(varargin{1},'wave')
+    if ~strcmp(varargin{1},'Wave')
         warndlg('Pierson-Moskowitz option only available with wave type input')
         return;
     end

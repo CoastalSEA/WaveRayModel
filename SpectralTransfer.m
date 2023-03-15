@@ -200,8 +200,9 @@ classdef SpectralTransfer < muiDataSet
             radint = deg2rad(dir_int);
             per_int = 0.5;     %interval uset to interpolate periods (s)
             
-            %check for invalid conditions
-            if istable(input)
+            %check for invalid conditions when
+            %timeseries wave or wind data used to define conditions
+            if istable(input) 
                 if strcmp(sp.source,'Wave') && any(isnan(input{1,[1,3,5,9]})) %offshore waves  
                     return;
                 elseif strcmp(sp.source,'Wind') && any(isnan(input{1,[1,2]})) %wind input  
@@ -479,8 +480,8 @@ function output = get_inshore_wave(~,SGo,SGi,Dims,inp)
             figax = axes(hfig);
             [s1,s2] = off_in_plot(obj,1./Dims.f,Dims.xso,SGo,SGi,figax);
  
-            sgtxt = sprintf('%s with n=%d, gamma=%.2g and %s',sel.form,...
-                                        sel.nspread,sel.gamma,sel.spread);
+            sgtxt = sprintf('%s, gamma=%.2g, and %s, n=%d ',sel.form,...
+                                        sel.gamma,sel.spread,sel.nspread);
             sgtitle(sgtxt,'FontSize',12,'Margin',1);
 
             if strcmp(sel.source,'Wave')
@@ -806,8 +807,13 @@ function spectra = get_model_selection(~,iswind)
             var = output.kd(:,:,ki);
             check_plot(obj,T,Dir,var,{'Direction shift (deg)',labelx,labely},s4);
             sg1 = sprintf('Transfer Coefficients(Mean Direction, Period) for swl=%g mOD',zwl(ki));
-            sgtxt = sprintf('%s\n%s with n=%d, gamma=%.2g and %s',sg1,sel.form,...
-                                    sel.nspread,sel.gamma,sel.spread);
+            if contains({'JONSWAP fetch limited','TMA shallow water'},sel.form)
+                sgtxt = sprintf('%s\n%s, gamma=%.2g, and %s, n=%d',sg1,...
+                                sel.form,sel.gamma,sel.spread,sel.nspread);
+            else
+                sgtxt = sprintf('%s\n%s, and %s, n=%d',sg1,...
+                                sel.form,sel.spread,sel.nspread);
+            end
             sgtitle(sgtxt,'FontSize',12,'Margin',1);
         end
 %%

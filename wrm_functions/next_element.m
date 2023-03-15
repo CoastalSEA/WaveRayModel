@@ -39,24 +39,24 @@ function [newquad,edge,uvi] = next_element(ray,uvr,tol)
     %resolve double quad cases
     if quad>4
         [newquad,edge,uvi] = resolve_quad(ray,uvr,tol);  
-    elseif edge==0
-        newquad = find_diag_quad(ray);
-        auv = abs(uvr);
-        if auv(1)>auv(2)
-            edge = 1;
-        else
-            edge = 2;
-        end
-        diagquad = int8(mod(quad+1,4)+1);
-        if newquad~=diagquad
-            fprintf('Direction quad %d and Diagonal quad %d\n',newquad,diagquad)
-        end
-    elseif edge<0
-        %point passes through distal node of the element - 
-        newquad = find_diag_quad(ray);
-        edge = -edge;
-        uvi = round(uvr);                   %make this point the new origin
-        fprintf('Moved to distal point and from quad %d to quad %d\n',quad,newquad)
+%     elseif edge==0
+%         newquad = find_diag_quad(ray);
+%         auv = abs(uvr);
+%         if auv(1)>auv(2)
+%             edge = 1;
+%         else
+%             edge = 2;
+%         end
+%         diagquad = int8(mod(quad+1,4)+1);
+%         if newquad~=diagquad
+%             fprintf('Direction quad %d and Diagonal quad %d\n',newquad,diagquad)
+%         end
+%     elseif edge<0
+%         %point passes through distal node of the element - 
+%         newquad = find_diag_quad(ray);
+%         edge = -edge;
+%         uvi = round(uvr);                   %make this point the new origin
+%         fprintf('Moved to distal point and from quad %d to quad %d\n',quad,newquad)
     else
         pi_2 = pi/2;    
         %sign and magnitude of quadrant change for each case
@@ -101,7 +101,7 @@ function [quad,edge,uvi] = resolve_quad(ray,uvr,tol)
         %quadrant based on the celerity gradient radius
         if abs(ray.r)<1000               %matches tol.angle tolerance 
             %check if theta in same direction as ray to determine gradient sign    
-            ray.alpha = mod(ray.alpha+sign(ray.r)*asin(2*tol.dist/1),2*pi);
+            ray.alpha = mod(ray.alpha+sign(ray.r)*asin(2*tol.dist),2*pi);
             [ison,uvi] = is_axis_point(ray,uvr,tol);
             quad = get_quadrant(ray,uvr,ison); %update quadrant based on gradient direction
             if quad>4
@@ -111,16 +111,25 @@ function [quad,edge,uvi] = resolve_quad(ray,uvr,tol)
             end
         else
             %directed along axis with radius~=straight line, no change
-            quad = ray.quad; edge = ray.edge; uvi = [0,0];
+            [~,uvi] = is_axis_point(ray,uvr,tol);
+            quad = ray.quad; edge = ray.edge; 
         end
 end
 %%
 function edge = get_edge(ison)
     %assign and edge when directed along axis
-    if ison(2)==1 || ison(2)==3
-        edge = 2;
-    else 
-        edge = 1;
+    if ison(1)<0
+        if ison(2)==1 || ison(2)==3
+            edge = 1;
+        else 
+            edge = 2;
+        end
+    else
+        if ison(2)==1 || ison(2)==3
+            edge = 2;
+        else 
+            edge = 1;
+        end
     end
 end
 %%

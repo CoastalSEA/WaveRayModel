@@ -22,7 +22,8 @@ classdef Ray < handle
 %--------------------------------------------------------------------------
 %     
     properties
-        Track     %table of track properties: xr,yr,alpha,k,quad,edge  
+        Track         %table of track properties: xr,yr,alpha,k,quad,edge  
+        outFlag = 0   %flag to indicate nature of ray termination
     end
     
     methods
@@ -60,77 +61,98 @@ classdef Ray < handle
             %--------------------------------------------------------------
 
             %loop to get ray track to edge of grid or depth limit
-            hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
+            hr = ray.hr(1);
             while hr>hlimit
                 newray = arc_ray(cgrid,ray(end,:),tol);
-                if isempty(newray), hr = hlimit; continue; end
+                if isempty(newray)                         %ray exits grid
+                    obj.outFlag = 1; hr = hlimit; continue; 
+                elseif isnumeric(newray) && newray<0       %ray error (eg radius too small)
+                    obj.outFlag = newray; hr = hlimit; continue; 
+                end
                 ray = [ray;newray]; %#ok<AGROW> 
                 %check plot for finding ray errors - comment out when not required
                 % hold on
                 % plot(ax,newray.xr,newray.yr,'+k')
                 % hold off   
                 %----------------------------------------------------------
-                hr = interp2(cgrid.X,cgrid.Y,cgrid.h',ray.xr,ray.yr,'linear',0);
+                
+                hr = newray.hr;
+                if hr<=hlimit, obj.outFlag = -1; end
             end
-            ray(:,4:7) = [];   %remove k, quad and edge from the ray table 888888
+            ray(:,4:6) = [];   %remove k and quad from the ray table
             obj.Track = dstable(ray,'DSproperties',modelDSproperties(obj));
         end
     end
 %%
     methods (Access=private)  
-        function ray = startRay(obj,cgrid,xys,alpha,tol)
+        function ray = startRay(obj,cgrid,xyr,alpha,tol)
             %compute the first element intersection from the start point
             % grid - contains X,Y,h,c,dcx,dcy
-            % xys - start point grid coordinates
+            % xyr - start point grid coordinates
             % alpha - start angle (radians)
             
             delta = cgrid.X(1,2)-cgrid.X(1,1);                  %grid spacing
             XY = [reshape(cgrid.X,[],1),reshape(cgrid.Y,[],1)]; %x,y vectors
 
             %find nearest node to start point
-            k = dsearchn(XY,xys);
-            [row,col] = ind2sub(size(cgrid.X),k);
-            xi = cgrid.X(row,col); yi = cgrid.Y(row,col);       %coordinates of start point
-            
-            %get vector to start point in local grid coordinates
-            us = (xys(1)-xi)/delta;
-            vs = (xys(2)-yi)/delta;
+            kr = dsearchn(XY,xyr);
+            %wave properties at start point
+            [hr,cr,cgr] = raypoint_properties(obj,cgrid,xyr(1),xyr(2));
+            %initialise ray table
+            r = inf;                                     %intial radius
+            xr = xyr(1); yr = xyr(2); quad = 0;
+            ray = table(xr,yr,alpha,kr,quad,r,hr,cr,cgr);%grid properties of ray position
 
-            [ue,ve] = pol2cart(alpha,2);      %vector from start in direction of alpha
+            %coordinates of local origin
+            [row,col] = ind2sub(size(cgrid.X),kr);
+            xi = cgrid.X(row,col); yi = cgrid.Y(row,col); 
+            %get vector to start point in local grid coordinates
+            uvr = [(xr-xi)/delta,(yr-yi)/delta];
+            %find quadrant for start point
+            ison = is_axis_point(ray,uvr,tol);
+            ray.quad = get_quadrant(ray,uvr,ison);
+            
+            %find first intersection point
+            [ue,ve] = pol2cart(alpha,sqrt(2));      %vector from start in direction of alpha
                                                     %sqrt(2) ensures it crosses a boundary
-            lineseg = [us-ue,vs-ve;us+ue,vs+ve];    %ray vector line segment
+            [u0,v0] = pol2cart(alpha,tol.dist);     %offset from start point
+            us = uvr(1); vs = uvr(2);               %start point
+            lineseg = [us+u0,vs+v0;us+ue,vs+ve];    %ray vector line segment
             r = inf;                                %intial radius
 
+            % figure; ax = axes;
+            % plot(ax,xi,yi,'ob')  %origin
+            % hold on
+            % plot(ax,xr,yr,'xr')
+            % plot(ax,xi+lineseg(:,1)*delta,yi+lineseg(:,2)*delta,'--k')
+            % hold off
             %check line does not go out of grid from start point                                   
-            xye = [xys(1)+ue*delta,xys(2)+ve*delta];
+            xye = [xyr(1)+ue*delta,xyr(2)+ve*delta];
             isbound = checkGridBoundary(obj,cgrid,xye);       
             if isbound, ray = NaN; return; end
 
-            %check whether point is on grid axes and determine quad
-            ray = table(alpha,k,r);
-            [ison,uvi] = is_axis_point(ray,[us,vs],tol);
-            quad = get_quadrant(ray,[us,vs],ison);
+            %get new ray point where it exits current element
+            uvray = get_intersection(ray,lineseg,uvr,tol);
+            xr = xi+uvray(1)*delta; yr = yi+uvray(2)*delta;
+            kr = dsearchn(XY,[xr,yr]);            
+            %wave properties at new ray point
+            [hr,cr,cgr] = raypoint_properties(obj,cgrid,xr,yr);      
+            %coordinates of start point
+            [row,col] = ind2sub(size(cgrid.X),kr);
+            xi = cgrid.X(row,col); yi = cgrid.Y(row,col); 
+            %get vector to start point in local grid coordinates
+            uvr = [(xr-xi)/delta,(yr-yi)/delta];
 
-            if ison(1)<1 || ison(1)>2
-                %not on axis (in element or on a diagonal)
-                [uvr,edge] = get_intersection(quad,lineseg,ray,[us,vs],tol);
-                xr = xi+uvr(1)*delta; yr = yi+uvr(2)*delta;
-            else
-                %on an axis and directed along axis
-                edge = get_edge(obj,ison);
-                xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
-            end            
-
-            [hr,cr,cgr] = raypoint_properties(obj,cgrid,xr,yr);
-            ray = table(xr,yr,alpha,k,quad,edge,r,hr,cr,cgr);%grid properties of ray position
-            if xr~=xys(1) || yr~=xys(2)
-                %wave properties at start point
-                [hs,cs,cgs] = raypoint_properties(obj,cgrid,xys(1),xys(2));
-                %duplicate row and add start point to first row
-                ray = [ray;ray];
-                ray{1,1} = xys(1); ray{1,2} = xys(2); 
-                ray{1,8} = hs; ray{1,9} = cs; ray{1,10} = cgs; 
-            end
+            % hold on
+            % plot(ax,xr,yr,'+g')
+            % plot(ax,xi,yi,'vb')
+            % hold off
+            %find quadrant for new ray point
+            ison = is_axis_point(ray,uvr,tol);
+            quad = get_quadrant(ray,uvr,ison);
+            %add new ray position to table
+            newray = table(xr,yr,alpha,kr,quad,r,hr,cr,cgr);%grid properties of ray position
+            ray = [ray;newray];
         end
 %%
         function edge = get_edge(~,ison)

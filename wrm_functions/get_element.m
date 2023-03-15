@@ -13,7 +13,7 @@ function Tri = get_element(quad)
 % OUTPUTS
 %   Tri - triangular polyshape for the required quadrant(s)
 % SEE ALSO
-%   get_quadrant, next_element and arc_ray.
+%   get_quadrant, is_axis_point, arc_ray, get_intersection
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023

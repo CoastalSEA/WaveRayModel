@@ -148,8 +148,8 @@ classdef WaveRayModel < muiModelUI
                                 'Test Grid','Derive Output'};
             menucall = repmat({@obj.runMenuOptions},[1,8]);            
             menu.Run(1).Callback = menucall;
-            menu.Run(1).Separator = [repmat({'off'},[1,4]),{'on','off','on','on'}];
-
+            menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off',...
+                                                    'on','off','on','on'}];
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,3]),...

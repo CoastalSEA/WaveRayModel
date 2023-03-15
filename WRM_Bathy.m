@@ -123,8 +123,7 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
             end
     
             %plot form as a contour plot
-            surf(ax,grid.x,grid.y,grid.z');
-            view(2);
+            pcolor(ax,grid.x,grid.y,grid.z');
             ax = gd_ax_dir(ax,grid.x,grid.y);
             %use the YlGnBu colormap generated in cbrewer. This then needs
             %to be interpolated to get a smooth surface plot

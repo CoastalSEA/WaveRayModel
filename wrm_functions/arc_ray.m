@@ -15,11 +15,13 @@ function newray = arc_ray(cgrid,ray,tol)
 %          c - celerity grid matrix 
 %          dcx, dcy - gradients of celerity in x and y directions
 %   ray - table of incoming ray position (xr,yr), direction, alpha, local
-%         node index, k, quadrant being entered, quad, side of element, edge
+%         node index, k, quadrant being entered, quad
 %   tol - tolerance to test for angles that are multiples of pi/2 (5.7 deg)
 % OUTPUTS
 %   newray - table of outgoing ray position (xr,yr), direction, alpha, local
 %            node index, k, quadrant being entered, quad, side of element, edge
+%            - returned empty if new point is outside grid domain
+%            - returned as -2 if radius is too small (<0.5) 
 % NOTES
 %   Ray method based on Abernethy C L and Gilbert G, 1975, Refraction of 
 %   wave spectra, Report No: INT 117,pp. 1-166, Wallingford, UK.
@@ -29,12 +31,11 @@ function newray = arc_ray(cgrid,ray,tol)
 %   node (0,0) and the surrounding nodes (1,0),(1,1),(0,1),(-1,1),(-1,0)
 %   (-1,-1),(0,-1),(1,-1). The position of the ray at any given time
 %   relative to the grid is defined in grid coordinates as xr,yr and in
-%   indices as the nearest node, k (or i,j), the quadrant, q, and the edge
-%   of the triangle, e. Where q is the trigonometric quadrant 1-4 of the 
-%   ray point, and e has a value of 1-3: e=1 if yr=yi; e=2 if xr=zi; 
-%   else e=3.
+%   indices as the nearest node, kr (or i,j), the quadrant, quad, 
+%   of the triangle. Where quad is the trigonometric quadrant 1-4 of the 
+%   ray point. 
 % SEE ALSO
-%   get_quadrant, get_element and next_element 
+%   get_quadrant, get_element, is_axis_point, get_intersection
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023
@@ -42,108 +43,109 @@ function newray = arc_ray(cgrid,ray,tol)
 %
     X = cgrid.X; Y = cgrid.Y;
     delta = X(1,2)-X(1,1);                  %grid spacing
+    XY = [reshape(cgrid.X,[],1),reshape(cgrid.Y,[],1)]; %x,y vectors
 
     %variables used in function
     % alpha - angle of ray direction
     % phi - angle of normal to ray direction
     % theta - angle from origin to ray position
-    % k - index of reference grid node
+    % kr - index of reference grid node
     % xi,yi - position of reference grid node for local coordinates
     % xr,yr - ray position in grid coordinates
     % ur,vr - ray position in local coordinates
     % uc,vc - centre of arc in local coordinates
     % r - radius of arc in local coordinates (R = r*delta)
-
+    
     %find node of ray point
-    [row,col] = ind2sub(size(X),ray.k);
+    [row,col] = ind2sub(size(X),ray.kr);
     xi = X(row,col); yi = Y(row,col);       %coordinates of start point
 
     %get vector to start point in local grid coordinates
     ur = (ray.xr-xi)/delta;
     vr = (ray.yr-yi)/delta;
-
-    %find which element the ray is entering
-    [quad,edge,uvi] = next_element(ray,[ur,vr],tol);
-    %transform local coordinates if start point is on edge 3 (hypotenuse)
-    if ray.edge==3 || sum(abs(uvi))>0
-        xi = xi+uvi(1)*delta;       %translate origin to new local origin
-        yi = yi+uvi(2)*delta;
-        isoutbound = checkGridBoundary(cgrid,[xi,yi]);
-        if isoutbound, newray = []; return; end
-        k = sub2ind(size(X),row+uvi(2),col+uvi(1));
-        ur = (ray.xr-xi)/delta;     %update ray position to new origin
-        vr = (ray.yr-yi)/delta;
-    else
-        k = ray.k;                  %no change in origin
-    end
-
+    
     %get the centre of the arc that is tangential to the ray at ur,vr
     [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray);
-    if quad>4                       %assign values for ray along an axis
-        xr = xi+uvi(1)*delta; yr = yi+uvi(2)*delta;
-        alpha = ray.alpha;
-    else
-        %create line vector based on defined arc
-        xyArc = get_arc(phi,r,uc,vc,ur,vr,tol);
-        if any(isnan(xyArc))
-            Tri = get_element(quad);
-            plot_element(Tri,xyArc,ur,vr,k)
+    uvArc = get_arc(phi,r,uc,vc,ur,vr,tol);
+        if any(isnan(uvArc))
+            Tri = get_element(ray.quad);
+            plot_element(Tri,uvArc,ur,vr,ray.kr)
             error('Arc segment not found at xr=%.0f; yr=%.0f',ray.xr,ray.yr)
-        elseif isempty(xyArc)
-            warndlg(sprintf('Radius too small at xr=%.0f; yr=%.0f',ray.xr,ray.yr));
-            newray = []; return;
+        elseif isempty(uvArc)
+            % warndlg(sprintf('Radius, r=%0.2f too small at xr=%.0f; yr=%.0f',r,ray.xr,ray.yr));
+            newray = -2; return;
         end
-        %find the intersection of the arc segment with quad triangle
-        [uvray,edge] = get_intersection(quad,xyArc,ray,[ur,vr],tol);
-        xr = xi+uvray(1)*delta; yr = yi+uvray(2)*delta;
-        %get exit angle
-        alpha =  exit_angle(phi,r,ur,vr,uvray);  
-    end
+    %find the intersection of the arc segment with quad triangle
+    uvray = get_intersection(ray,uvArc,[ur,vr],tol);
+    xr = xi+uvray(1)*delta; yr = yi+uvray(2)*delta;
+    kr = dsearchn(XY,[xr,yr]);
+    %wave properties at new ray point
+    [hr,cr,cgr] = raypoint_properties(cgrid,xr,yr); 
+    %get exit angle (ur,vr entry point into element, uvray exit point)
+    alpha =  exit_angle(phi,r,ur,vr,uvray);  ray.alpha = alpha;
+
+    %coordinates of start point
+    [row,col] = ind2sub(size(cgrid.X),kr);
+    xi = cgrid.X(row,col); yi = cgrid.Y(row,col); 
+    %get vector to start point in local grid coordinates
+    uvr = [(xr-xi)/delta,(yr-yi)/delta];
+    %find quadrant for new ray point
+    ison = is_axis_point(ray,uvr,tol);
+    quad = get_quadrant(ray,uvr,ison);
 
     isoutbound = checkGridBoundary(cgrid,[xr,yr]);
     if isoutbound 
         newray = []; return; 
-    end
-
-    [hr,cr,cgr] = raypoint_properties(cgrid,xr,yr);
-    try
-    newray = table(xr,yr,alpha,k,quad,edge,r,hr,cr,cgr);%grid properties of ray position
-    catch
-        warndlg()
+    else
+        newray = table(xr,yr,alpha,kr,quad,r,hr,cr,cgr);
     end
 end
 %%
-function [xy_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)  
+function [uv_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
     N = 20;                                       %number of points in half-Arc
     rt2 = sqrt(2);
     rad = abs(radius);
+    alpha = mod(phi-pi/2,2*pi);
+    
     if rad>1000 
-        %straight line segment will suffice        
-        [ue,ve] = pol2cart(phi-pi/2,rt2);         %vector from ray point in direction of alpha
-                                                  %use 2 to ensure line crosses a boundary
-                                                  %max element length is sqrt(2)
-        xy_arc = [ur-ue,vr-ve;ur+ue,vr+ve];       %ray vector line segment
+        %straight line segment will suffice       
+        [ue,ve] = pol2cart(alpha,rt2); %vector from ray point in direction of alpha
+                                       %use 2 to ensure line crosses a boundary
+                                       %max element length is sqrt(2) 
+        [us,vs] = pol2cart(phi-pi/2,tol.dist);         
+        uv_arc = [ur+us,vr+vs;ur+ue,vr+ve];       %ray vector line segment
         return;
-    elseif rad<0.001
-        xy_arc = []; return;
+    elseif rad<1.0                                %radius is so small that it may not exit element
+        uv_arc = []; return;
     end
 
     phi = phi+pi;                                  %angle of normal from centre of arc
     arcang = rt2/rad;                              %set arc segment based on radius
-
-    r_angl = linspace(phi-arcang,phi-tol.angle, N);%angles Defining left Arc Segment (radians)
-    r_angr = linspace(phi+tol.angle,phi+arcang, N);%angles Defining right Arc Segment (radians)
     %abstract Circle Function For Angles In Radians
-    circr = @(radius,angle)  [radius*cos(angle)+uc,  radius*sin(angle)+vc];  
-    %ensure that current position is on arc
-    xy_arc = [circr(radius,r_angl');circr(radius,r_angr')];
+    circr = @(radius,angle)  [radius*cos(angle)+uc,  radius*sin(angle)+vc]; 
+    r_angl = linspace(phi-arcang,phi-tol.angle, N);%angles Defining left Arc Segment (radians)
+    uv_arcl = circr(radius,r_angl');
+    r_angr = linspace(phi+tol.angle,phi+arcang, N);%angles Defining right Arc Segment (radians)
+    uv_arcr = circr(radius,r_angr');
+    %find arc in direction of ray
+    ua1 = uv_arcl(1,1)-ur; va1 = uv_arcl(1,2)-vr;  %vector from ray point to first point on arc
+    arcl = mod(cart2pol(ua1,va1),2*pi);
+    ua2 = uv_arcr(1,1)-ur; va2 = uv_arcr(1,2)-vr;  %vector from ray point to first point on arc
+    arcr = mod(cart2pol(ua2,va2),2*pi);
+    angtol = 1.0;                                  %angle limit of +/-1.0 rads (57.3 deg)
+    bound = [alpha-angtol,alpha+angtol];
+   
+    if isangletol(arcl,bound)                      %check if arcl is within bound   
+        uv_arc = uv_arcl;
+    elseif isangletol(arcr,bound)                  %check if arcr is within bound   
+        uv_arc = uv_arcr;
+    else
+        uv_arc = [];
+        % warndlg('Arc not found in get_arc')
+    end
 
-    %Arc segment use
-    % Arc = polyshape([xy_arc(:,1)],[xy_arc(:,2)]);
-    %For Arc sector use 
-    % Arc = polyshape([uc;xy_arc(:,1)],[vc;xy_arc(:,2)]);
 end
 %%
 function [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray)
@@ -215,4 +217,3 @@ function isoutbound = checkGridBoundary(cgrid,xye)
     isoutbound = xye(1)<limxy(1,1) || xye(1)>limxy(2,1) || ...%check x
               xye(2)<limxy(1,2) || xye(2)>limxy(2,2);         %check y       
 end
-

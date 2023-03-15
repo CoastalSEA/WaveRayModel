@@ -17,7 +17,7 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
 %     
     properties
-        tol = 1e-9   %distance tolerance (m) scaled in setTolerances to 
+        tol          %distance tolerance (m) scaled in setTolerances to 
                      %create struct for angle and distance tolerances 
                      %dependent on the model grid size
     end
@@ -25,6 +25,8 @@ classdef RayTracks < muiDataSet
     methods (Access = private)
         function obj = RayTracks()                
             %class constructor 
+            obj.tol.dist = 1e-9;
+            obj.tol.angle = atan(obj.tol.dist);
         end
     end      
 %%
@@ -70,7 +72,7 @@ classdef RayTracks < muiDataSet
 
             [X,Y] = meshgrid(grid.x,grid.y);            
             delta = grid.x(2)-grid.x(1);
-            setTolerances(obj,delta); %adjust tolerance to local coordinates
+%             setTolerances(obj,delta); %adjust tolerance to local coordinates
             cgrid = struct('X',X,'Y',Y,'z',grid.z);
 
             %arrays of waver periods and water levels            
@@ -107,7 +109,7 @@ classdef RayTracks < muiDataSet
                     modelprop = mean(depths,'omitnan');
             end
             
-            raytable = setTable(obj,rays);
+            [raytable,outflag] = setTable(obj,rays);
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
 %--------------------------------------------------------------------------                   
@@ -123,6 +125,7 @@ classdef RayTracks < muiDataSet
             dst.Source = metaclass(obj).Name;
             dst.MetaData = modeltype;
             dst.UserData.prop = modelprop; %direction or av. depth of point
+            dst.UserData.flag = outflag;   %flag to define ray termination
             setDataSetRecord(obj,muicat,dst,modeltype);
             getdialog('Run complete');
         end
@@ -147,7 +150,8 @@ classdef RayTracks < muiDataSet
             %transform wave direction to grid (trigonometric) direction
             [~,alpha] = compass2trig(runobj.dir0TN);
 
-            hf = figure;  src = axes(hf);
+            hf = figure('Name','Start','Tag','PlotFig');  
+            src = axes(hf);
             tabPlot(grdobj,src)
             %add start line points to figure
             ax = findobj(hf.Children,'Type','axes');
@@ -162,20 +166,37 @@ classdef RayTracks < muiDataSet
         function startDepth(mobj)
             %check the depths of the bacakward ray start point for the range of
             %water levels specified
-                promptxt = 'Select grid to use for wave model'; 
-                gridclasses = {'WRM_Bathy','GD_ImportData'};
-                grdobj = selectCaseObj(mobj.Cases,[],gridclasses,promptxt);
-                if isempty(grdobj), return; end
-                grid = getGrid(grdobj,1);
-                if isempty(grid.z), return; end
-    
-                spnt = mobj.Inputs.WRM_BT_Params.StartPoint;
-                [X,Y] = meshgrid(grid.x,grid.y);
-                bed = interp2(X,Y,grid.z',spnt(1),spnt(2),'linear');
-                wls =  mobj.Inputs.WRM_RunParams.WaterLevelRange;
+            promptxt = 'Select grid to use for wave model'; 
+            gridclasses = {'WRM_Bathy','GD_ImportData'};
+            grdobj = selectCaseObj(mobj.Cases,[],gridclasses,promptxt);
+            if isempty(grdobj), return; end
+            grid = getGrid(grdobj,1);
+            if isempty(grid.z), return; end
+
+            spnt = mobj.Inputs.WRM_BT_Params.StartPoint;
+            [X,Y] = meshgrid(grid.x,grid.y);
+            bed = interp2(X,Y,grid.z',spnt(1),spnt(2),'linear');
+            wls =  mobj.Inputs.WRM_RunParams.WaterLevelRange;
+            if isscalar(wls)
+                msgtxt = sprintf('Water depth at start point: %.2f m',wls-bed); 
+            else
                 msgtxt = sprintf('Water depths at start point: min=%.2f m; max=%0.2f m',...
-                                                   wls(1)-bed,wls(2)-bed);
-                msgbox(msgtxt)
+                                               wls(1)-bed,wls(2)-bed);
+            end
+        
+            hf = figure('Name','Start','Tag','PlotFig');  
+            src = axes(hf);
+            tabPlot(grdobj,src)
+            %add start point to figure
+            ax = findobj(hf.Children,'Type','axes');
+            axis tight
+            hold on
+            plot (ax,spnt(1),spnt(2),'xr','LineWidth',1,'MarkerSize',8)
+            plot (ax,spnt(1),spnt(2),'ok','LineWidth',1,'MarkerSize',8)            
+            xtxt = ax.XLim(2)*0.05;
+            ytxt = ax.YLim(2)*0.95;
+            text(ax,xtxt,ytxt,msgtxt);
+            hold off              
         end    
     end
 %%
@@ -247,15 +268,15 @@ classdef RayTracks < muiDataSet
     end 
 %%    
     methods (Access = private)   
-        function setTolerances(obj,delta)
-            %set the distance, radius and angle tolerances based on grid
-            %size
-            atol = obj.tol;  %constructor dimension setting of tolerance
-            obj.tol = []; 
-            obj.tol.dist = atol/delta;
-            obj.tol.angle = atan(obj.tol.dist);
-            %obj.tol.radius = 0.2865/obj.tol.angle;            
-        end
+%         function setTolerances(obj,delta)
+%             %set the distance, radius and angle tolerances based on grid
+%             %size
+%             atol = obj.tol;  %constructor dimension setting of tolerance
+%             obj.tol = []; 
+%             obj.tol.dist = atol;
+%             obj.tol.angle = atan(obj.tol.dist);
+%             %obj.tol.radius = 0.2865/obj.tol.angle;            
+%         end
 %%
         function agrid = subSampleGrid(~,cgrid,j,k)
             %select grids for give wave period (j) and water level (k)
@@ -304,7 +325,8 @@ classdef RayTracks < muiDataSet
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
                         if islog
-                            lines = sprintf('Ray dir %d, period %d, level %d points %d',i,j,k,npt);
+                            lines = sprintf('Ray no: %d, period %.1f, level %.1f, points %d, outflag %d',...
+                                                 i,T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
                             writelines(lines,filename,WriteMode="append")
                         end
                         
@@ -341,7 +363,8 @@ classdef RayTracks < muiDataSet
             rownames = round(phi',1);
 
             %transform wave direction to grid (trigonometric) direction
-            alpha = mod(compass2trig(phi),2*pi);
+           %[~,alpha]  = compass2trig(phi); %change input 'from' to ray 'to'           
+            alpha = mod(compass2trig(phi),2*pi); %ray directions 'to'
 
             filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));                       
             %check plot - comment out when using parfor in loop
@@ -365,9 +388,10 @@ classdef RayTracks < muiDataSet
                         rayobj = Ray.setRay(agrid,xys,alpha(i),hlimit,obj.tol);
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
-                        depths(i,j,k) = rayobj.Track.DataTable.depth(1);
+                        depths(i,j,k) = rayobj.Track.DataTable.depth(1);                        
                         if islog
-                            lines = sprintf('Ray dir %d, period %d, level %d points %d',i,j,k,npt);
+                            lines = sprintf('Ray dir %.1f, period %.1f, level %.1f, points %d, outflag %d',...
+                                                 phi(i),T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
                             writelines(lines,filename,WriteMode="append")
                         end
                                                 
@@ -402,8 +426,7 @@ classdef RayTracks < muiDataSet
             [ua,va] = pol2cart(alpha,delta);
             hq = quiver(ax,xs-ua,ys-va,ua,va,'AutoScale',0);
             hq.Color = 'r';
-            hq.MaxHeadSize = 2.0;
-            hq.LineWidth = 1.0;
+            hq.LineWidth = 1;         
             hold(ax,"off")
         end
 %%
@@ -461,6 +484,11 @@ classdef RayTracks < muiDataSet
                     xr = obj.Data.Dataset.xr{i,opt(1),opt(2)};
                     yr = obj.Data.Dataset.yr{i,opt(1),opt(2)};
                     plot(ax,xr,yr,'-k');
+                    if obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))<-1
+                        plot(ax,xr(end),yr(end),'vr','MarkerSize',4)
+                    elseif obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))<0    
+                        plot(ax,xr(end),yr(end),'xr','MarkerSize',4)
+                    end
                 end
                 hold(ax,"off")
             else
@@ -514,10 +542,11 @@ function options = get_selection(obj)
             end  
         end
 %%
-        function newtable = setTable(~,rays)
+        function [newtable,outflag] = setTable(~,rays)
             %make the table contents of a ray a single row
             [nr,np,nq] = size(rays);
             newtable = [];
+            outflag = zeros(nr,np,nq);
             varnames = {'xr','yr','alpha','depth','celerity','cgroup'};         
             for i=1:nr                  %ray number
                 perzwl = cell(1,np,nq);
@@ -528,6 +557,7 @@ function options = get_selection(obj)
                         for l=1:6
                             varcells{1,l}(1,j,k) = {atable.(varnames{l})};
                         end
+                        outflag(i,j,k) = rays{i,j,k}.outFlag;
                     end
                 end
                 raytable = table(varcells{:},'VariableNames',varnames);
