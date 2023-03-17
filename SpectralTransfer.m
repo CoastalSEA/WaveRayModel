@@ -102,10 +102,10 @@ classdef SpectralTransfer < muiDataSet
             end
         end
 %%
-        function  [Sot,Sit,Dims,select] = runSpectra(obj,mobj,tsdst,srs)
+        function  [Sot,Sit,Dims,select] = runModelSpectra(obj,mobj,tsdst,srs)
             %run the spectral transfer model for a timeseries of offshore
-            %wave conditions and return the spectra. Called from runWaves
-            %and from classs WRM_WaveModel by runSpectrum and runAnimation
+            %wave conditions and return the spectra. Called 
+            %from classs WRM_WaveModel by runSpectrum and runAnimation
             Sot = []; Sit = []; Dims = []; 
             select = get_model_selection(obj,srs); %select spectral form and data type
             if isempty(select), return; end        %user cancelled

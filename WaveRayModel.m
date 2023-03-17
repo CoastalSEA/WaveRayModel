@@ -41,7 +41,6 @@ classdef WaveRayModel < muiModelUI
             obj.ModelInputs.RayTracks = {'WRM_RunParams'};
             obj.ModelInputs.WRM_Bathy = {'GD_GridProps'};
             obj.ModelInputs.SpectralTransfer = {''};
-            obj.ModelInputs.WRM_WaveModel = {'WRM_RunParams'};
             %tabs to include in DataUIs for plotting and statistical analysis
             %select which of the options are needed and delete the rest
             %Plot options: '2D','3D','4D','2DT','3DT','4DT'
@@ -144,12 +143,13 @@ classdef WaveRayModel < muiModelUI
             %% Run menu ---------------------------------------------------
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
                                 'Check Start Depth','Backward Rays',...
-                                'Transfer Table','Run Timeseries',...
+                                'Transfer Table','Run Property Timeseries',...
+                                'Run Spectra Timeseries',...
                                 'Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,8]);            
+            menucall = repmat({@obj.runMenuOptions},[1,9]);            
             menu.Run(1).Callback = menucall;
             menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off',...
-                                                    'on','off','on','on'}];
+                                              'on','off','off','on','on'}];
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,3]),...
@@ -314,8 +314,10 @@ classdef WaveRayModel < muiModelUI
                     RayTracks.runModel(obj,src);
                 case 'Transfer Table'
                     SpectralTransfer.runModel(obj);
-                case 'Run Timeseries'
+                case 'Run Property Timeseries'
                     WRM_WaveModel.runModel(obj);
+                case 'Run Spectra Timeseries'
+                    WRM_WaveModel.runSpectra(obj);
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'

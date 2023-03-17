@@ -37,14 +37,6 @@ classdef WRM_WaveModel < muiDataSet
             %function to run the wave refraction model.
             obj = WRM_WaveModel;                            
             dsp = modelDSproperties(obj);
-            
-            %now check that the input data has been entered
-            %isValidModel checks the InputHandles defined in CoastalTools
-            %NB - water level data not checked because optional
-            if ~isValidModel(mobj, metaclass(obj).Name)  
-                warndlg('Use Setup to define model input parameters');
-                return;
-            end
 %--------------------------------------------------------------------------
 % Model code 
 %-------------------------------------------------------------------------- 
@@ -77,7 +69,7 @@ classdef WRM_WaveModel < muiDataSet
             %add depths of inshore point for which there are backward rays
             dst.UserData = sptobj.Data.Inshore.UserData.Depths;
             %save results
-            setDataSetRecord(obj,mobj.Cases,dst,'wave_model');
+            setDataSetRecord(obj,mobj.Cases,dst,'Inwave_model');
             getdialog('Run complete');
         end
 %--------------------------------------------------------------------------
@@ -99,7 +91,7 @@ classdef WRM_WaveModel < muiDataSet
                 return;
             end
 
-            [SGo,SGi,Dims,sel] = runSpectra(sptobj,mobj,off,srs);
+            [SGo,SGi,Dims,sel] = runModelSpectra(sptobj,mobj,off,srs);
             if isempty(SGo), return; end
 
             if strcmp(srs,'Wind')
@@ -135,7 +127,7 @@ classdef WRM_WaveModel < muiDataSet
                 return;
             end
 
-            [SGo,SGi,Dims,~] = runSpectra(sptobj,mobj,tsdst,'Wave');
+            [SGo,SGi,Dims,~] = runModelSpectra(sptobj,mobj,tsdst,'Wave');
             if isempty(SGo), return; end
 
             wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
@@ -145,7 +137,6 @@ classdef WRM_WaveModel < muiDataSet
     methods
         function [tsdst,caserec] = getWaveModelDataset(obj,mobj,type,varnames,caserec)
             %prompt user to select a model wave dataset and add Tp if inshore
-            %
             muicat = mobj.Cases;
             if nargin<4
                 varnames = {'Tp'};  %default is to add Tp

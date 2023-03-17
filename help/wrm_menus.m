@@ -90,7 +90,11 @@
 % * *Forward Rays*: uses the defined run parameters (Setup>Run Parameters>Run Conditions) and start points (Setup>Run Parameters>Forward Tracking) to generate a set of rays. These can then be viewed on the Q-Plot tab, or using the Analysis>Ray Plots option.
 % * *Backward Rays*: uses the defined run parameters (Setup>Run Parameters>Run Conditions) and start point (Setup>Run Parameters>Backward Tracking) to generate a set of rays. These can then be viewed on the Q-Plot tab, or using the Analysis>Ray Plots option.
 % * *Transfer Table*: generates the Transfer Table from a set of Backward Tracking rays.  Summary output from the tables can then viewed on the Q-Plot tab, or using the Analysis>Spectral Plots>Transfer Table option.
-% * *Run Timeseries*: uses a selected Transfer Table and imported wind or wave data to compute the inshore conditions which are saved as a timeseries 
+% * *Run Property Timeseries*: uses a selected Transfer Table and imported wind or wave data to compute the inshore conditions which are saved as a timeseries 
+% * *Run Spectra Timeseries*: uses a selected Transfer Table and imported
+% directional wave spectra data to compute the inshore spectra, which are
+% saved as spectra and property data (with the same definitions as the
+% input timeseries).
 % * *Derive Output*: initialises the Derive Output UI to select and define manipulations of the data or call external functions and load the result as new data set.
 
 %% Analysis
