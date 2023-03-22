@@ -39,7 +39,7 @@ function wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
 
     %extract the timeseries data and dimensions for plot
     pobj.Data.X = 1./Dims.f;
-    pobj.Data.Y = Dims.xso;
+    pobj.Data.Y = Dims.xsi;
     pobj.Data.Z = {SGo,SGi};
     pobj.Data.T = tsdst.RowNames;    
     pobj.Data.Waves = [tsdst.Hs,tsdst.Tp,tsdst.Dir];

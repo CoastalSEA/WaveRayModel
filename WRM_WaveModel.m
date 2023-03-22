@@ -43,15 +43,18 @@ classdef WRM_WaveModel < muiDataSet
             %get the timeseries input data and site parameters
             %Note: getInputData calls setRunParam
             [tsdst,inputxt] = getInputData(obj,mobj);
-            if isempty(tsdst), return; end   %user cancelled data selection
-            tsdst = getSubSet(obj,tsdst);    %allow user to extract a subset 
+            if isempty(tsdst), return; end     %user cancelled data selection
+            tsdst = getSubSet(obj,tsdst);      %allow user to extract a subset 
 
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
-            if isempty(sptobj), return; end  %user cancelled selection
+            if isempty(sptobj), return; end       %user cancelled selection
+
+            select = get_model_selection(sptobj); %select spectral form and data type
+            if isempty(select), return; end       %user cancelled
             
-            results = runWaves(sptobj,mobj,tsdst);
+            results = runWaves(sptobj,mobj,tsdst,select);
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
 %--------------------------------------------------------------------------                   
@@ -77,29 +80,46 @@ classdef WRM_WaveModel < muiDataSet
 %--------------------------------------------------------------------------
 %%
         function runSpectrum(mobj)
-            %create a plot of hte offshore and inshore 2-D specrum surfaces for a
-            %single wave condition
-            [off,srs] = WRM_WaveModel.getForcingConditions();   %get the input conditions
-            if isempty(off); return; end
+            %create a plot of the offshore and inshore 2-D specrum surfaces 
+            %for a single wave condition
+            offdata = WRM_WaveModel.getForcingConditions();   %get the input conditions
+            if isempty(offdata); return; end
 
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
-            isout = checkWLrange(sptobj,off.swl);
+            isout = checkWLrange(sptobj,offdata.swl);
             if isout
                 warndlg('Water levels are outside the range of the Transfer Table')
                 return;
             end
+            
+            if strcmp(offdata.source,'Spectrum')
+%                 rayrec = caseRec(mobj.Cases,sptobj.RunParam.RayTracks.caseid); %ray case used
+%                 rayobj = getCase(mobj.Cases,rayrec);
+%                 hlimit = rayobj.RunParam.WRM_RunParams.hCutOff; 
+%                 ShoreAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;%to exclude this limit use NaN
+               
+                select.form = 'Measured';           %initialise select properties
+                select.source = 'Spectrum';         
+                select.ismodel = false;
+                select.issat = offdata.issat;       %copy to sprectrum selection
+                
+                [SGo,SGi,Dims] = runSpectra(sptobj,mobj,offdata,select);
+            else
+                select = get_model_selection(sptobj,offdata.source); %select spectral form and data type
+                if isempty(select), return; end           %user cancelled
 
-            [SGo,SGi,Dims,sel] = runModelSpectra(sptobj,mobj,off,srs);
-            if isempty(SGo), return; end
-
-            if strcmp(srs,'Wind')
-                off = WRM_WaveModel.addWaveConditions(SGo,Dims,off);
+                [SGo,SGi,Dims] = runSpectra(sptobj,mobj,offdata,select);
+                if isempty(SGo), return; end
+    
+                if strcmp(offdata.source,'Wind')
+                    offdata = WRM_WaveModel.addWaveConditions(SGo,Dims,offdata);
+                end
             end
-            ins = get_inshore_wave(sptobj,SGo,SGi,Dims,off);
+            ins = get_inshore_wave(SGo,SGi,Dims,offdata,select);
 
-            getSpectrumPlot(sptobj,SGo,SGi,Dims,ins,off,sel);            
+            getSpectrumPlot(sptobj,SGo,SGi,Dims,ins,offdata,select);            
         end
 %%
         function runAnimation(mobj)
@@ -379,12 +399,12 @@ classdef WRM_WaveModel < muiDataSet
     end  
 %%
     methods (Static, Access=private)
-        function [inputs,answer] = getForcingConditions()
+        function inputs = getForcingConditions()
             %get the user input of wave or wind conditions
             inputs = []; 
 
-            answer = questdlg('Wind or Wave input?','Input','Wind','Wave','Wave');
-
+            answer = questdlg('Wind, Wave or Spectrum input?','Input',...
+                                         'Wind','Wave','Spectrum','Wave');            
             if strcmp(answer,'Wave')
                 promptxt = {'Wave height (m)','Peak period (s)',...
                                  'Wave direction (degTN)','Still water level'};
@@ -395,7 +415,7 @@ classdef WRM_WaveModel < muiDataSet
                 inputs.Tp = str2double(inpt{2});
                 inputs.Dir = str2double(inpt{3});
                 inputs.swl = str2double(inpt{4});
-            else
+            elseif strcmp(answer,'Wind')
                 promptxt = {'Wind Speed (m/s)','Wind Direction (degTN)',...
                             'Height above msl (m)','Fetch Length (m)',...
                             'Still water level'};                                 
@@ -407,7 +427,19 @@ classdef WRM_WaveModel < muiDataSet
                 inputs.zW = str2double(inpt{3});
                 inputs.Fetch = str2double(inpt{4});
                 inputs.swl = str2double(inpt{5});
+            else
+                promptxt = {'Still water level','Include depth saturation (1=Yes,0=No)'};
+                defaults = {'0.0','1'};
+                inpt = inputdlg(promptxt,'Input conditions',1,defaults);
+                if isempty(inpt), return; end  %user cancelled
+                inputs.swl = str2double(inpt{1});
+                inputs.issat = logical(str2double(inpt{2}));    
+                [filename,path,~] = getfiles('MultiSelect','off','PromptText','Select file:');
+                if filename==0, inputs = []; return; end  %user cancelled
+                varlist = {'',[path,filename]};
+                inputs.dst = wave_cco_spectra('getData',varlist{:});
             end
+            inputs.source = answer;
         end
 %%
         function off = addWaveConditions(SGo,Dims,off)

@@ -41,6 +41,8 @@ classdef WaveRayModel < muiModelUI
             obj.ModelInputs.RayTracks = {'WRM_RunParams'};
             obj.ModelInputs.WRM_Bathy = {'GD_GridProps'};
             obj.ModelInputs.SpectralTransfer = {''};
+            obj.ModelInputs.WRM_WaveModel = {'WRM_RunParams'};
+            obj.ModelInputs.WRM_SpectraModel = {''};
             %tabs to include in DataUIs for plotting and statistical analysis
             %select which of the options are needed and delete the rest
             %Plot options: '2D','3D','4D','2DT','3DT','4DT'
@@ -317,7 +319,7 @@ classdef WaveRayModel < muiModelUI
                 case 'Run Property Timeseries'
                     WRM_WaveModel.runModel(obj);
                 case 'Run Spectra Timeseries'
-                    WRM_WaveModel.runSpectra(obj);
+                    WRM_SpectraModel.runModel(obj);
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'
