@@ -10,7 +10,10 @@ function output = get_inshore_wave(SGo,SGi,Dims,inp,sp)
 % INPUTS
 %   SGo - array of offshore direction-frequency spectral energy
 %   SGi - array of inshore direction-frequency spectral energy
-%   Dims - dimensions used for the spectral arrays
+%   Dims - dimensions used for the spectral arrays, struct with fields:
+%          freq - interpolated frequency vector (1/1-30s)
+%          beta - interpolated direction vector (0-360 deg)
+%          depi - inshore or minimum depth
 %   inp - input parameters wave parameters
 %   sp - defines type of model to use and model parameters
 % OUTPUT
@@ -30,39 +33,47 @@ function output = get_inshore_wave(SGo,SGi,Dims,inp,sp)
         return;
     end     
     %spectrum dimensions and parameter settings
-    fri = Dims.f; xsi = Dims.xsi; depi = Dims.depi; swl = inp.swl;
+    freq = Dims.freq; dir = Dims.dir; depi = Dims.depi; swl = inp.swl;
     if sp.ismodel
         Hso = inp.Hs;
         Tp = inp.Tp;
         Dir0 = inp.Dir;
     else
-        [~,idx] = max(inp.dst.Spectra.S);        
-        Dir0 = inp.dst.Spectra.Dir(idx);
-        Hso = inp.dst.Properties.Hs;
-        Tp = 1/inp.dst.Spectra.Dimensions.freq(idx);
+        if istable(inp)
+            [~,idx] = max(inp.S);        
+            Dir0 = inp.Dir(idx);
+            intf = abs(sp.freq(1)-sp.freq(2));
+            Hso = 4*sqrt(trapz(intf,inp.S));
+            Tp = 1/sp.freq(idx);
+        else
+            [~,idx] = max(inp.dst.Spectra.S);        
+            Dir0 = inp.dst.Spectra.Dir(idx);
+            Hso = inp.dst.Properties.Hs;
+            Tp = 1/inp.dst.Spectra.Dimensions.freq(idx);
+        end
     end
 
-    dir_int = abs(median(diff(xsi))); %interval used to interpolate directions (deg)
+    dir_int = abs(median(diff(dir))); %interval used to interpolate directions (deg)
     radint = deg2rad(dir_int);
 
-    m0 = trapz(radint,abs(trapz(fri,SGo,2))); %integral of offshore spectrum
-    m0i = trapz(radint,abs(trapz(fri,SGi,2))); %integral of inshore spectrum
+    m0 = trapz(radint,abs(trapz(freq,SGo,2))); %integral of offshore spectrum
+    m0i = trapz(radint,abs(trapz(freq,SGi,2))); %integral of inshore spectrum
     kw = sqrt(m0i/m0);                %wave transfer coefficient
     [~,idf] = max(SGi,[],'All');     %index of peak energy
-    [idir,ifrq] = ind2sub([length(xsi),length(fri)],idf);
-    Diripk = xsi(idir);              %direction at inshore peak
-    Tpi =1/fri(ifrq);                %period at inshore peak
+    [idir,ifrq] = ind2sub([length(dir),length(freq)],idf);
+    Diripk = dir(idir);              %direction at inshore peak
+    Tpi =1/freq(ifrq);                %period at inshore peak
     ktp = Tpi/Tp;                   %peak period coefficient
 
-    radxso = deg2rad(xsi);
-    SGdir = trapz(radxso,abs(trapz(fri,radxso'.*SGi,2)));%direction moment
+    radxso = deg2rad(dir);
+    SGdir = trapz(radxso,abs(trapz(freq,radxso'.*SGi,2)));%direction moment
     Diri = rad2deg(SGdir/m0i);
     kd = Diri-Dir0;
 
-    SGif2 = trapz(radint,abs(trapz(fri,(fri.^2).*SGi,2))); %inshore f^2 moment
+    SGif2 = trapz(radint,abs(trapz(freq,(freq.^2).*SGi,2))); %inshore f^2 moment
     T2i = sqrt(m0i/SGif2);
 
-    SGof2 = trapz(radint,abs(trapz(fri,(fri.^2).*SGi,2)));  %offshore f^2 moment
+    SGof2 = trapz(radint,abs(trapz(freq,(freq.^2).*SGi,2)));  %offshore f^2 moment
     T2o = sqrt(m0/SGof2);
     kt2 = T2i/T2o;                  %mean period coefficient
 

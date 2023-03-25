@@ -36,41 +36,67 @@ classdef WRM_WaveModel < muiDataSet
         function obj = runModel(mobj)
             %function to run the wave refraction model.
             obj = WRM_WaveModel;                            
-            dsp = modelDSproperties(obj);
+            [dspec,dsprop] = setDSproperties(obj);
 %--------------------------------------------------------------------------
 % Model code 
 %-------------------------------------------------------------------------- 
             %get the timeseries input data and site parameters
             %Note: getInputData calls setRunParam
-            [tsdst,inputxt] = getInputData(obj,mobj);
-            if isempty(tsdst), return; end     %user cancelled data selection
-            tsdst = getSubSet(obj,tsdst);      %allow user to extract a subset 
-
+            [tsdst,inputxt,source] = getInputData(obj,mobj);
+            
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
             if isempty(sptobj), return; end       %user cancelled selection
-
-            select = get_model_selection(sptobj); %select spectral form and data type
-            if isempty(select), return; end       %user cancelled
             
-            results = runWaves(sptobj,mobj,tsdst,select);
+            if strcmp(source,'Measured spectra')
+                select = WRM_WaveModel.getSprectraConditions();   
+                select.freq = tsdst.Dimensions.freq;
+                if isempty(select), return; end       %user cancelled
+            else
+                select = get_model_selection(sptobj); %select spectral form and data type
+                if isempty(select), return; end       %user cancelled
+            end
+            
+            [Sot,Sit,Dims,results] = runWaves(sptobj,tsdst,select);
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
 %--------------------------------------------------------------------------                   
             %each variable should be an array in the 'results' cell array
             %if model returns single variable as array of doubles, use {results}
             time = tsdst.RowNames;
-            dst = dstable(results,'RowNames',time,'DSproperties',dsp);
+            dst.Properties = dstable(results,'RowNames',time,'DSproperties',dsprop);                      
+            %assign metadata about model            
+            dst.Properties.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
+                                                         obj.ModelType);
+            dst.Properties.MetaData = inputxt;   
+            %add depths of inshore point for which there are backward rays
+            dst.Properties.UserData = sptobj.Data.Inshore.UserData.Depths;
+            %check whether wave spectra should also be saved
+            sze = 2*getfield(whos('Sot'),'bytes')*9.53674e-7;
+            questxt = sprintf('Save the wave spectra (arrays are %.1f Mb)?',sze);
+            answer = questdlg(questxt,'Wave model','In Full','Minimised','No','No');
+            if ~strcmp(answer,'No')
+                if strcmp(answer,'Minimised')
+                    %reduce to 1 degree spacing but keep all frequencies
+                    idx = rem(Dims.dir,1)>0;
+                    idy = rem(1./Dims.freq,1)>0;
+                    Dims.dir(idx) = [];
+                    Dims.freq(idy) = [];
+                    Sot(:,idx,:) = [];  Sot(:,:,idy) = [];
+                    Sit(:,idx,:) = [];  Sit(:,:,idy) = [];
+                end
+                dst.Spectra = dstable(Sot,Sit,'RowNames',time,'DSproperties',dspec); 
+                dst.Spectra.Dimensions.dir = Dims.dir;    %NB order is X,Y and must
+                dst.Spectra.Dimensions.freq = Dims.freq;  %match variable dimensions           
+                %assign metadata about model
+                dst.Properties.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
+                    obj.ModelType);
+                dst.Properties.MetaData = inputxt;
+            end
 %--------------------------------------------------------------------------
 % Save results
-%--------------------------------------------------------------------------                        
-            %assign metadata about model            
-            dst.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
-                                                         obj.ModelType);
-            dst.MetaData = inputxt;   
-            %add depths of inshore point for which there are backward rays
-            dst.UserData = sptobj.Data.Inshore.UserData.Depths;
+%--------------------------------------------------------------------------  
             %save results
             setDataSetRecord(obj,mobj.Cases,dst,'Inwave_model');
             getdialog('Run complete');
@@ -94,23 +120,18 @@ classdef WRM_WaveModel < muiDataSet
                 return;
             end
             
-            if strcmp(offdata.source,'Spectrum')
-%                 rayrec = caseRec(mobj.Cases,sptobj.RunParam.RayTracks.caseid); %ray case used
-%                 rayobj = getCase(mobj.Cases,rayrec);
-%                 hlimit = rayobj.RunParam.WRM_RunParams.hCutOff; 
-%                 ShoreAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;%to exclude this limit use NaN
-               
+            if strcmp(offdata.source,'Spectrum')               
                 select.form = 'Measured';           %initialise select properties
                 select.source = 'Spectrum';         
                 select.ismodel = false;
-                select.issat = offdata.issat;       %copy to sprectrum selection
-                
-                [SGo,SGi,Dims] = runSpectra(sptobj,mobj,offdata,select);
+                select.issat = offdata.issat;       %copy to sprectrum selection  
+                select.freq = offdata.dst.Spectra.Dimensions.freq;
+                [SGo,SGi,Dims] = runSpectra(sptobj,offdata,select);
             else
                 select = get_model_selection(sptobj,offdata.source); %select spectral form and data type
                 if isempty(select), return; end           %user cancelled
 
-                [SGo,SGi,Dims] = runSpectra(sptobj,mobj,offdata,select);
+                [SGo,SGi,Dims] = runSpectra(sptobj,offdata,select);
                 if isempty(SGo), return; end
     
                 if strcmp(offdata.source,'Wind')
@@ -196,6 +217,7 @@ classdef WRM_WaveModel < muiDataSet
         function tabPlot(obj,src) %abstract class for muiDataSet
             %generate plot for display on Q-Plot tab
             
+            
             %add code to define plot format or call default tabplot using:
             tabDefaultPlot(obj,src);
         end
@@ -244,18 +266,23 @@ classdef WRM_WaveModel < muiDataSet
     end 
 %%    
     methods (Access = private)
-        function [tsdst,inputxt] = getInputData(obj,mobj)
+        function [tsdst,inputxt,source] = getInputData(obj,mobj)
             %prompt user to select wave and water level data and return in
             %input dstable of data and metadata for inputs used
             tsdst = []; inputxt = [];
             muicat = mobj.Cases;
             promptxt = 'Select input wave data set:';           
-            [wv_crec,ok] = selectRecord(muicat,'PromptText',promptxt,...
+            [wv_caserec,ok] = selectRecord(muicat,'PromptText',promptxt,...
                            'CaseClass',{'ctWaveData'},'ListSize',[300,100]);                                    
             if ok<1, return; end
-            wvdst = getDataset(muicat,wv_crec,1);
+            wvdst = getDataset(muicat,wv_caserec,1);  %1 selects first dataset in struct
             wvtime = wvdst.RowNames;
             inputxt = sprintf('%s used for offshore waves',wvdst.Description);
+
+            source = 'Measured waves';
+            if isfield(wvdst.Dimensions,'freq')
+                source = 'Measured spectra';
+            end
 
             promptxt = 'Select input water level data set (Cancel to use SWL=0):';           
             [wl_crec,ok] = selectRecord(muicat,'PromptText',promptxt,...
@@ -296,16 +323,20 @@ classdef WRM_WaveModel < muiDataSet
                                                 inputxt,wldst.Description);
                 end
             end
+
+            [wvdst,timerange] = getSubSet(obj,wvdst);      %allow user to extract a subset 
+            swl = swl(timerange);
+
             tsdst = addvars(wvdst,swl,'NewVariableNames','swl');
             %assign the run parameters to the model instance
             if wl_crec==0
-                setRunParam(obj,mobj,wv_crec);
+                setRunParam(obj,mobj,wv_caserec);
             else
-                setRunParam(obj,mobj,wv_crec,wl_crec); %input caserecs passed as varargin     
+                setRunParam(obj,mobj,wv_caserec,wl_crec); %input caserecs passed as varargin     
             end
         end
 %%
-        function subdst = getSubSet(~,tsdst)
+function [subdst,timerange] = getSubSet(~,tsdst)
             %
         %   Defined using varargin for the following fields
             %    FigureTitle     - title for the UI figure
@@ -360,15 +391,39 @@ classdef WRM_WaveModel < muiDataSet
             results = {Hso,tsdst.Tp,Diro};
         end
 %%
-        function dsp = modelDSproperties(~) 
-            %define a dsproperties struct and add the model metadata
-            dsp = struct('Variables',[],'Row',[],'Dimensions',[]); 
+        function [dspec,dsprop] = setDSproperties(~)
+            %define the variables in the dataset
+            %define the metadata properties for the demo data set
+            dspec = struct('Variables',[],'Row',[],'Dimensions',[]); dspar = dspec;    
             %define each variable to be included in the data table and any
             %information about the dimensions. dstable Row and Dimensions can
             %accept most data types but the values in each vector must be unique
             
             %struct entries are cell arrays and can be column or row vectors
-            dsp.Variables = struct(...   
+            dspec.Variables = struct(...
+                'Name',{'So','Si'},...
+                'Description',{'Offshore spectral density','Inshore spectral density'},...
+                'Unit',{'m^2/Hz','m^2/Hz'},...
+                'Label',{'Spectral density (m^2/Hz)','Spectral density (m^2/Hz)'},...
+                'QCflag',repmat({'raw'},1,2)); 
+            dspec.Row = struct(...
+                'Name',{'Time'},...
+                'Description',{'Time'},...
+                'Unit',{'h'},...
+                'Label',{'Time'},...
+                'Format',{'dd-MM-yyyy HH:mm:ss'});        
+            dspec.Dimensions = struct(...    
+                'Name',{'dir','freq'},...
+                'Description',{'Direction','Frequency'},...
+                'Unit',{'degTN','Hz'},...
+                'Label',{'Direction (degTN)','Frequency (Hz)'},...
+                'Format',{'',''});   
+%                  'Name',{'freq','dir'},...
+%                 'Description',{'Frequency','Direction'},...
+%                 'Unit',{'Hz','degTN'},...
+%                 'Label',{'Frequency (Hz)','Direction (degTN)'},...
+%                 'Format',{'',''});  
+            dsprop.Variables = struct(...   
                 'Name',{'Hsi','T2i','Diri','Tpi','Diripk','kw','kt2','ktp',...
                                                        'kd','swl','depi'},...
                 'Description',{'Inshore wave height','Inshore mean period',...
@@ -383,19 +438,19 @@ classdef WRM_WaveModel < muiDataSet
                          'Transfer coefficient, ktp','Direction shift (deg)',...
                          'Water level (mOD)','Water depth (m)'},...
                 'QCflag',repmat({'model'},1,11)); 
-            dsp.Row = struct(...
+            dsprop.Row = struct(...
                 'Name',{'Time'},...
                 'Description',{'Time'},...
                 'Unit',{'h'},...
                 'Label',{'Time'},...
                 'Format',{'dd-MM-yyyy HH:mm:ss'});        
-            dsp.Dimensions = struct(...    
+            dsprop.Dimensions = struct(...    
                 'Name',{''},...
                 'Description',{''},...
                 'Unit',{''},...
                 'Label',{''},...
-                'Format',{''});  
-        end       
+                'Format',{''}); 
+        end   
     end  
 %%
     methods (Static, Access=private)
@@ -440,6 +495,20 @@ classdef WRM_WaveModel < muiDataSet
                 inputs.dst = wave_cco_spectra('getData',varlist{:});
             end
             inputs.source = answer;
+        end
+%%
+        function inputs = getSprectraConditions()
+            %get conditions for getForcingConditions when the input is a
+            %measured spectrum and is called for same purpose in runWaves
+            inputs = []; 
+            promptxt = {'Include depth saturation (1=Yes,0=No)'};
+            defaults = {'1'};
+            inpt = inputdlg(promptxt,'Input conditions',1,defaults);
+            if isempty(inpt), return; end  %user cancelled
+            inputs.issat = logical(str2double(inpt{1}));    
+            inputs.form = 'Measured';           %initialise select properties
+            inputs.source = 'Spectrum';         
+            inputs.ismodel = false;
         end
 %%
         function off = addWaveConditions(SGo,Dims,off)

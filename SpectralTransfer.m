@@ -61,6 +61,7 @@ classdef SpectralTransfer < muiDataSet
             indst.MetaData = sprintf('Derived using Case ID %d',rayobj.CaseIndex);
             indst.UserData.Location = [inprops{1},inprops{2}];
             indst.UserData.Depths = inprops{3};
+            indst.UserData.ShoreAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;
 
             %offshore celerities for direction, period and water level
             dspo = modelDSproperties(obj,false);
@@ -82,92 +83,83 @@ classdef SpectralTransfer < muiDataSet
     end
 %%
     methods
-        function [Sot,Sit,Dims,output] = runWaves(obj,mobj,tsdst,select)
+        function [Sot,Sit,Dims,output] = runWaves(obj,tsdst,select)
             %run the spectral transfer model for a timeseries of offshore
             %wave conditions and return a table of wave conditions
-%             select = get_model_selection(obj); %select spectral form and data type
-%             if isempty(select), return; end    %user cancelled
-
-%             rayrec = caseRec(mobj.Cases,obj.RunParam.RayTracks.caseid); %ray case used
-%             rayobj = getCase(mobj.Cases,rayrec);
-%             hlimit = rayobj.RunParam.WRM_RunParams.hCutOff; 
-%             ShoreAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;%to exclude this limit use NaN 
-
             nint = height(tsdst);
             output = table();
-            inputable = tsdst.DataTable;       %needed for parallel option
-%             transtable = obj.Data;             %inshore and offshore transfer tables
 
-            [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst,select);
-            parfor i=1:nint                    %parfor loop  
+            [Sot,Sit,Dims] = runSpectra(obj,tsdst,select);
+
+            inputable = tsdst.DataTable;       %needed for parallel option
+            for i=1:nint                    %parfor loop  
                 %for each offshore wave get the inshore results
                 input = inputable(i,:);
-%                 [SGo,SGi,Dims] = get_inshore_spectrum(transtable,ShoreAngle,hlimit,input,select);
-                output(i,:) = get_inshore_wave(Sot(i,:,:),Sit(i,:,:),Dims,input,select);
+                output(i,:) = get_inshore_wave(squeeze(Sot(i,:,:)),...
+                                    squeeze(Sit(i,:,:)),Dims,input,select);
             end
         end
 %%
-function  [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst,select)
+function  [Sot,Sit,Dims] = runSpectra(obj,tsdst,select)
             %run the spectral transfer model for a timeseries of offshore
             %wave conditions and return the spectra. Called 
             %from classs WRM_WaveModel by runSpectrum and runAnimation
             Sot = []; Sit = []; Dims = []; 
-%             select = get_model_selection(obj,srs); %select spectral form and data type
-%             if isempty(select), return; end        %user cancelled
-
-            rayrec = caseRec(mobj.Cases,obj.RunParam.RayTracks.caseid); %ray case used
-            rayobj = getCase(mobj.Cases,rayrec);
-            hlimit = rayobj.RunParam.WRM_RunParams.hCutOff; 
-            ShoreAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;%to exclude this limit use NaN  
-
+            filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));   
             transtable = obj.Data;                 %inshore and offshore transfer tables
-
+            
             if isa(tsdst,'dstable')                %time series of data
                 nint = height(tsdst);
                 inputable = tsdst.DataTable;       %needed for parallel option
                 hpw = PoolWaitbar(nint, 'Processing timeseries');
-                errflag = zeros(1,nint);
+                blank = zeros(1,720,59);           %fixed intervals assigned in get_inshore_spectrum
                 for i=1:nint                    %parfor loop   
                     %for each offshore wave get the inshore results
                     input = inputable(i,:);
-                    [SGo,SGi,dims] = get_inshore_spectrum(transtable,ShoreAngle,hlimit,input,select);
-                    if isempty(SGo), errflag(i) = i; continue; end                         
+%                     input = getDSTable(tsdst,i,1:width(tsdst)); 
+                    [SGo,SGi,dims] = get_inshore_spectrum(transtable,input,select);
+                    if isempty(SGo)
+                        lines = sprintf('%s',tsdst.RowNames(i)); %#ok<PFBNS> 
+                        writelines(lines,filename,WriteMode="append")
+                        Sot(i,:,:) = blank; Sit(i,:,:) = blank;
+                        continue; 
+                    end     
                     Sot(i,:,:) = SGo;
                     Sit(i,:,:) = SGi;
-                    Fri(i,:) = dims.f;
-                    Xso(i,:) = dims.xso;
+                    Fri(i,:) = dims.freq;
+                    Dir(i,:) = dims.dir;
                     Depi(i) = dims.depi;
                     increment(hpw);
                 end   
-
-                if any(errflag>0)
-                    times = tsdst.RowNames(errflag>0);
-                    warndlg(sprintf('Offshore spectra undefined for %s\n',string(times)))   
-                    Sot = []; return; 
-                end 
                 
-                idx = find(Fri(:,1)~=0,1,'first');   %find first non-null result
-                Dims.f = squeeze(Fri(idx,:));   %dimensions used for run
-                Dims.xso = squeeze(Xso(idx,:));
+                idx = find(Fri(:,1)~=0,1,'first'); %find first non-null result
+                Dims.freq = squeeze(Fri(idx,:));      %dimensions used for run
+                Dims.dir = squeeze(Dir(idx,:));
                 Dims.depi = Depi(idx);
                 delete(hpw)
-            else                                   %single case, tsdst is inputs struct                
-                [Sot,Sit,Dims] = get_inshore_spectrum(transtable,ShoreAngle,hlimit,tsdst,select);
+
+                %minimise array size - remove directions and frequencies that
+                %are not contributing to spectra (S<0.1 m^2/Hz)
+                [~,idro,idco] = compact3Darray(Sot,1,0.1); %pivot dim is time and tolerance=0.1
+                [~,idri,idci] = compact3Darray(Sit,1,0.1);
+                idr = minmax([idro;idri]);
+                idc = minmax([idco;idci]);
+                Sot = Sot(:,idr(1):idr(2),idc(1):idc(2));
+                Sit = Sit(:,idr(1):idr(2),idc(1):idc(2));
+                Dims.dir = Dims.dir(idr(1):idr(2));
+                Dims.freq = Dims.freq(idc(1):idc(2));    
+            else                                   %single case, tsdst is inputs struct  
+                [Sot,Sit,Dims] = get_inshore_spectrum(transtable,tsdst,select);
             end
         end
 %% 
-        function coefficientsPlot(obj,mobj)
+        function coefficientsPlot(obj)
             %generate data to plot the coefficents as a function of
             %direction, period and water level
             select = get_model_selection(obj);  %select spectral form and data type
             if isempty(select), return; end     %user cancelled
             %force selection of source to be waves
             if strcmp(select.source,'Wind'), select.source='Wave'; end
-
-            rayrec = caseRec(mobj.Cases,obj.RunParam.RayTracks.caseid); %ray case used
-            rayobj = getCase(mobj.Cases,rayrec);
-            hlimit = rayobj.RunParam.WRM_RunParams.hCutOff; 
-            ShoreAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;%to exclude this limit use NaN
             
             transtable = obj.Data;              %inshore and offshore transfer tables       
             T = obj.Data.Offshore.Dimensions.Period;
@@ -182,7 +174,7 @@ function  [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst,select)
                 for j=1:nper
                     for k=1:nwls
                         input = getloopinput(obj,Diri,T,zwl,i,j,k);
-                        [SGo,SGi,Dims] = get_inshore_spectrum(transtable,ShoreAngle,hlimit,input,select);                                                   
+                        [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,select);                                                   
                         outable = get_inshore_wave(obj,SGo,SGi,Dims,input);
                         kw(i,j,k) = outable.kw;
                         kt2(i,j,k) = outable.kt2;
@@ -257,13 +249,15 @@ function  [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst,select)
 
             answer = questdlg('What type of plot','O?I spectrum','XY','Polar','XY');
             if strcmp(answer,'XY')
-                figtype = true;
+                figtype = true;          %Cartesian dir-freq plot
             else
-                figtype = false;
+                figtype = false;         %Polar dir-freq plot     
             end
             hfig.Visible = 'on';
-            [s1,s2] = off_in_plot(obj,1./Dims.f,Dims.xsi,SGo,SGi,figax,figtype);
-
+            %add offshore and inshore plots of spectra
+            [s1,s2] = off_in_plot(obj,1./Dims.freq,Dims.dir,SGo,SGi,figax,figtype);
+            
+            %titles are source dependent
             if strcmp(sel.source,'Wave')
                 sgtxt = sprintf('%s, gamma=%.2g, and %s, n=%d ',sel.form,...
                                         sel.gamma,sel.spread,sel.nspread);
@@ -284,7 +278,9 @@ function  [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst,select)
 
             sgtitle(sgtxt,'FontSize',12,'Margin',1);
             st2 = title(s2,sprintf('Hsi=%.2f m; Tp=%.1f s; Dir=%.3g degTN; hmin=%.2f m',...
-                            ins.Hsi,ins.Tpi,ins.Diri,ins.depi),'Margin',1);    
+                            ins.Hsi,ins.Tpi,ins.Diri,ins.depi),'Margin',1);   
+
+            %for polar plot adjust figure size and subplot title position
             if ~figtype
                 st1.Position(2) = -st1.Position(2)*1.2;
                 st2.Position(2) = -st2.Position(2)*1.2;
@@ -292,7 +288,7 @@ function  [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst,select)
             end
         end
 %%
-        function [s1,s2] = off_in_plot(obj,T,phi,var0,vari,ax,isXY)
+        function [s1,s2] = off_in_plot(obj,T,dir,var0,vari,ax,isXY)
             %plot offshore and inshore spectra
             if nargin<6
                 hf = figure('Name','SpecTrans','Tag','PlotFig');
@@ -301,18 +297,29 @@ function  [Sot,Sit,Dims] = runSpectra(obj,mobj,tsdst,select)
             labeli = 'Inshore direction (degTN)';
             label0 = 'Offshore direction (degTN)';
             labelx = 'Wave period (s)';
-            
+            shorenorm = obj.Data.Inshore.UserData.ShoreAngle+90;         
+            grey = mcolor('light grey');
+
             if isXY
                 s1 = subplot(2,1,1,ax);
-                check_plot(obj,T,phi,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
+                check_plot(obj,T,dir,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
                 s2 = subplot(2,1,2);
-                check_plot(obj,T,phi,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
+                check_plot(obj,T,dir,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
+                hold on
+                    xn = minmax(T); yn = [shorenorm,shorenorm]; 
+                    plot(s2,xn,yn,'Color',grey,'LineStyle','--','LineWidth',1);
+                hold off
                 s2.YLim = s1.YLim;
             else
                 s1 = subplot(1,2,1,ax);
-                polar_plot(obj,T,phi,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
+                polar_plot(obj,T,dir,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
                 s2 = subplot(1,2,2);
-                polar_plot(obj,T,phi,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
+                polar_plot(obj,T,dir,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
+                hold on
+                    ang = compass2trig(shorenorm);
+                    xn = [0,max(T)*cos(ang)]; yn = [0,max(T)*sin(ang)];
+                    plot(s2,xn,yn,'Color',grey,'LineStyle','--','LineWidth',1);
+                hold off                
                 s2.YLim = s1.YLim;
             end
         end        

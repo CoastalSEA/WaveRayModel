@@ -145,13 +145,12 @@ classdef WaveRayModel < muiModelUI
             %% Run menu ---------------------------------------------------
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
                                 'Check Start Depth','Backward Rays',...
-                                'Transfer Table','Run Property Timeseries',...
-                                'Run Spectra Timeseries',...
+                                'Transfer Table','Run Wave Timeseries',...
                                 'Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,9]);            
+            menucall = repmat({@obj.runMenuOptions},[1,8]);            
             menu.Run(1).Callback = menucall;
             menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off',...
-                                              'on','off','off','on','on'}];
+                                              'on','off','on','on'}];
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,3]),...
@@ -316,10 +315,8 @@ classdef WaveRayModel < muiModelUI
                     RayTracks.runModel(obj,src);
                 case 'Transfer Table'
                     SpectralTransfer.runModel(obj);
-                case 'Run Property Timeseries'
+                case 'Run Wave Timeseries'
                     WRM_WaveModel.runModel(obj);
-                case 'Run Spectra Timeseries'
-                    WRM_SpectraModel.runModel(obj);
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'
@@ -348,7 +345,7 @@ classdef WaveRayModel < muiModelUI
                     tabPlot(cobj,ax,obj);
                 case 'Transfer Coefficients'
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
-                    coefficientsPlot(cobj,obj);
+                    coefficientsPlot(cobj);
                 case 'O/I Spectrum'
                     WRM_WaveModel.runSpectrum(obj);
                 case 'O/I Animation'
