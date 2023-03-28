@@ -358,7 +358,7 @@ classdef WaveRayModel < muiModelUI
 
         %% Help menu ------------------------------------------------------
         function Help(~,~,~)
-            doc modelskill                             
+            doc waveraymodel                             
         end
     end
 end    
