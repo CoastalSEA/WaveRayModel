@@ -1,4 +1,4 @@
-function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
+function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,intable,sp)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -12,7 +12,7 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
 %   transtable - spectral transfer table created by SpectralTransfer class
         %   ShoreAngle - angle of shoreline (degTN), use NaN to exclude this limit
         %   hlimit - limiting depth (m)
-%   input - input parameters - timeseries of wave data or spectra
+%   intable - input parameters - table of timeseries of wave data or spectra
 %   sp - defines type of model to use and model parameters
 % OUTPUT
 %   SGo - array of offshore direction-frequency spectral energy
@@ -24,20 +24,19 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
 % CoastalSEA (c) March 2023
 %--------------------------------------------------------------------------
 %
-    %
     SGo = []; SGi = [];
     dir_int = 0.5;     %interval used to interpolate directions (deg)
     radint = deg2rad(dir_int);
     per_int = 0.5;     %interval used to interpolate periods (s)
+    per_range = 30;    %upper bound of period range
     
     %extract transfer tables and get shoaling coefficients
     indst = transtable.Inshore;             %inshore properties       
     depths = indst.UserData.Depths;         %inshore water depths            
     indst = indst.DataTable;
     offdst = transtable.Offshore;           %offshore properties  
-%     T = offdst.Dimensions.Period;           %wave periods used in ray model
     zwl = offdst.Dimensions.WaterLevel;     %water levels used in ray model
-    swl = input.swl;                        %required water level
+    swl = intable.swl;                        %required water level
     if isscalar(zwl)
         Dims.depi = depths;                 %depth at inshore point
     else
@@ -46,12 +45,7 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
     InDir = offdst.RowNames;  %inshore directions are held in the offshore table    
 
     %check limits for valid rays based on depth and shoreline angle  
-%     [idx,bound] = checkLimits(offdst,ShoreAngle,hlimit);
-    idx = offdst.depth<=0;
-    %frequencies at 1/per_int period intervals
-    % freq = 1./(min(T):per_int:max(T));         
-    %offshore direction at dir_int degree intervals
-    % beta = mod(bound(1):dir_int:bound(2),360);  %range determined by shoreline angle
+    idx = offdst.DataTable.depth<=0;        %parfor not finding dynamic property, so use table
 
     %variable definitions:
     % InDir - transfer table inshore directions (degTN)
@@ -67,7 +61,7 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
     % dspectra - measured spectra offshore direction range (degTN)
 
     %frequencies at 1/per_int period intervals
-    freq = 1./(1:per_int:30);         
+    freq = 1./(1:per_int:per_range);         
     %offshore direction at dir_int degree intervals
     beta = 0:dir_int:359.5; 
 
@@ -75,11 +69,11 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
 
     %setup input definition using model or measured definitions
     if sp.ismodel
-        sp_inputs = setInputParams(input,sp);
+        sp_inputs = setInputParams(intable,sp);
         if isempty(sp_inputs), return; end
 
         %directional spreading factor for selected function  
-        dir0 = input.Dir;                       %mean wave direction 
+        dir0 = intable.Dir;                       %mean wave direction 
         diro = dir0-90:dir_int:dir0+90;
         G = directional_spreading(dir0,diro,sp.nspread,sp.spread);
         G = interp1(diro,G,beta,'linear',0);
@@ -97,20 +91,14 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
         SGo = G'*S;
     else
         fspectra = sp.freq;
-        if istable(input)
-            S = input.S;
-            SpecDir = input.Dir;
-            input = {fspectra,input.Dir,input.Spr,input.Skew,input.Kurt};
-        else
-            S = input.dst.Spectra.S;
-            SpecDir = input.dst.Spectra.Dir;
-            input = {input.dst};
-        end
+        S = intable.S;
+        SpecDir = intable.Dir;
+        intable = {fspectra,intable.Dir,intable.Spr,intable.Skew,intable.Kurt};
         %use range of directional means to define direction range which can
         %be greater than 180 if bidrectional sea-state
         Dmnmx = minmax(SpecDir,'omitnan');
         dspectra = Dmnmx(1)-90:dir_int:Dmnmx(2)+90;
-        G = datawell_directional_spectra(dspectra,false,input{:});
+        G = datawell_directional_spectra(dspectra,false,intable{:});
         [XoFo,XiFi] = transferDims(dspectra,fspectra,swl,beta,freq,swl); %swl forces scalar use
         Gint = interpn(XoFo{:},G,XiFi{:},'linear',0);  
         Sint = interp1(fspectra,S,freq,'linear',0);  
@@ -159,6 +147,8 @@ function [shoal,offdir] = getShoal(offdst,indst,InDir,beta,freq,swl,idx)
         c0 = [repmat(c0(:,1,:),1,3),c0];
         cg0 = [repmat(cg0(:,1,:),1,3),cg0];
         
+        if isrow(ci), ci = ci'; end          %force a column vector 
+        if isrow(cgi), cgi = cgi'; end       %force a column vector 
         addci = repmat(ci(1,:),3,1);         %inshore celerities for highest frequency
         addcgi = repmat(cgi(1,:),3,1);
         cdeepwater = 9.81./addfray/2/pi;     %deepwater celerity = gT/2pi
@@ -183,8 +173,9 @@ function [shoal,offdir] = getShoal(offdst,indst,InDir,beta,freq,swl,idx)
 
     %calculate the shoaling coefficient ks(xso,fri)
     ishoal = cifw.*cgifw;                   %inshore c.cg
+    if iscolumn(ishoal), ishoal = ishoal'; end %force a column vector 
     oshoal = c0fdw.*cg0fdw;                 %offshore c.cg
-    shoal = oshoal./ishoal';                %shoaling factor array            
+    shoal = oshoal./ishoal;                %shoaling factor array            
     % check_plot(1./fro,xso,shoal,{'shoal','Wave period (s)','Offshore direction (degTN)'}); 
 end
 %%

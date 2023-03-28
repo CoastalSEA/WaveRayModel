@@ -45,10 +45,11 @@ classdef WRM_WaveModel < muiDataSet
             [tsdst,inputxt,source] = getInputData(obj,mobj);
             
             %get the refraction transfer table
-            promptxt = 'Select a Transfer Table Case to use:'; 
+            promptxt = 'Select a Transfer Table Case to use:';             
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
-            if isempty(sptobj), return; end       %user cancelled selection
-            
+            msgtxt = 'Spectral Transfer Table not found';
+            if isempty(sptobj), warndlg(msgtxt); return; end
+                 
             if strcmp(source,'Measured spectra')
                 select = WRM_WaveModel.getSprectraConditions();   
                 select.freq = tsdst.Dimensions.freq;
@@ -57,7 +58,8 @@ classdef WRM_WaveModel < muiDataSet
                 select = get_model_selection(sptobj); %select spectral form and data type
                 if isempty(select), return; end       %user cancelled
             end
-            
+            answer = questdlg('Save the spectra?','Wave model','Yes','No','No');
+            if strcmp(answer,'Yes'), select.issave=true; else, select.issave=false; end
             [Sot,Sit,Dims,results] = runWaves(sptobj,tsdst,select);
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
@@ -74,9 +76,9 @@ classdef WRM_WaveModel < muiDataSet
             dst.Properties.UserData = sptobj.Data.Inshore.UserData.Depths;
             %check whether wave spectra should also be saved
             sze = 2*getfield(whos('Sot'),'bytes')*9.53674e-7;
-            questxt = sprintf('Save the wave spectra (arrays are %.1f Mb)?',sze);
-            answer = questdlg(questxt,'Wave model','In Full','Minimised','No','No');
-            if ~strcmp(answer,'No')
+            if select.issave
+                questxt = sprintf('Save the full wave spectra (arrays are %.1f Mb)?',sze);
+                answer = questdlg(questxt,'Wave model','In Full','Minimised','Minimised');
                 if strcmp(answer,'Minimised')
                     %reduce to 1 degree spacing but keep all frequencies
                     idx = rem(Dims.dir,1)>0;
@@ -90,9 +92,9 @@ classdef WRM_WaveModel < muiDataSet
                 dst.Spectra.Dimensions.dir = Dims.dir;    %NB order is X,Y and must
                 dst.Spectra.Dimensions.freq = Dims.freq;  %match variable dimensions           
                 %assign metadata about model
-                dst.Properties.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
+                dst.Spectra.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
                     obj.ModelType);
-                dst.Properties.MetaData = inputxt;
+                dst.Spectra.MetaData = inputxt;
             end
 %--------------------------------------------------------------------------
 % Save results
@@ -119,26 +121,29 @@ classdef WRM_WaveModel < muiDataSet
                 warndlg('Water levels are outside the range of the Transfer Table')
                 return;
             end
-            
+
             if strcmp(offdata.source,'Spectrum')               
                 select.form = 'Measured';           %initialise select properties
                 select.source = 'Spectrum';         
                 select.ismodel = false;
                 select.issat = offdata.issat;       %copy to sprectrum selection  
-                select.freq = offdata.dst.Spectra.Dimensions.freq;
-                [SGo,SGi,Dims] = runSpectra(sptobj,offdata,select);
+                select.freq = offdata.tsdst.Dimensions.freq;
+                intable = offdata.tsdst.DataTable;
+                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj.Data,intable,select);
+                ins = get_inshore_wave(SGo,SGi,Dims,intable,select);
             else
                 select = get_model_selection(sptobj,offdata.source); %select spectral form and data type
                 if isempty(select), return; end           %user cancelled
 
-                [SGo,SGi,Dims] = runSpectra(sptobj,offdata,select);
+                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj.Data,offdata,select);
                 if isempty(SGo), return; end
     
                 if strcmp(offdata.source,'Wind')
                     offdata = WRM_WaveModel.addWaveConditions(SGo,Dims,offdata);
                 end
+                ins = get_inshore_wave(SGo,SGi,Dims,offdata,select);
             end
-            ins = get_inshore_wave(SGo,SGi,Dims,offdata,select);
+            
 
             getSpectrumPlot(sptobj,SGo,SGi,Dims,ins,offdata,select);            
         end
@@ -147,9 +152,8 @@ classdef WRM_WaveModel < muiDataSet
             %create an animation of the 2-D spectrum surfaces using a
             %timeseries input
             obj = WRM_WaveModel; 
-            [tsdst,~] = getInputData(obj,mobj);
-            if isempty(tsdst), return; end   %user cancelled data selection
-            tsdst = getSubSet(obj,tsdst);    %allow user to extract a subset    
+            [tsdst,~,source] = getInputData(obj,mobj);
+            if isempty(tsdst), return; end   %user cancelled data selection  
             tsdst.DataTable = rmmissing(tsdst.DataTable);%remove nans
 
             if height(tsdst)>5000
@@ -168,10 +172,20 @@ classdef WRM_WaveModel < muiDataSet
                 return;
             end
 
-            [SGo,SGi,Dims,~] = runModelSpectra(sptobj,mobj,tsdst,'Wave');
+            if strcmp(source,'Measured spectra')
+                select = WRM_WaveModel.getSprectraConditions();   
+                select.freq = tsdst.Dimensions.freq;
+                if isempty(select), return; end       %user cancelled
+            else
+                select = get_model_selection(sptobj); %select spectral form and data type
+                if isempty(select), return; end       %user cancelled
+            end
+            
+            select.issave = true;
+            [SGo,SGi,Dims] = runWaves(sptobj,tsdst,select);
             if isempty(SGo), return; end
 
-            wrm_animation(obj,sptobj,tsdst,SGo,SGi,Dims)
+            wrm_animation(mobj,sptobj,tsdst,SGo,SGi,Dims)
         end
     end
 %%
@@ -221,55 +235,13 @@ classdef WRM_WaveModel < muiDataSet
             %add code to define plot format or call default tabplot using:
             tabDefaultPlot(obj,src);
         end
-%%
-        function runMovie(~,pobj,src,~)
-            %callback function for animation figure buttons and slider
-            %modified from muiPlots to handle two subplots
-            hfig = src.Parent;
-            idm = hfig.Number==[pobj.ModelMovie{:,1}];
-            if strcmp(src.Tag,'runMovie')       %user pressed run button
-                if license('test', 'Image_Processing_Toolbox')   %tests whether product is licensed (returns 1 if it is)
-                    implay(pobj.ModelMovie{idm,2});
-                else
-                    hmf = figure('Name','Animation', 'Units','normalized', ...
-                    'Resize','on','HandleVisibility','on','Visible','on',...
-                    'Position',[0.38,0.42,0.30,0.42],'Tag','PlotFig');
-                    movie(hmf,pobj.ModelMovie{idm,2});
-                end
-            elseif strcmp(src.Tag,'saveMovie')  %user pressed save button 
-                saveanimation2file(pobj.ModelMovie{idm,2});
-            else                                %user moved slider
-                val = ceil(src.Value);          %slider value 
-                %get figure axis, extract variable and refresh plot                
-                s1 = findobj(hfig,'Tag','PlotFigAxes1'); 
-                s2 = findobj(hfig,'Tag','PlotFigAxes2');                 
-                var = s1.UserData.Z;                              
-                hp1 = s1.Children;
-                hp2 = s2.Children;    
-                var1 = squeeze(var{1}(val,:,:)); %#ok<NASGU> 
-                refreshdata(hp1,'caller')
-                var2 = squeeze(var{2}(val,:,:)); %#ok<NASGU> 
-                refreshdata(hp2,'caller')
-
-                %update title
-                time = s1.UserData.T(val);   %time slice selected
-                w = pobj.Data.Waves;
-                sg = findobj(s1.Parent.Children,'Tag','PlotFigTitle');
-                sg.String = sprintf('%s \nTime = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g\n',...
-                    pobj.Title,string(time),w(val,1),w(val,2),w(val,3));
-                drawnow;
-                %update slider selection text
-                stxt = findobj(hfig,'Tag','FrameTime');
-                stxt.String = string(time);
-            end
-        end
     end 
 %%    
     methods (Access = private)
         function [tsdst,inputxt,source] = getInputData(obj,mobj)
             %prompt user to select wave and water level data and return in
             %input dstable of data and metadata for inputs used
-            tsdst = []; inputxt = [];
+            tsdst = []; inputxt = []; source = [];
             muicat = mobj.Cases;
             promptxt = 'Select input wave data set:';           
             [wv_caserec,ok] = selectRecord(muicat,'PromptText',promptxt,...
@@ -328,6 +300,14 @@ classdef WRM_WaveModel < muiDataSet
             swl = swl(timerange);
 
             tsdst = addvars(wvdst,swl,'NewVariableNames','swl');
+            
+            if strcmp(source,'Measured spectra')                
+                tsprops = getDataset(muicat,wv_caserec,2);  %2 selects Properties dataset from spectra input
+                tsprops = removerows(tsprops,find(~timerange));
+                tsdst = horzcat(tsdst,tsprops);                
+            end
+            tsdst = activatedynamicprops(tsdst);
+
             %assign the run parameters to the model instance
             if wl_crec==0
                 setRunParam(obj,mobj,wv_caserec);
@@ -361,12 +341,14 @@ function [subdst,timerange] = getSubSet(~,tsdst)
 
             if isempty(selection)
                 subdst = tsdst;
+                timerange = true(size(tsdst.RowNames));
             else
                 seltime = range2var(selection{1});
                 times = tsdst.RowNames;
                 timerange = isbetween(times,seltime{:});
                 subdst = getDSTable(tsdst,'RowNames',times(timerange));
             end
+            
         end
 %%
         function results = callRefraction(~,tsdst,site_params)
@@ -394,7 +376,7 @@ function [subdst,timerange] = getSubSet(~,tsdst)
         function [dspec,dsprop] = setDSproperties(~)
             %define the variables in the dataset
             %define the metadata properties for the demo data set
-            dspec = struct('Variables',[],'Row',[],'Dimensions',[]); dspar = dspec;    
+            dspec = struct('Variables',[],'Row',[],'Dimensions',[]); dsprop = dspec;    
             %define each variable to be included in the data table and any
             %information about the dimensions. dstable Row and Dimensions can
             %accept most data types but the values in each vector must be unique
@@ -417,12 +399,8 @@ function [subdst,timerange] = getSubSet(~,tsdst)
                 'Description',{'Direction','Frequency'},...
                 'Unit',{'degTN','Hz'},...
                 'Label',{'Direction (degTN)','Frequency (Hz)'},...
-                'Format',{'',''});   
-%                  'Name',{'freq','dir'},...
-%                 'Description',{'Frequency','Direction'},...
-%                 'Unit',{'Hz','degTN'},...
-%                 'Label',{'Frequency (Hz)','Direction (degTN)'},...
-%                 'Format',{'',''});  
+                'Format',{'',''});    
+
             dsprop.Variables = struct(...   
                 'Name',{'Hsi','T2i','Diri','Tpi','Diripk','kw','kt2','ktp',...
                                                        'kd','swl','depi'},...
@@ -492,7 +470,11 @@ function [subdst,timerange] = getSubSet(~,tsdst)
                 [filename,path,~] = getfiles('MultiSelect','off','PromptText','Select file:');
                 if filename==0, inputs = []; return; end  %user cancelled
                 varlist = {'',[path,filename]};
-                inputs.dst = wave_cco_spectra('getData',varlist{:});
+                specdst = wave_cco_spectra('getData',varlist{:});
+                tsdst = horzcat(specdst.Spectra,specdst.Properties);
+                tsdst = activatedynamicprops(tsdst,specdst.Properties.VariableNames);
+                tsdst = addvars(tsdst,inputs.swl,'NewVariableNames','swl');
+                inputs.tsdst = tsdst;
             end
             inputs.source = answer;
         end
@@ -518,7 +500,7 @@ function [subdst,timerange] = getSubSet(~,tsdst)
 
             dir_int = 0.5;     %interval used to interpolate directions (deg)
             radint = deg2rad(dir_int);
-            So = trapz(radint,abs(trapz(Dims.f,SGo,2))); %integral of offshore spectrum
+            So = trapz(radint,abs(trapz(Dims.freq,SGo,2))); %integral of offshore spectrum
             off.Hs = 4*sqrt(So);
         end
     end

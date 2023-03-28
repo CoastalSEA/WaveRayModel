@@ -86,71 +86,48 @@ classdef SpectralTransfer < muiDataSet
         function [Sot,Sit,Dims,output] = runWaves(obj,tsdst,select)
             %run the spectral transfer model for a timeseries of offshore
             %wave conditions and return a table of wave conditions
+            Sot = []; Sit = []; Dims = [];
+            islog = false;  filename = [];
+            if select.issave
+                answer = questdlg('Write log of missing dates to file?','Rays','Yes','No','No');
+                if strcmp(answer,'Yes'), islog = true; end
+                filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));
+            end
+
+            transtable = obj.Data;             %inshore and offshore transfer tables   
             nint = height(tsdst);
             output = table();
-
-            [Sot,Sit,Dims] = runSpectra(obj,tsdst,select);
-
             inputable = tsdst.DataTable;       %needed for parallel option
-            for i=1:nint                    %parfor loop  
+            hpw = PoolWaitbar(nint, 'Processing timeseries');
+            blank = zeros(1,720,59);           %fixed intervals assigned in get_inshore_spectrum
+            parfor i=1:nint                    %parfor loop  
                 %for each offshore wave get the inshore results
                 input = inputable(i,:);
-                output(i,:) = get_inshore_wave(squeeze(Sot(i,:,:)),...
-                                    squeeze(Sit(i,:,:)),Dims,input,select);
-            end
-        end
-%%
-function  [Sot,Sit,Dims] = runSpectra(obj,tsdst,select)
-            %run the spectral transfer model for a timeseries of offshore
-            %wave conditions and return the spectra. Called 
-            %from classs WRM_WaveModel by runSpectrum and runAnimation
-            Sot = []; Sit = []; Dims = []; 
-            filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));   
-            transtable = obj.Data;                 %inshore and offshore transfer tables
-            
-            if isa(tsdst,'dstable')                %time series of data
-                nint = height(tsdst);
-                inputable = tsdst.DataTable;       %needed for parallel option
-                hpw = PoolWaitbar(nint, 'Processing timeseries');
-                blank = zeros(1,720,59);           %fixed intervals assigned in get_inshore_spectrum
-                for i=1:nint                    %parfor loop   
-                    %for each offshore wave get the inshore results
-                    input = inputable(i,:);
-%                     input = getDSTable(tsdst,i,1:width(tsdst)); 
-                    [SGo,SGi,dims] = get_inshore_spectrum(transtable,input,select);
+                [SGo,SGi,dims] = get_inshore_spectrum(transtable,input,select);
+                output(i,:) = get_inshore_wave(SGo,SGi,dims,input,select);
+                if select.issave
                     if isempty(SGo)
-                        lines = sprintf('%s',tsdst.RowNames(i)); %#ok<PFBNS> 
-                        writelines(lines,filename,WriteMode="append")
                         Sot(i,:,:) = blank; Sit(i,:,:) = blank;
+                        if islog
+                            lines = sprintf('%s',tsdst.RowNames(i)); %#ok<PFBNS> 
+                            writelines(lines,filename,WriteMode="append")
+                        end
                         continue; 
-                    end     
+                    end  
                     Sot(i,:,:) = SGo;
                     Sit(i,:,:) = SGi;
                     Fri(i,:) = dims.freq;
                     Dir(i,:) = dims.dir;
-                    Depi(i) = dims.depi;
-                    increment(hpw);
-                end   
-                
-                idx = find(Fri(:,1)~=0,1,'first'); %find first non-null result
-                Dims.freq = squeeze(Fri(idx,:));      %dimensions used for run
-                Dims.dir = squeeze(Dir(idx,:));
-                Dims.depi = Depi(idx);
-                delete(hpw)
-
-                %minimise array size - remove directions and frequencies that
-                %are not contributing to spectra (S<0.1 m^2/Hz)
-                [~,idro,idco] = compact3Darray(Sot,1,0.1); %pivot dim is time and tolerance=0.1
-                [~,idri,idci] = compact3Darray(Sit,1,0.1);
-                idr = minmax([idro;idri]);
-                idc = minmax([idco;idci]);
-                Sot = Sot(:,idr(1):idr(2),idc(1):idc(2));
-                Sit = Sit(:,idr(1):idr(2),idc(1):idc(2));
-                Dims.dir = Dims.dir(idr(1):idr(2));
-                Dims.freq = Dims.freq(idc(1):idc(2));    
-            else                                   %single case, tsdst is inputs struct  
-                [Sot,Sit,Dims] = get_inshore_spectrum(transtable,tsdst,select);
+                    Depi(i) = dims.depi;    
+                end
+                increment(hpw);
             end
+
+            if select.issave
+                [Sot,Sit,Dims] = packSpectra(obj,Sot,Sit,Fri,Dir,Depi);
+            end
+            
+            delete(hpw)  
         end
 %% 
         function coefficientsPlot(obj)
@@ -175,7 +152,7 @@ function  [Sot,Sit,Dims] = runSpectra(obj,tsdst,select)
                     for k=1:nwls
                         input = getloopinput(obj,Diri,T,zwl,i,j,k);
                         [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,select);                                                   
-                        outable = get_inshore_wave(obj,SGo,SGi,Dims,input);
+                        outable = get_inshore_wave(SGo,SGi,Dims,input,select);
                         kw(i,j,k) = outable.kw;
                         kt2(i,j,k) = outable.kt2;
                         ktp(i,j,k) = outable.ktp;
@@ -269,7 +246,7 @@ function  [Sot,Sit,Dims] = runSpectra(obj,tsdst,select)
                 st1 = title(s1,sprintf('Uw=%.2f m/s; Fetch=%0.0f m; swl=%.2f mOD\nHso=%.2f m; Tp=%.1f s; Dir=%.3g degTN',...
                       off.AvSpeed,off.Fetch,off.swl,off.Hs,off.Tp,off.Dir),'Margin',1);
             else
-                ofd = off.dst.Properties;    
+                ofd = off.tsdst;    
                 sgtxt = sprintf('Measured spectrum at %s on %s',...
                                    ofd.Description,string(ofd.RowNames));
                 st1 = title(s1,sprintf('Hso=%.2f m; Tz=%.1f s; swl=%.2f mOD',...
@@ -396,17 +373,42 @@ function  [Sot,Sit,Dims] = runSpectra(obj,tsdst,select)
             for i=1:ndir
                 for j=1:nper
                     for k=1:nwls
+                        flag = dst.UserData.flag(i,j,k)>0;
+                        if flag>0
                         theta = dst.alpha{i,j,k}(end);
                         offdir(i,j,k) = mod(compass2trig(theta,true),360);
-                        h(i,j,k) = dst.depth{i,j,k}(end);
-                        hav(i,j,k) = mean(dst.depth{i,j,k});
-                        hmn(i,j,k) = min(dst.depth{i,j,k});
-                        c(i,j,k) = dst.celerity{i,j,k}(end);
-                        cg(i,j,k) = dst.cgroup{i,j,k}(end);
+                        else
+                            offdir(i,j,k) = NaN;
+                        end
+                        h(i,j,k) = dst.depth{i,j,k}(end).*flag;
+                        hav(i,j,k) = mean(dst.depth{i,j,k}).*flag;
+                        hmn(i,j,k) = min(dst.depth{i,j,k}).*flag;
+                        c(i,j,k) = dst.celerity{i,j,k}(end).*flag;
+                        cg(i,j,k) = dst.cgroup{i,j,k}(end).*flag;
                     end
                 end
             end
             spectran = {offdir,h,c,cg,hav,hmn};
+        end
+%%
+        function [Sot,Sit,Dims] = packSpectra(~,Sot,Sit,Fri,Dir,Depi)
+            %pack spectral timeseries to minimise size of arrays        
+            idx = find(Fri(:,1)~=0,1,'first'); %find first non-null result
+            Dims.freq = squeeze(Fri(idx,:));      %dimensions used for run
+            Dims.dir = squeeze(Dir(idx,:));
+            Dims.depi = Depi(idx);
+        
+            %minimise array size - remove directions and frequencies that
+            %are not contributing to spectra (S<0.05 m^2/Hz)
+            tol = max(Sot,[],'all')/1000;
+            [~,idro,idco] = compact3Darray(Sot,1,tol); %pivot dim is time
+            [~,idri,idci] = compact3Darray(Sit,1,tol);
+            idr = minmax([idro;idri]);
+            idc = minmax([idco;idci]);
+            Sot = Sot(:,idr(1):idr(2),idc(1):idc(2));
+            Sit = Sit(:,idr(1):idr(2),idc(1):idc(2));
+            Dims.dir = Dims.dir(idr(1):idr(2));
+            Dims.freq = Dims.freq(idc(1):idc(2));    
         end
 %%       
         function options = get_selection(obj)
@@ -658,7 +660,7 @@ function  [Sot,Sit,Dims] = runSpectra(obj,tsdst,select)
             vq(isnan(vq)) = 0;  %fill blank sector so that it plots the period labels
             warning('on',wid)
             color = mcolor('dark blue');
-            [X,Y] = polarplot3d(vq,'plottype','surfcn','TickSpacing',45,...
+            [X,Y] = polarplot3d(vq,'plottype','surfn','TickSpacing',45,...
                 'RadLabels',4,'RadLabelLocation',{20 'top'},...
                 'GridColor',color,'TickColor',color,...
                 'RadLabelColor',mcolor('dark grey'),...

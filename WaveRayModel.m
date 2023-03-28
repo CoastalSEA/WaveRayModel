@@ -335,16 +335,19 @@ classdef WaveRayModel < muiModelUI
                     obj.mUI.StatsUI = muiStatsUI.getStatsUI(obj);
                 case 'Ray Plots'                    
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'RayTracks'},promptxt);
+                    if isempty(cobj), return; end
                     hf = figure('Name','SpecTrans','Tag','PlotFig');
                     ax = axes(hf);
                     tabPlot(cobj,ax,obj);
                 case 'Transfer Table'
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
+                    if isempty(cobj), return; end
                     hf = figure('Name','SpecTrans','Tag','PlotFig');
                     ax = axes(hf);
                     tabPlot(cobj,ax,obj);
                 case 'Transfer Coefficients'
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
+                    if isempty(cobj), return; end
                     coefficientsPlot(cobj);
                 case 'O/I Spectrum'
                     WRM_WaveModel.runSpectrum(obj);
