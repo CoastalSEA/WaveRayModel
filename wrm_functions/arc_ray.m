@@ -65,16 +65,16 @@ function newray = arc_ray(cgrid,ray,tol)
     vr = (ray.yr-yi)/delta;
     
     %get the centre of the arc that is tangential to the ray at ur,vr
-    [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray);
+    [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray,tol);
     uvArc = get_arc(phi,r,uc,vc,ur,vr,tol);
-        if any(isnan(uvArc))
-            Tri = get_element(ray.quad);
-            plot_element(Tri,uvArc,ur,vr,ray.kr)
-            error('Arc segment not found at xr=%.0f; yr=%.0f',ray.xr,ray.yr)
-        elseif isempty(uvArc)
-            % warndlg(sprintf('Radius, r=%0.2f too small at xr=%.0f; yr=%.0f',r,ray.xr,ray.yr));
-            newray = -2; return;
-        end
+    if any(isnan(uvArc))
+        Tri = get_element(ray.quad);
+        plot_element(Tri,uvArc,ur,vr,ray.kr)
+        error('Arc segment not found at xr=%.0f; yr=%.0f',ray.xr,ray.yr)
+    elseif isempty(uvArc)
+        % warndlg(sprintf('Radius, r=%0.2f too small at xr=%.0f; yr=%.0f',r,ray.xr,ray.yr));
+        newray = -2; return;
+    end
     %find the intersection of the arc segment with quad triangle
     uvray = get_intersection(ray,uvArc,[ur,vr],tol);
     xr = xi+uvray(1)*delta; yr = yi+uvray(2)*delta;
@@ -82,7 +82,7 @@ function newray = arc_ray(cgrid,ray,tol)
     %wave properties at new ray point
     [hr,cr,cgr] = raypoint_properties(cgrid,xr,yr); 
     %get exit angle (ur,vr entry point into element, uvray exit point)
-    alpha =  exit_angle(phi,r,ur,vr,uvray);  ray.alpha = alpha;
+    alpha =  exit_angle(phi,r,ur,vr,uvray,tol);  ray.alpha = alpha;
 
     %coordinates of start point
     [row,col] = ind2sub(size(cgrid.X),kr);
@@ -101,6 +101,31 @@ function newray = arc_ray(cgrid,ray,tol)
     end
 end
 %%
+function [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray,tol)
+    %find the radius and centre of the arc that the ray follows in element
+    X = cgrid.X; Y = cgrid.Y; c = cgrid.c; dcx = cgrid.dcx; dcy = cgrid.dcy;
+    delta = X(1,2)-X(1,1);             %grid spacing
+    method = 'linear';
+    cr = interp2(X,Y,c',ray.xr,ray.yr,method);
+    dcrx = interp2(X,Y,dcx',ray.xr,ray.yr,method,0);
+    dcry = interp2(X,Y,dcy',ray.xr,ray.yr,method,0);
+
+    %unit normal to ray (convention is left in direction of ray is positive)
+    phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction    
+    [un,vn] = pol2cart(phi,1);         %normal vector in local coordinates
+
+    %radius of arc
+    Ndc = un*dcrx+vn*dcry;
+    R = -cr/Ndc;                       %radius in grid coordinates
+    r = R/delta;                       %radius in local coordinates
+    if abs(r)<tol.radius
+        uc = ur+r*un;
+        vc = vr+r*vn;
+    else
+        uc = 0; vc = 0;   %radius is large so use straight line segment
+    end
+end
+%%
 function [uv_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
@@ -109,7 +134,7 @@ function [uv_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)
     rad = abs(radius);
     alpha = mod(phi-pi/2,2*pi);
     
-    if rad>1000 
+    if rad>=tol.radius
         %straight line segment will suffice       
         [ue,ve] = pol2cart(alpha,rt2); %vector from ray point in direction of alpha
                                        %use 2 to ensure line crosses a boundary
@@ -145,49 +170,25 @@ function [uv_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)
         uv_arc = [];
         % warndlg('Arc not found in get_arc')
     end
-
-end
-%%
-function [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray)
-    %find the radius and centre of the arc that the ray follows in element
-    X = cgrid.X; Y = cgrid.Y; c = cgrid.c; dcx = cgrid.dcx; dcy = cgrid.dcy;
-    delta = X(1,2)-X(1,1);             %grid spacing
-    cr = interp2(X,Y,c',ray.xr,ray.yr);
-    dcrx = interp2(X,Y,dcx',ray.xr,ray.yr,'linear',0);
-    dcry = interp2(X,Y,dcy',ray.xr,ray.yr,'linear',0);
-
-    %unit normal to ray (convention is left in direction of ray is positive)
-    phi = mod(ray.alpha+pi/2,2*pi);    %angle of normal to ray direction    
-    [un,vn] = pol2cart(phi,1);         %normal vector in local coordinates
-
-    %radius of arc
-    Ndc = un*dcrx+vn*dcry;
-    R = -cr/Ndc;                       %radius in grid coordinates
-    r = R/delta;                       %radius in local coordinates
-    if abs(r)<1000
-        uc = ur+r*un;
-        vc = vr+r*vn;
-    else
-        uc = 0; vc = 0;   %radius is large so use straight line segment
-    end
 end
 %%
 function [hr,cr,cgr] = raypoint_properties(cgrid,xr,yr)
     %interpolate depth, celerity and group celerity at ray point
     X = cgrid.X; Y = cgrid.Y; 
-    hr = interp2(X,Y,cgrid.h',xr,yr);
-    cr = interp2(X,Y,cgrid.c',xr,yr);
-    cgr = interp2(X,Y,cgrid.cg',xr,yr);
+    method = 'linear';
+    hr = interp2(X,Y,cgrid.h',xr,yr,method);
+    cr = interp2(X,Y,cgrid.c',xr,yr,method);
+    cgr = interp2(X,Y,cgrid.cg',xr,yr,method);
 end
 %%
-function alpha = exit_angle(phi,r,ur,vr,uvray)
+function alpha = exit_angle(phi,r,ur,vr,uvray,tol)
     %find the angle that is tangent to the arc at the exit point
     % phi,r - angle of normal and radius of arc
     % uv,vr - ray entry point into element
     % uvray - ray exit point out of element
     phi = mod(phi+pi,2*pi);                    %angle of normal from centre of arc
     L = sqrt((ur-uvray(1))^2+(vr-uvray(2))^2); %arc segment length
-    if abs(r)<1000
+    if abs(r)<tol.radius
         theta = 2*asin(L/2/r);                 %angle between entry and exit point
     else
         theta = 0;                             %straight line no change in direction

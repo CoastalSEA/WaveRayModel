@@ -57,7 +57,7 @@ function wrm_animation(mobj,sptobj,tsdst,SGo,SGi,Dims)
         pobj.Data.Waves = [Hs,Tp,pkDir];
     end
 
-    answer = questdlg('What type of plot','O?I spectrum','XY','Polar','XY');
+    answer = questdlg('What type of plot','OI spectrum','XY','Polar','XY');
     if strcmp(answer,'XY')
         pobj.MetaData = true;          %Cartesian dir-freq plot
     else
@@ -135,6 +135,7 @@ function getAnimation(pobj,s1,s2,hfig)
     %generate an animation for user selection.
     t = pobj.Data.T;  
     var = pobj.Data.Z;
+    w = pobj.Data.Waves;
     nrec = length(t);
     Mframes(nrec) = struct('cdata',[],'colormap',[]);
     Mframes(1) = getframe(gcf); %NB print function allows more control of 
@@ -144,9 +145,7 @@ function getAnimation(pobj,s1,s2,hfig)
         var1 = squeeze(var{1}(i,:,:)); %#ok<NASGU> 
         refreshdata(hp1,'caller')
         var2 = squeeze(var{2}(i,:,:)); %#ok<NASGU> 
-        refreshdata(hp2,'caller')
-
-        w = pobj.Data.Waves;
+        refreshdata(hp2,'caller')        
         sg = findobj(s1.Parent.Children,'Tag','PlotFigTitle');
         sg.String = sprintf('%s \nTime = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g\n',...
                        pobj.Title,string(t(i)),w(i,1),w(i,2),w(i,3));

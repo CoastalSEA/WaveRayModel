@@ -43,6 +43,7 @@ classdef WaveRayModel < muiModelUI
             obj.ModelInputs.SpectralTransfer = {''};
             obj.ModelInputs.WRM_WaveModel = {'WRM_RunParams'};
             obj.ModelInputs.WRM_SpectraModel = {''};
+            obj.ModelInputs.WRM_Mesh = {'WRM_Mesh'};
             %tabs to include in DataUIs for plotting and statistical analysis
             %select which of the options are needed and delete the rest
             %Plot options: '2D','3D','4D','2DT','3DT','4DT'
@@ -102,11 +103,12 @@ classdef WaveRayModel < muiModelUI
             menu.Project(3).Callback = repmat({@obj.projectMenuOptions},[1,2]);
             
             %% Setup menu -------------------------------------------------
-            menu.Setup(1).List = {'Input Data','Grid Parameters','Grid Tools',...
-                                  'Run Parameters','Data Clean-up','Model Constants'};                                    
+            menu.Setup(1).List = {'Input Data','Grid Parameters',...
+                                  'Grid Tools','Run Parameters',...
+                                  'Data Clean-up','Model Constants'};                                                                      
             menu.Setup(1).Callback = [{'gcbo;'},{@obj.setupMenuOptions},...
-                                          {'gcbo;'},{'gcbo;'},{'gcbo;'},...
-                                                 {@obj.setupMenuOptions}];
+                                      {'gcbo;'},{'gcbo;'},{'gcbo;'},...
+                                      {@obj.setupMenuOptions}];
             %add separators to menu list (optional - default is off)
             menu.Setup(1).Separator = [repmat({'off'},[1,5]),{'on'}]; %separator preceeds item
             
@@ -146,11 +148,11 @@ classdef WaveRayModel < muiModelUI
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
                                 'Check Start Depth','Backward Rays',...
                                 'Transfer Table','Run Wave Timeseries',...
-                                'Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,8]);            
+                                'Create Mesh','Test Grid','Derive Output'};
+            menucall = repmat({@obj.runMenuOptions},[1,9]);            
             menu.Run(1).Callback = menucall;
             menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off',...
-                                              'on','off','on','on'}];
+                                              'on','off','on','off','on'}];
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,3]),...
@@ -201,7 +203,8 @@ classdef WaveRayModel < muiModelUI
                 'WRM_FT_Params','Inputs',[0.94,0.50],{160,90},'Forward tracking parameters:'; ...
                 'WRM_BT_Params','Inputs',[0.62,0.50],{160,90},'Backward tracking parameters:'; ...
                 'GD_GridProps','Inputs',[0.35,0.50],{160,90}, 'Grid parameters:';...
-                'WRM_Bathy','Inputs',[0.35,0.97],{160,70}, 'Bathymetry parameters:'};
+                'WRM_Bathy','Inputs',[0.35,0.97],{160,70}, 'Bathymetry parameters:';...
+                'WRM_Mesh','Inputs',[0.50,0.97],{160,70}, 'Mesh parameters:'};
         end    
  %%
         function setTabAction(obj,src,cobj)
@@ -255,7 +258,7 @@ classdef WaveRayModel < muiModelUI
                     WRM_BT_Params.setInput(obj);  
                     %update tab display with input data
                     tabsrc = findobj(obj.mUI.Tabs,'Tag','Inputs');
-                    InputTabSummary(obj,tabsrc);
+                    InputTabSummary(obj,tabsrc);                
                 case 'Model Constants'
                     obj.Constants = setInput(obj.Constants);
             end
@@ -317,6 +320,8 @@ classdef WaveRayModel < muiModelUI
                     SpectralTransfer.runModel(obj);
                 case 'Run Wave Timeseries'
                     WRM_WaveModel.runModel(obj);
+                case 'Create Mesh'
+                    WRM_Mesh.runModel(obj);    
                 case 'Test Grid'
                     WRM_Bathy.runModel(obj);
                 case 'Derive Output'

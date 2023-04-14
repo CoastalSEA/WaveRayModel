@@ -35,7 +35,7 @@ classdef RayTracks < muiDataSet
 % Model implementation
 %--------------------------------------------------------------------------         
         function obj = runModel(mobj,src)
-            %function to run a simple 2D diffusion model
+            %function to run a simple forwared and backward ray tracing
             obj = RayTracks;                          
 
             %now check that the input data has been entered
@@ -50,7 +50,7 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
             runobj = mobj.Inputs.WRM_RunParams;
             promptxt = 'Select grid to use for wave model'; 
-            gridclasses = {'WRM_Bathy','GD_ImportData'};
+            gridclasses = {'WRM_Bathy','GD_ImportData','WRM_Mesh'};
             grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
             if isempty(grdobj), return; end
             grdrec = caseRec(muicat,grdobj.CaseIndex);            
@@ -66,14 +66,18 @@ classdef RayTracks < muiDataSet
             answer = questdlg('Write log to file?','Rays','Yes','No','No');
             islog = false;
             if strcmp(answer,'Yes'), islog = true; end
-
-            grid = getGrid(grdobj,1);
-            if isempty(grid.z), return; end
-
-            [X,Y] = meshgrid(grid.x,grid.y);            
-            delta = grid.x(2)-grid.x(1);
-%             setTolerances(obj,delta); %adjust tolerance to local coordinates
-            cgrid = struct('X',X,'Y',Y,'z',grid.z);
+            
+            if isprop(grdobj,'kind')
+                cgrid.Tri = grdobj.Data.Dataset.Tri{1};
+                cgrid.z = grdobj.Data.Dataset.zlevel{1};
+            else
+                grid = getGrid(grdobj,1);
+                if isempty(grid.z), return; end
+    
+                [X,Y] = meshgrid(grid.x,grid.y);            
+                delta = grid.x(2)-grid.x(1);
+                cgrid = struct('X',X,'Y',Y,'z',grid.z);
+            end
 
             %arrays of waver periods and water levels            
             T = runobj.PeriodRange;
@@ -96,7 +100,11 @@ classdef RayTracks < muiDataSet
             hlimit = runobj.hCutOff;
 
             %get the celerity, group celerity and celeirty gradient grids
-            cgrid = celerity_grid(cgrid,T,zwl,delta);
+            if isprop(grdobj,'kind')
+                cgrid = celerity_mesh(cgrid,T,zwl);
+            else
+                cgrid = celerity_grid(cgrid,T,zwl,delta);
+            end
             
             switch src.Text
                 case 'Forward Rays'
@@ -213,8 +221,12 @@ classdef RayTracks < muiDataSet
             %retrieve bathymetry grid and plot
             if isfield(obj.RunParam,'WRM_Bathy')
                 caserec = caseRec(muicat,obj.RunParam.WRM_Bathy.caseid); 
-            else
+            elseif isfield(obj.RunParam,'GD_ImportData')
                 caserec = caseRec(muicat,obj.RunParam.GD_ImportData.caseid); 
+            elseif isfield(obj.RunParam,'WRM_Mesh')
+                caserec = caseRec(muicat,obj.RunParam.WRM_Mesh.caseid); 
+            else
+                warndlg('Unknown grid/mesh input type'); return
             end
             gobj = getCase(muicat,caserec);
 
@@ -237,8 +249,12 @@ classdef RayTracks < muiDataSet
             shading interp
             
             %add the start arrows
-            grid = getGrid(gobj);
-            delta = abs(grid.x(2)-grid.x(1));
+            if isprop(gobj,'kind')
+                delta = gobj.minshore;
+            else
+                grid = getGrid(gobj);
+                delta = abs(grid.x(2)-grid.x(1));
+            end
 
             if strcmp(obj.Data.Dataset.MetaData,'forward_model')
                 plotArrow(obj,ax,delta);
@@ -278,15 +294,24 @@ classdef RayTracks < muiDataSet
 %             %obj.tol.radius = 0.2865/obj.tol.angle;            
 %         end
 %%
-        function agrid = subSampleGrid(~,cgrid,j,k)
+        function agrid = subSampleGrid(~,cgrid,j,k,ismesh)
             %select grids for give wave period (j) and water level (k)
-            agrid.X = cgrid.X;
-            agrid.Y = cgrid.Y;
-            agrid.h = cgrid.h(:,:,k);
-            agrid.c = cgrid.c(:,:,j,k);
-            agrid.cg = cgrid.cg(:,:,j,k);
-            agrid.dcx = cgrid.dcx(:,:,j,k);
-            agrid.dcy = cgrid.dcy(:,:,j,k);
+            if ismesh
+                agrid.Tri = cgrid.Tri;
+                agrid.h = cgrid.h(:,k);
+                agrid.c = cgrid.c(:,j,k);
+                agrid.cg = cgrid.cg(:,j,k);
+                agrid.dcx = cgrid.dcx(:,j,k);
+                agrid.dcy = cgrid.dcy(:,j,k);
+            else
+                agrid.X = cgrid.X;
+                agrid.Y = cgrid.Y;
+                agrid.h = cgrid.h(:,:,k);
+                agrid.c = cgrid.c(:,:,j,k);
+                agrid.cg = cgrid.cg(:,:,j,k);
+                agrid.dcx = cgrid.dcx(:,:,j,k);
+                agrid.dcy = cgrid.dcy(:,:,j,k);
+            end
         end
 %%
         function [rays,rownames] = forwardTrack(obj,cgrid,T,zwl,hlimit,islog)
@@ -308,6 +333,7 @@ classdef RayTracks < muiDataSet
             % set(ax,'xgrid','on')
             % set(ax,'ygrid','on')
             %--------------------------------------------------------------
+            if isfield(cgrid,'Tri'),ismesh=true; else, ismesh=false; end
 
             nr = ftrobj.nRay;
             np = length(T);
@@ -319,7 +345,7 @@ classdef RayTracks < muiDataSet
             parfor i=rownames           %ray number
                 for j=1:np              %wave period
                     for k=1:nq          %water level
-                        agrid = subSampleGrid(obj,cgrid,j,k);
+                        agrid = subSampleGrid(obj,cgrid,j,k,ismesh);
                         xys = [x_start(i),y_start(i)];
                         rayobj = Ray.setRay(agrid,xys,alpha,hlimit,obj.tol);
                         increment(hpw);
@@ -373,6 +399,7 @@ classdef RayTracks < muiDataSet
             % set(ax,'xgrid','on')
             % set(ax,'ygrid','on')
             %--------------------------------------------------------------
+            if isfield(cgrid,'Tri'),ismesh=true; else, ismesh=false; end
 
             nd = btrobj.nDirections;
             np = length(T);
@@ -384,7 +411,7 @@ classdef RayTracks < muiDataSet
             parfor i=1:nd               %ray direction
                 for j=1:np              %wave period
                     for k=1:nq          %water level
-                        agrid = subSampleGrid(obj,cgrid,j,k);
+                        agrid = subSampleGrid(obj,cgrid,j,k,ismesh);
                         rayobj = Ray.setRay(agrid,xys,alpha(i),hlimit,obj.tol);
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);

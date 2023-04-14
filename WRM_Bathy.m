@@ -2,13 +2,13 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
 %
 %-------class help---------------------------------------------------------
 % NAME
-%   WRM_RunParams.m
+%   WRM_Bathy.m
 % PURPOSE
 %   Generate idealised bathymetries using a linear slope or Dean's profile
 %   on a linear or crenulate shoreline. Also option for a mound on a linear
 %   slope
 % USAGE
-%   obj = WRMrunparams.setInput(mobj); %mobj is a handle to Main UI
+%   obj = WRM_Bathy.setInput(mobj); %mobj is a handle to Main UI
 % SEE ALSO
 %   inherits muiPropertyUI and GDintereface
 %   uses the following external functions:
@@ -63,8 +63,7 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
 % Model implementation
 %--------------------------------------------------------------------------         
         function obj = runModel(mobj)
-            %function to run a simple 2D diffusion model                         
-
+            %function to run a simple bathymetry model                       
             obj = WRM_Bathy.setInput(mobj);
             if isempty(obj.BedLevelat1km), return; end
             %now check that the input data has been entered

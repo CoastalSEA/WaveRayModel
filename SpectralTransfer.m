@@ -17,19 +17,22 @@ classdef SpectralTransfer < muiDataSet
 %     
     properties
         %inherits Data, RunParam, MetaData and CaseIndex from muiDataSet
-        %Additional properties:     
+        %Additional properties:   
+        interp
     end
     
     methods (Access={?muiDataSet,?muiStats,?WRM_WaveModel})
         function obj = SpectralTransfer()             
             %class constructor
+            obj.interp.dir = 0.5; %interval used to interpolate directions (deg)
+            obj.interp.per = 0.5; %interval used to interpolate periods (s)
         end
     end      
 %%
     methods (Static)        
 %--------------------------------------------------------------------------
-% Model implementation
-%--------------------------------------------------------------------------         
+% Model to construct spectral transfer table
+%--------------------------------------------------------------------------   
         function obj = runModel(mobj)
             %function to run a simple 2D diffusion model
             obj = SpectralTransfer;                           
@@ -50,7 +53,6 @@ classdef SpectralTransfer < muiDataSet
 % Assign model output to a dstable using the defined dsproperties meta-data
 %--------------------------------------------------------------------------  
             %inshore celerities for period and water level
-
             inccg = inprops(4:5);
             dspi = modelDSproperties(obj,true);
             indst = dstable(inccg{:},'DSproperties',dspi);
@@ -83,6 +85,9 @@ classdef SpectralTransfer < muiDataSet
     end
 %%
     methods
+%--------------------------------------------------------------------------
+% Model to transfer a wave timeseries or spectral data set
+%--------------------------------------------------------------------------         
         function [Sot,Sit,Dims,output] = runWaves(obj,tsdst,select)
             %run the spectral transfer model for a timeseries of offshore
             %wave conditions and return a table of wave conditions
@@ -94,16 +99,17 @@ classdef SpectralTransfer < muiDataSet
                 filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));
             end
 
-            transtable = obj.Data;             %inshore and offshore transfer tables   
+            ndir = 360/obj.interp.dir;         %number of direction intervals
+            nper = length(1:obj.interp.per:30);%number of period intervals
             nint = height(tsdst);
             output = table();
             inputable = tsdst.DataTable;       %needed for parallel option
             hpw = PoolWaitbar(nint, 'Processing timeseries');
-            blank = zeros(1,720,59);           %fixed intervals assigned in get_inshore_spectrum
+            blank = zeros(1,ndir,nper);           %fixed intervals assigned in get_inshore_spectrum
             parfor i=1:nint                    %parfor loop  
                 %for each offshore wave get the inshore results
                 input = inputable(i,:);
-                [SGo,SGi,dims] = get_inshore_spectrum(transtable,input,select);
+                [SGo,SGi,dims] = get_inshore_spectrum(obj,input,select);
                 output(i,:) = get_inshore_wave(SGo,SGi,dims,input,select);
                 if select.issave
                     if isempty(SGo)
@@ -130,6 +136,9 @@ classdef SpectralTransfer < muiDataSet
             delete(hpw)  
         end
 %% 
+%--------------------------------------------------------------------------
+% Plots of model output and utilities
+%-------------------------------------------------------------------------- 
         function coefficientsPlot(obj)
             %generate data to plot the coefficents as a function of
             %direction, period and water level
@@ -137,8 +146,7 @@ classdef SpectralTransfer < muiDataSet
             if isempty(select), return; end     %user cancelled
             %force selection of source to be waves
             if strcmp(select.source,'Wind'), select.source='Wave'; end
-            
-            transtable = obj.Data;              %inshore and offshore transfer tables       
+     
             T = obj.Data.Offshore.Dimensions.Period;
             zwl = obj.Data.Offshore.Dimensions.WaterLevel;   
             Diri = obj.Data.Offshore.RowNames;  %inshore ray directions
@@ -151,7 +159,7 @@ classdef SpectralTransfer < muiDataSet
                 for j=1:nper
                     for k=1:nwls
                         input = getloopinput(obj,Diri,T,zwl,i,j,k);
-                        [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,select);                                                   
+                        [SGo,SGi,Dims] = get_inshore_spectrum(obj,input,select);                                                   
                         outable = get_inshore_wave(SGo,SGi,Dims,input,select);
                         kw(i,j,k) = outable.kw;
                         kt2(i,j,k) = outable.kt2;
@@ -375,8 +383,8 @@ classdef SpectralTransfer < muiDataSet
                     for k=1:nwls
                         flag = dst.UserData.flag(i,j,k)>0;
                         if flag>0
-                        theta = dst.alpha{i,j,k}(end);
-                        offdir(i,j,k) = mod(compass2trig(theta,true),360);
+                            theta = dst.alpha{i,j,k}(end);
+                            offdir(i,j,k) = mod(compass2trig(theta,true),360);
                         else
                             offdir(i,j,k) = NaN;
                         end

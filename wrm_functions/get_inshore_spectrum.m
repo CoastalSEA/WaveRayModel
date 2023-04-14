@@ -1,4 +1,4 @@
-function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,intable,sp)
+function [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -9,7 +9,11 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,intable,sp)
 % USAGE
 %   [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
 % INPUTS
-%   transtable - spectral transfer table created by SpectralTransfer class
+%   sptobj - SpectralTransfer class object
+%            Data - inshore and offshore transfer tables
+%            interp - direction and period interpolation intervals
+        %no longer passed
+        %   transtable - spectral transfer table created by SpectralTransfer class        
         %   ShoreAngle - angle of shoreline (degTN), use NaN to exclude this limit
         %   hlimit - limiting depth (m)
 %   intable - input parameters - table of timeseries of wave data or spectra
@@ -25,18 +29,18 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(transtable,intable,sp)
 %--------------------------------------------------------------------------
 %
     SGo = []; SGi = [];
-    dir_int = 0.5;     %interval used to interpolate directions (deg)
+    dir_int = sptobj.interp.dir;  %interval used to interpolate directions (deg)
     radint = deg2rad(dir_int);
-    per_int = 0.5;     %interval used to interpolate periods (s)
-    per_range = 30;    %upper bound of period range
+    per_int = sptobj.interp.per;  %interval used to interpolate periods (s)
+    per_range = 30;               %upper bound of period range
     
     %extract transfer tables and get shoaling coefficients
-    indst = transtable.Inshore;             %inshore properties       
+    indst = sptobj.Data.Inshore;            %inshore properties       
     depths = indst.UserData.Depths;         %inshore water depths            
     indst = indst.DataTable;
-    offdst = transtable.Offshore;           %offshore properties  
+    offdst = sptobj.Data.Offshore;          %offshore properties  
     zwl = offdst.Dimensions.WaterLevel;     %water levels used in ray model
-    swl = intable.swl;                        %required water level
+    swl = intable.swl;                      %required water level
     if isscalar(zwl)
         Dims.depi = depths;                 %depth at inshore point
     else

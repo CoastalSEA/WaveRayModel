@@ -19,9 +19,9 @@ classdef WRM_WaveModel < muiDataSet
         %Additional properties:   
     end
     
-    properties (Hidden)
-        ModelType        %model used for the particular instance
-    end
+%     properties (Hidden)
+%         ModelType        %model used for the particular instance
+%     end
     
     methods (Access={?muiDataSet,?muiStats})
         function obj = WRM_WaveModel()                    
@@ -54,9 +54,11 @@ classdef WRM_WaveModel < muiDataSet
                 select = WRM_WaveModel.getSprectraConditions();   
                 select.freq = tsdst.Dimensions.freq;
                 if isempty(select), return; end       %user cancelled
+                ModelType = 'transfer spectra';
             else
                 select = get_model_selection(sptobj); %select spectral form and data type
                 if isempty(select), return; end       %user cancelled
+                ModelType = 'transfer timeseries';
             end
             answer = questdlg('Save the spectra?','Wave model','Yes','No','No');
             if strcmp(answer,'Yes'), select.issave=true; else, select.issave=false; end
@@ -70,7 +72,7 @@ classdef WRM_WaveModel < muiDataSet
             dst.Properties = dstable(results,'RowNames',time,'DSproperties',dsprop);                      
             %assign metadata about model            
             dst.Properties.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
-                                                         obj.ModelType);
+                                                         ModelType);
             dst.Properties.MetaData = inputxt;   
             %add depths of inshore point for which there are backward rays
             dst.Properties.UserData = sptobj.Data.Inshore.UserData.Depths;
@@ -80,7 +82,7 @@ classdef WRM_WaveModel < muiDataSet
                 questxt = sprintf('Save the full wave spectra (arrays are %.1f Mb)?',sze);
                 answer = questdlg(questxt,'Wave model','In Full','Minimised','Minimised');
                 if strcmp(answer,'Minimised')
-                    %reduce to 1 degree spacing but keep all frequencies
+                    %reduce to 1 degree spacing and 1 second periods
                     idx = rem(Dims.dir,1)>0;
                     idy = rem(1./Dims.freq,1)>0;
                     Dims.dir(idx) = [];
@@ -93,7 +95,7 @@ classdef WRM_WaveModel < muiDataSet
                 dst.Spectra.Dimensions.freq = Dims.freq;  %match variable dimensions           
                 %assign metadata about model
                 dst.Spectra.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
-                    obj.ModelType);
+                    ModelType);
                 dst.Spectra.MetaData = inputxt;
             end
 %--------------------------------------------------------------------------
@@ -129,13 +131,13 @@ classdef WRM_WaveModel < muiDataSet
                 select.issat = offdata.issat;       %copy to sprectrum selection  
                 select.freq = offdata.tsdst.Dimensions.freq;
                 intable = offdata.tsdst.DataTable;
-                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj.Data,intable,select);
+                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,select);
                 ins = get_inshore_wave(SGo,SGi,Dims,intable,select);
             else
                 select = get_model_selection(sptobj,offdata.source); %select spectral form and data type
                 if isempty(select), return; end           %user cancelled
 
-                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj.Data,offdata,select);
+                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,offdata,select);
                 if isempty(SGo), return; end
     
                 if strcmp(offdata.source,'Wind')
@@ -190,43 +192,43 @@ classdef WRM_WaveModel < muiDataSet
     end
 %%
     methods
-        function [tsdst,caserec] = getWaveModelDataset(obj,mobj,type,varnames,caserec)
-            %prompt user to select a model wave dataset and add Tp if inshore
-            muicat = mobj.Cases;
-            if nargin<4
-                varnames = {'Tp'};  %default is to add Tp
-            end
-            %
-            if nargin<5   %no caserec to prompt for selection
-                [wvobj,wvdst,ok] = selectClassInstance(obj,'ModelType',type);
-                if ok<1, tsdst = []; return; end
-                caserec = caseRec(muicat,wvobj.CaseIndex);
-            else
-                wvobj = getCase(muicat,caserec);
-                wvdst = wvobj.Data.Dataset;
-            end
-            
-            
-            %if inshore wave dataset add variables requested otherwise just
-            %copy dstable
-            tsdst = copy(wvdst);
-            if strcmp(type,'Inwave_model')
-                inpwavecid = wvobj.RunParam.ctWaveData.caseid;
-                inpwaverec = caseRec(muicat,inpwavecid);
-                inpdst = getDataset(muicat,inpwaverec,1);
-                dstnames = inpdst.VariableNames;
-                for i=1:length(varnames)                    
-                    if any(strcmp(dstnames,varnames{i})) && ...
-                                            ~isempty(inpdst.(varnames{i}))
-                        tsdst = addvars(tsdst,inpdst.(varnames{i}),...
-                                           'NewVariableNames',varnames{i});
-                    else
-                        warndlg('Variable %s not found so not added to wave dataset',...
-                                                           varnames{i});
-                    end
-                end
-            end
-        end
+%         function [tsdst,caserec] = getWaveModelDataset(obj,mobj,type,varnames,caserec)
+%             %prompt user to select a model wave dataset and add Tp if inshore
+%             muicat = mobj.Cases;
+%             if nargin<4
+%                 varnames = {'Tp'};  %default is to add Tp
+%             end
+%             %
+%             if nargin<5   %no caserec to prompt for selection
+%                 [wvobj,wvdst,ok] = selectClassInstance(obj,'ModelType',type);
+%                 if ok<1, tsdst = []; return; end
+%                 caserec = caseRec(muicat,wvobj.CaseIndex);
+%             else
+%                 wvobj = getCase(muicat,caserec);
+%                 wvdst = wvobj.Data.Dataset;
+%             end
+%             
+%             
+%             %if inshore wave dataset add variables requested otherwise just
+%             %copy dstable
+%             tsdst = copy(wvdst);
+%             if strcmp(type,'Inwave_model')
+%                 inpwavecid = wvobj.RunParam.ctWaveData.caseid;
+%                 inpwaverec = caseRec(muicat,inpwavecid);
+%                 inpdst = getDataset(muicat,inpwaverec,1);
+%                 dstnames = inpdst.VariableNames;
+%                 for i=1:length(varnames)                    
+%                     if any(strcmp(dstnames,varnames{i})) && ...
+%                                             ~isempty(inpdst.(varnames{i}))
+%                         tsdst = addvars(tsdst,inpdst.(varnames{i}),...
+%                                            'NewVariableNames',varnames{i});
+%                     else
+%                         warndlg('Variable %s not found so not added to wave dataset',...
+%                                                            varnames{i});
+%                     end
+%                 end
+%             end
+%         end
 %%        
         function tabPlot(obj,src) %abstract class for muiDataSet
             %generate plot for display on Q-Plot tab

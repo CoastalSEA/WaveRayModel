@@ -46,6 +46,19 @@ classdef Ray < handle
 
             obj = Ray;                               %Ray class instance 
 
+            if isfield(cgrid,'Tri')
+                ray = meshRay(obj,cgrid,xys,alpha,hlimit,tol);
+            else
+                ray = gridRay(obj,cgrid,xys,alpha,hlimit,tol);
+            end
+            
+            obj.Track = dstable(ray,'DSproperties',modelDSproperties(obj));
+        end
+    end
+%%
+    methods (Access=private)  
+        function ray = gridRay(obj,cgrid,xys,alpha,hlimit,tol)
+            %get ray path using Carteisan grid
             %get first first element intersection from the start point
             ray = startRay(obj,cgrid,xys,alpha,tol);
             if isempty(ray)
@@ -53,7 +66,7 @@ classdef Ray < handle
             elseif ~isa(ray,'table')
                 error('Ray start position outside grid domain')
             end   
-
+            tol.radius = 1e3;
             %check plot for finding ray errors - comment out when not required
             % hf = figure('Name','Search','Tag','PlotFig');
             % ax = axes(hf);
@@ -74,17 +87,61 @@ classdef Ray < handle
                 % hold on
                 % plot(ax,newray.xr,newray.yr,'+k')
                 % hold off   
-                %----------------------------------------------------------
-                
+                %----------------------------------------------------------                
                 hr = newray.hr;
                 if hr<=hlimit, obj.outFlag = -1; end
             end
-            ray(:,4:6) = [];   %remove k and quad from the ray table
-            obj.Track = dstable(ray,'DSproperties',modelDSproperties(obj));
+            ray(:,4:6) = [];   %remove kr quad and r from the ray table
         end
-    end
 %%
-    methods (Access=private)  
+
+        function ray = meshRay(obj,cmesh,xys,alpha,hlimit,tol)
+            %get ray path using triangular mesh held in cmesh (renamed from
+            %cgrid)
+
+            %find nearest node to start point
+            kr = nearestNeighbor(cmesh.Tri,xys);
+
+            %wave properties at start point
+            tol.radius = 1e6;
+            r = inf;                                     %intial radius
+            xr = xys(1); yr = xys(2); quad = 0;
+            [hr,cr,cgr] = raypoint_properties(obj,cmesh,xr,yr);
+            %initialise ray table            
+            ray = table(xr,yr,alpha,kr,quad,r,hr,cr,cgr);%grid properties of ray position
+
+            %check plot for finding ray errors - comment out when not required
+%             hf = figure('Name','Search','Tag','PlotFig');
+%             ax = axes(hf);
+%             Tri = cmesh.Tri;
+%             save('trigrid_input','Tri')
+%             pts = cmesh.Tri.Points;
+%             tria = cmesh.Tri.ConnectivityList;
+%             trimesh(tria,pts(:,1),pts(:,2),'Color','k')
+%             hold on
+%             plot(ax,ray.xr(1),ray.yr(1),'ob')
+%             hold off
+            %--------------------------------------------------------------
+            
+            while hr>hlimit
+                newray = mesh_arc_ray(cmesh,ray(end,:),tol);
+                if isempty(newray)                         %ray exits grid
+                    obj.outFlag = 1; hr = hlimit; continue; 
+                elseif isnumeric(newray) && newray<0       %ray error (eg radius too small)
+                    obj.outFlag = newray; hr = hlimit; continue; 
+                end
+                ray = [ray;newray]; %#ok<AGROW> 
+                %check plot for finding ray errors - comment out when not required
+%                 hold on
+%                 plot(ax,newray.xr,newray.yr,'+r')
+%                 hold off   
+                %----------------------------------------------------------                
+                hr = newray.hr;
+                if hr<=hlimit, obj.outFlag = -1; end
+            end   
+            ray(:,4:6) = [];   %remove kr quad and r from the ray table
+        end
+%%
         function ray = startRay(obj,cgrid,xyr,alpha,tol)
             %compute the first element intersection from the start point
             % grid - contains X,Y,h,c,dcx,dcy
@@ -166,10 +223,17 @@ classdef Ray < handle
 %%
         function [hr,cr,cgr] = raypoint_properties(~,cgrid,xr,yr)
             %interpolate depth, celerity and group celerity at ray point
-            X = cgrid.X; Y = cgrid.Y; 
-            hr = interp2(X,Y,cgrid.h',xr,yr);
-            cr = interp2(X,Y,cgrid.c',xr,yr);
-            cgr = interp2(X,Y,cgrid.cg',xr,yr);
+            if isfield(cgrid,'Tri')
+                X = cgrid.Tri.Points(:,1); Y = cgrid.Tri.Points(:,2); 
+                hr = griddata(X,Y,cgrid.h,xr,yr);
+                cr = griddata(X,Y,cgrid.c,xr,yr);
+                cgr = griddata(X,Y,cgrid.cg,xr,yr);                
+            else
+                X = cgrid.X; Y = cgrid.Y; 
+                hr = interp2(X,Y,cgrid.h',xr,yr);
+                cr = interp2(X,Y,cgrid.c',xr,yr);
+                cgr = interp2(X,Y,cgrid.cg',xr,yr);
+            end
         end
 %%
         function isbound = checkGridBoundary(~,cgrid,xye)

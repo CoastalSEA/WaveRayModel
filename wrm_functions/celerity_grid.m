@@ -12,9 +12,9 @@ function cgrid = celerity_grid(cgrid,T,zwl,delta)
 %   cgrid.z - [m,n] array of bed elevations relative to zero datum (m)
 %   T - [1,p] array of wave periods (s)
 %   zwl - [1,q] water level elevations relative to zero datum (m)
-%   delta - grid scpaing interval of uniform grid (delx=dely)
+%   delta - grid spacing interval of uniform grid (delx=dely)
 % OUTPUTS
-%   Adds the following variables to the 'grid' struct
+%   Adds the following variables to the 'cgrid' struct
 %   h - [m,n,q] array of water depths
 %   c  - [m,n,p,q] array of wave celerity using linear wave theory
 %   cg - [m,n,p,q] array of wave group celerity using linear wave theory
@@ -57,6 +57,5 @@ function cgrid = celerity_grid(cgrid,T,zwl,delta)
     end
     cgrid.c = c;           cgrid.h = depth;
     cg(isnan(cg)) = 0;     dcx(isnan(dcx)) = 0;    dcy(isnan(dcy)) = 0; 
-    cgrid.cg = cg;         cgrid.dcx = dcx;        cgrid.dcy = dcy; 
-    
+    cgrid.cg = cg;         cgrid.dcx = dcx;        cgrid.dcy = dcy;     
 end
