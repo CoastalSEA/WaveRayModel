@@ -44,6 +44,7 @@
 % * *Add data*: prompts user for file to be loaded (only one file at a time can be added). Only files with the format used to create the data set can be used to Add data to a data record.
 % * *Delete data*: prompts user for Case to be deleted.
 % * *Quality control*: runs a series of checks on the data. This is only available for waves and water levels in this version. See <matlab:ct_open_manual manual> for details of the checks applied. Once run, the last column of the Data tab is updated to show that qc has been applied.lly, the default values are appropriate but these can be adjusted and saved with the project if required.
+
 %% Setup > Grid Tools
 % * *Grid Tools > Translate Grid*: interactively translate grid x-y
 % coordinates;
@@ -84,17 +85,15 @@
 % * *Grid Parameters*: dialogue to set dimensions of default grid
 % * *Model Constants*: a number of constants are used in the model. Generally, the default values are appropriate but these can be adjusted and saved with the project if required.
 
-
 %% Run
 % * *Check Start Points*: utility generates a plot showing the bathymetry, start points and initial ray directions.
 % * *Forward Rays*: uses the defined run parameters (Setup>Run Parameters>Run Conditions) and start points (Setup>Run Parameters>Forward Tracking) to generate a set of rays. These can then be viewed on the Q-Plot tab, or using the Analysis>Ray Plots option.
+% * *Check Start Depth*: utility generates a plot showing the bathymetry, start point aand depth.
 % * *Backward Rays*: uses the defined run parameters (Setup>Run Parameters>Run Conditions) and start point (Setup>Run Parameters>Backward Tracking) to generate a set of rays. These can then be viewed on the Q-Plot tab, or using the Analysis>Ray Plots option.
 % * *Transfer Table*: generates the Transfer Table from a set of Backward Tracking rays.  Summary output from the tables can then viewed on the Q-Plot tab, or using the Analysis>Spectral Plots>Transfer Table option.
-% * *Run Property Timeseries*: uses a selected Transfer Table and imported wind or wave data to compute the inshore conditions which are saved as a timeseries 
-% * *Run Spectra Timeseries*: uses a selected Transfer Table and imported
-% directional wave spectra data to compute the inshore spectra, which are
-% saved as spectra and property data (with the same definitions as the
-% input timeseries).
+% * *Run Wave Timeseries*: uses a selected Transfer Table and imported wind or wave data to compute the inshore conditions which are saved as a timeseries. Alternatively, imported directional wave spectra data can be selected to estimate the same set to wave properties. 
+% * *Create Mesh*: generate an unstructured triangular mesh from a Cartesian grid (requires mesh2d to be installed). 
+% * *Test Grid*: generate a grid of an idealised bathymetry (linear or Dean profile for linear shore or embayment).
 % * *Derive Output*: initialises the Derive Output UI to select and define manipulations of the data or call external functions and load the result as new data set.
 
 %% Analysis
@@ -104,7 +103,7 @@
 % * *Spectral Plots > Transfer Table*: uses a Transfer Table created using _Run>Spectral Transfer>Create Table_ to plot data from the inshore or offshore Transfer Tables. For a selected water level the options are for celerity or group celerity inshore and direction, celerity, group celerity, offshore depth (seaward end of ray), average depth along rays and minimum depth along rays.
 % * *Spectral Plots > Transfer Coefficients*: uses a selected Transfer Table and a unit wave height (Hs=1m) to derive the inshore wave parameters and return a set of transfer coefficients. These can then be plotted as a function of wave period and mean offshore direction for a selected water level.
 % * *Spectral Plots > O/I Spectrum*: uses a selected Transfer Table and user defined input conditions for wind or wave forcing to derive a 2D offshore spectrum and the associated inshore spectrum, which are then plotted along with details of the conditions.
-% * *Spectral Plots>O/I Animation*: uses a selected Transfer Table and an imported time series of wind or wave conditions to generate an animation of offshore and inshore spectrum (frames are similar to the above image). The user is prompted to select the type of spectrum to use and the range of data to use. If the record selected has more than 5000 data points the user is asked to confirm. This is because the plotting is data intensive and can quickly create large arrays. However, it does provide a useful way of checking what is happening in the transfer process.
+% * *Spectral Plots > O/I Animation*: uses a selected Transfer Table and an imported time series of wind or wave conditions to generate an animation of offshore and inshore spectrum (frames are similar to the above image). The user is prompted to select the type of spectrum to use and the range of data to use. If the record selected has more than 5000 data points the user is asked to confirm. This is because the plotting is data intensive and can quickly create large arrays. However, it does provide a useful way of checking what is happening in the transfer process.
 
 %% Help
 % * *Help*: access the online documentation for CoastalTools.

@@ -11,6 +11,7 @@
 % * *WRM_Bathy*: generate idealised bathymetries using a linear slope or Dean's profile on a linear or crenulate shoreline. Also includes an option for a mound on a linear slope.
 % * *WRM_BT_Params*: parameters define initial positions and direction of backward tracking rays.
 % * *WRM_FT_Params*: parameters define initial positions and direction of forward tracking rays.
+% * *WRM_Mesh*: generate triangular mesh of nearshore area from a Cartesian grid.
 % * *WRM_RunParams*: run parameters for the WaveRayModel.
 % * *WRM_WaveModel*: Class for wave refraction using backward ray transfer function. Constructs inshore time series from an offshore timeseries. Also includes methods to plot the offshore and inshore spectra.
 
@@ -19,7 +20,9 @@
 %%
 % * _arc_ray_ – compute the exit position and direction of a ray entering a triangular element at the position and direction defined by the incoming ray.
 % * _celerity_grid_ – calculate the celerity and group celerity over a bathymetry grid for a range of wave periods and a range of water levels.
+% * _celerity_mesh_ - calculate the celerity and group celerity over a bathymetry mesh for a range of wave periods and a range of water levels
 % * _compass2trig_ – convert compass directions to trigonometric angles, or vice versa.
+% * _curvspace_ -  evenly spaced points along an existing curve in 2D or 3D., Author: Yo Fukushima, 2005, https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace 
 % * _datawell_directional_spectra_ - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.
 % * _directional_spreading_ – sample a directional spreading function at selected direction intervals.
 % * _get_element_ – define triangular polyshape based on quadrant being entered by ray.
@@ -31,8 +34,12 @@
 % * _is_axis_point_ – find whether point lies on an axis and is travelling in the direction of that axis.
 % * _isangletol_ – boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.
 % * _isclosetol_ – boolean check of whether an x,y point lies close to another x,y point
+% * _mesh_arc_ray_ – compute the exit position and direction of a ray entering a trian.gular mesh element at the position and direction defined by the incoming.
+% * _mesh2d_ – generate triangular mesh, Author: Darren Engwirda, 2017, https://github.com/dengwirda/mesh2d. NB: the mesh2d folder in the App is empty and this set of functions needs to be downloaded from the source and installed in the designated sub-folder of the WaveRayModel App.
 % * _PoolWaitbar_ - initiallises and updates a waitbar when running a loop using parfor, Matlab(TM) Forum: Edric Ellis, 2019
+% * _trigradient_ – compute the gradients in the x and y directions using triangular mesh as input, Author: Mick Warehime, 2013, https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m .
 % * _wave_spectrum_ – calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).
+% * _wave_spectrum_params_ - integrate a 2-D spectra to obtain wave parameters
 % * _wrm_animation_ - animation of model spectra timeseries.
 % * _wrm_runmovie_ - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.
 

@@ -4,7 +4,7 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
 % NAME
 %   WRM_Mesh.m
 % PURPOSE
-%   Generate trinagular mesh of nearshore area from a Cartesian grid
+%   Generate triangular mesh of nearshore area from a Cartesian grid
 % USAGE
 %   obj = WRM_Mesh.setInput(mobj); %mobj is a handle to Main UI
 %   obj = WRM_Mesh.runModel(mobj);
@@ -20,12 +20,14 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
         %abstract properties in muiPropertyUI to define input parameters
         PropertyLabels = {'Upper shore level',...
                           'Shore mesh size',...
-                          'Seaward mesh size',...
-                          'Edge mesh size',...
+                          'Boundary mesh size',...
                           'Maximum radius-edge ratio',...
-                          'Edge-Element normalised length threshold',...
-                          'Tria-Element normalised length threshold',...
-                          'Gradient limit'};
+                          'Gradient limit',...
+                          'Edge-Element length threshold',...
+                          'Tria-Element length threshold',...
+                          'Include mesh optimisation (1/0)',...
+                          };
+
         %abstract properties in muiPropertyUI for tab display
         TabDisplay   %structure defines how the property table is displayed 
 %         Tri          %triangulation object
@@ -40,13 +42,13 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
 
     properties
         zhw = 5             %zhw is highest bed level to define shoreline
-        minshore = 50       %minimum mesh size along shoreline
-        minsea = 1000       %minimum mesh size along seaward boundary
-        minbound = 1000     %minimum mesh size along edge boundaries        
-        rho2 = 1.01;        %the maximum allowable radius-edge ratio
-        siz1 = 1.1;         %normalised rel. length threshold for edge-elements
-        siz2 = 1.1;         %normalised rel. length threshold for tria-elements
-        dhdx = 0.2;         %scalar gradient-limit used in limhfn2
+        minshore = 50       %mesh size along shoreline
+        minbound = 1000     %mesh size along boundaries        
+        rho2 = 1.025        %the maximum allowable radius-edge ratio
+        dhdx = 0.2          %scalar gradient-limit used in limhfn2
+        siz1 = 1.333        %normalised rel. length threshold for edge-elements
+        siz2 = 1.300        %normalised rel. length threshold for tria-elements  
+        isopt = true        %include optimisation if true (ie mesh smooting)
     end   
 %%   
     methods (Access=protected)
@@ -94,21 +96,15 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             shore_xy = getShoreline(obj,grid);           %extract shoreline
             if isempty(shore_xy), return; end
 
-            [node,edge] = getMeshBoundary(obj,shore_xy); %mesh boundary polygon
+            [node,edge] = getMeshBoundary(obj,shore_xy,grid); %mesh boundary polygon
             if isempty(node), return; end
+            %add internal refinement
+            % [node,edge,part} = add internal points
+            part{1} = 1:length(edge);
 
-            options = getPropertiesStruct(obj);
-            options.kind = obj.kind; options.disp = obj.disp;
-            %the generation of the mesh requires mesh2D
-                %check present???
-            %compute a size-estimate for a multiply-connected geometry
-            [vlfs,tlfs, hlfs] = lfshfn2(node,edge,[],options);
-            %spatial-indexing structure for a 2-simplex triangulation embedded in the two-dimensional plane.
-            [slfs] = idxtri2(vlfs,tlfs);
-            hfun = @trihfn2;            %evaluate a discrete mesh-size function        
-            %construct mesh using (Frontal)-Delaunay-refinement for 
-            %two-dimensional, polygonal geometries
-            [vert,~,tria,~] = refine2(node,edge,[],options,hfun,vlfs,tlfs,slfs,hlfs);
+            %now generate grid using mesh2d
+            [vert,tria] = get_mesh2d(obj,node,edge,part);
+
             %convert to a triangulation object
             Tri = triangulation(tria,vert);
             %find elevations on triangulated mesh
@@ -179,6 +175,8 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             M = contourc(grid.x,grid.y,grid.z',[obj.zhw,obj.zhw]);
             hold off
             shore_xy = M(:,2:end);
+%             idx = shore_xy(1,:)==0 & shore_xy(2,:)==0;
+%             shore_xy(:,idx) = [];
             delete(hf)
             
             %create accept button figure
@@ -193,8 +191,9 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             ok = 0;
             while ok<1
                 waitfor(h_but,'Tag');
-                if ~ishandle(h_but) || strcmp(h_but.Tag,'Quit')
-                    %this handles the user deleting figure window    
+                if ~ishandle(h_but) %this handles the user deleting figure window    
+                   shore_xy = []; return;
+                elseif strcmp(h_but.Tag,'Quit')                    
                    shore_xy = []; ok = 1;
                 elseif strcmp(h_but.Tag,'Smooth')
                    %Do something
@@ -211,29 +210,9 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             delete(h_plt.Parent)
         end
 %%
-        function [node,edge] = getMeshBoundary(obj,shore_xy)
+        function [node,edge] = getMeshBoundary(obj,shore_xy,grid)
             %construct defintion of nodes and edges for mesh
-            %interpolate shoreline to user specified mesh size
-            shorelength = sum(vecnorm(diff(shore_xy'),2,2));
-            shorepts = round(shorelength/obj.minshore);
-            newshore_xy = curvspace(shore_xy',shorepts);
-
-            %construct seaward boundaries of mesh using user define mesh sizes
-            xmax = newshore_xy(end,1);
-            lbound = 0:obj.minbound:newshore_xy(1,2);
-            left_bound = zeros(length(lbound),2);
-            left_bound(:,2) = lbound;
-            rbound = fliplr(0:obj.minbound:newshore_xy(end,2));
-            right_bound = ones(length(rbound),2);
-            right_bound(:,2) = rbound;
-            right_bound(:,1) = right_bound(:,1)*xmax;
-            sbound = fliplr(0:obj.minsea:xmax);
-            sea_bound = zeros(length(sbound)-2,2);
-            sea_bound(:,1) = sbound(2:end-1);
-
-            %initialise inputs for refine2
-            %node defines mesh boundary as an N-by-2 array of polygonal vertices
-            node = [left_bound;newshore_xy;right_bound;sea_bound];
+            node = setBoundary(obj,shore_xy);            
             % node = [[0,0];newshore_xy;[max(x),0]];
 
             %edge is an E-by-2 array of edge indexing, where each row in edge
@@ -246,24 +225,81 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             figtitle = 'Mesh boundary selection';
             promptxt = 'Accept mesh boundary?';
             tag = 'MeshFig'; %used for collective deletes of a group
-            butnames = {'Yes','No'};
+            butnames = {'Yes','Adjust','No'};
             [h_plt,h_but] = acceptfigure(figtitle,promptxt,tag,butnames);
             ax = axes(h_plt);
-            plot(ax,node(:,1),node(:,2),'.-')
+            hp = plot(ax,node(:,1),node(:,2),'.-');
             ax.XLim = ax.XLim*1.05 - ax.XLim(2)*0.025;
             ax.YLim = ax.YLim*1.05 - ax.YLim(2)*0.025;
 
             ok = 0;
             while ok<1
                 waitfor(h_but,'Tag');
-                if ~ishandle(h_but) || strcmp(h_but.Tag,'No')
-                    %this handles the user deleting figure window    
-                   node = []; ok = 1;
+                if ~ishandle(h_but) %this handles the user deleting figure window
+                    node = []; return;
+                elseif strcmp(h_but.Tag,'No')
+                    node = []; ok = 1;
+                elseif strcmp(h_but.Tag,'Adjust')
+                    obj = editProperties(obj);
+                    shore_xy = getShoreline(obj,grid);           %extract shoreline
+                    if isempty(shore_xy)
+                        node = []; 
+                        delete(h_plt.Parent); return; 
+                    end
+                    node = setBoundary(obj,shore_xy);
+                    hp.XData = node(:,1);
+                    hp.YData = node(:,2);
                 else
-                   ok = 1;
-                end  
+                    ok = 1;
+                end
             end
             delete(h_plt.Parent)
+        end
+%%
+        function node = setBoundary(obj,shore_xy)
+            %create the boundary with specified limits
+
+            shorelength = sum(vecnorm(diff(shore_xy'),2,2));
+            %interpolate shoreline to user specified mesh size
+            shorepts = round(shorelength/obj.minshore);
+            newshore_xy = curvspace(shore_xy',shorepts);
+
+            %construct seaward boundaries of mesh using user define mesh sizes
+            xmax = max(newshore_xy(:,1));
+            lbound = 0:obj.minbound:newshore_xy(1,2);
+            left_bound = zeros(length(lbound),2);
+            left_bound(:,2) = lbound;
+            rbound = fliplr(0:obj.minbound:newshore_xy(end,2));
+            right_bound = ones(length(rbound),2);
+            right_bound(:,2) = rbound;
+            right_bound(:,1) = right_bound(:,1)*xmax;
+            sbound = fliplr(0:obj.minbound:xmax);
+            sea_bound = zeros(length(sbound)-2,2);
+            sea_bound(:,1) = sbound(2:end-1);
+
+            %initialise inputs for refine2
+            %node defines mesh boundary as an N-by-2 array of polygonal vertices
+            node = [left_bound;newshore_xy;right_bound;sea_bound];    
+        end
+%%
+        function [vert,tria] = get_mesh2d(obj,node,edge,part)
+            %use mesh2d to generate the verticies and triangles for a mesh
+            options = getPropertiesStruct(obj);
+            options.kind = obj.kind; options.disp = obj.disp;
+            %the generation of the mesh requires mesh2D
+                %check present???
+            %compute a size-estimate for a multiply-connected geometry
+            [vlfs,tlfs, hlfs] = lfshfn2(node,edge,part,options);
+            %spatial-indexing structure for a 2-simplex triangulation embedded in the two-dimensional plane.
+            [slfs] = idxtri2(vlfs,tlfs);
+            hfun = @trihfn2;            %evaluate a discrete mesh-size function        
+            %construct mesh using (Frontal)-Delaunay-refinement for 
+            %two-dimensional, polygonal geometries
+            [vert,etri,tria,tnum] = refine2(node,edge,part,options,hfun,vlfs,tlfs,slfs,hlfs);
+            %optimize the mesh using smooth2
+            if options.isopt
+                [vert,~,tria,~] = smooth2(vert,etri,tria,tnum,options);
+            end
         end
 %%
         function isok = checkplot(~,Tri,zlevel)
@@ -289,9 +325,10 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
 
             isok = false;
             waitfor(h_but,'Tag');
-            if ~ishandle(h_but) || strcmp(h_but.Tag,'No')
+            if ~ishandle(h_but) 
                 %this handles the user deleting figure window    
-            else
+                return;
+            elseif strcmp(h_but.Tag,'Yes')
                isok = true;
             end  
             delete(h_plt.Parent)

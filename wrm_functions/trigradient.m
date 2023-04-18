@@ -46,6 +46,7 @@ function [zx,zy] = trigradient(x,y,z,t,opt)
 %   Copyright 2013 
 %   Mick Warehime
 %   $Version 2.1$ $Date: 2013/04/05$
+%   https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m
 
 % find the delaunay triangulation of the scaterred data if none provided
 if nargin<4; t = delaunay(x,y); opt ='normal';end

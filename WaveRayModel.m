@@ -15,8 +15,8 @@ classdef WaveRayModel < muiModelUI
 % 
     properties  (Access = protected)
         %implement properties defined as Abstract in muiModelUI
-        vNumber = '1.0'
-        vDate   = 'Jan 2023'
+        vNumber = '1.1'
+        vDate   = 'May 2023'
         modelName = 'WaveRayModel'                       
         %Properties defined in muiModelUI that need to be defined in setGui
         % ModelInputs  %classes required by model: used in isValidModel check 
@@ -266,7 +266,7 @@ classdef WaveRayModel < muiModelUI
 %%
         function gridMenuOptions(obj,src,~)
             %callback functions for grid tools options
-            gridclasses = {'GD_ImportData'}; %add other classes if needed
+            gridclasses = {'GD_ImportData','WRM_Bathy'}; %add other classes if needed
             GD_ImportData.gridMenuOptions(obj,src,gridclasses);
             DrawMap(obj);
         end

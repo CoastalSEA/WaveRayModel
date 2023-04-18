@@ -88,6 +88,7 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
            grid = getBathy(obj);
            if isempty(grid), obj = []; return; end
            [grid,rotate] = orientGrid(obj,grid); %option to flip or rotate grid 
+           if isempty(grid), obj = []; return; end
            newgrid(1,:,:) = grid.z; 
 %--------------------------------------------------------------------------
 % Save results
@@ -154,37 +155,19 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
 
             %set crosshore profile or mound based on selection
             switch obj.BathyType
-                case 1                                 %linear slope
+                case {1,3}                                 %linear slope
                     bedslope = z1km/1000;
                     zp = [zBC;grid.y(1:end-1)*bedslope];
                 case 2                                 %Dean's profile
                     [~,zp,~] = deanbeachprofile(grid.y',zBC,z1km,ubs,false);
                     %point for upper beach above msl added, so remove outer point
                     zp = zp(1:end-1); 
-                case 3                                 %linear slope and mound
-                    bedslope = z1km/1000;
-                    zp = [zBC;grid.y(1:end-1)*bedslope];
-                    promptxt = {'Height of mound','Radius of mound'};
-                    defaults = {'2',num2str(4*delx)};
-                    answer = inputdlg(promptxt,'Mound',1,defaults);
-                    if isempty(answer), grid = []; return; end
-                    hmound = str2double(answer{1});
-                    hrad = str2double(answer{2});
-                    xm = grid.x(1)+(grid.x(end)-grid.x(1))/2;
-                    ym = grid.y(1)+(grid.y(end)-grid.y(1))/2;
-                    Circ = get_circle(obj,hrad,xm,ym); 
-                    [X,Y] = meshgrid(grid.x,grid.y);
-                    XY = [reshape(X,[],1),reshape(Y,[],1)]; %x,y vectors
-                    TFin = isinterior(Circ,XY);
-                    grid.z = fliplr(repmat(zp,1,gobj.Xint+1)');
-                    idx = reshape(TFin,size(X))';
-                    grid.z(idx) = grid.z(idx)+hmound;
-                    return;
                 otherwise
                     return;
             end
     
             %add bay if required
+            [X,Y] = meshgrid(grid.x,grid.y);
             if obj.isbay
                 inp = setBayProperties(obj,gobj.XaxisLimits(2));
                 [E,N,~,~,~] = crenulate_bays(inp);
@@ -198,13 +181,37 @@ classdef WRM_Bathy < muiPropertyUI & GDinterface
                     xyz = [xyz;[xi,grid.y+offset(i),zp]];  %#ok<AGROW> %created scattered xyz tuples.
                 end
                 F = scatteredInterpolant(xyz(:,1),xyz(:,2),xyz(:,3),'linear');
-                [X,Y] = meshgrid(grid.x,grid.y);
                 h = F(X,Y)';
                 h(h>zBC) = zBC;
                 grid.z = fliplr(h);               %assume relative to zero datum
             else
                 grid.z = fliplr(repmat(zp,1,gobj.Xint+1)');
             end
+
+            %add mound if required
+            if obj.BathyType==3
+                %prompt user for dimensions of mound
+                promptxt = {'Height of mound','Radius of mound'};
+                defaults = {'3',num2str(10*delx)};
+                answer = inputdlg(promptxt,'Mound',1,defaults);
+                if isempty(answer), grid = []; return; end
+                hmound = str2double(answer{1});
+                hrad = str2double(answer{2});
+
+                %create spherical mound
+                [xs,ys,zs] = sphere;
+                idx = zs<0;
+                xs(idx) = [];
+                ys(idx) = [];
+                zs(idx) = [];
+                xs = xs*hrad+max(grid.x)/2;
+                ys = ys*hrad+max(grid.y)*2/3;
+                zs = zs*hmound;
+                F = scatteredInterpolant(xs',ys',zs');
+                Zs = F(X,Y)';
+                Zs(Zs<0) = 0;
+                grid.z = grid.z+Zs;               %assume relative to zero datum
+            end 
         end
 %%
         function inp = setBayProperties(~,xlim)

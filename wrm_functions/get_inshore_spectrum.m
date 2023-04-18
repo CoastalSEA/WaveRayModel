@@ -123,8 +123,7 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
         phi = kit_limit(freq,Dims.depi); %apply saturation to depth at site
         SGi = phi.*SGi;
     end
-
-    
+  
     Dims.freq = freq; Dims.dir = beta;  %return dimensions used
 end
 %%

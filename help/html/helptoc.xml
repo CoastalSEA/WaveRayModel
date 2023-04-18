@@ -24,7 +24,6 @@
             image="HelpIcon.USER_GUIDE">WaveRayModel User Guide
             <tocitem target="wrm_menus.html">Menu options</tocitem>    
             <tocitem target="wrm_tabs.html">Tab options</tocitem>    
-            <tocitem target="wrm_classes.html">Classes and Functions</tocitem>
             <tocitem target="wrm_example.html">WaveRayModel example</tocitem>  
         </tocitem>
         <!-- Developers Guide comes next -->
@@ -32,7 +31,6 @@
             image="HelpIcon.USER_GUIDE">WaveRayModel Developers Guide
             <tocitem target="wrm_classes.html">WaveRayModel classes and functions</tocitem>
             <tocitem target="grid_class_fcns.html">Grid classes and functions</tocitem>
-            <tocitem target="fgdinterface.html">FGDinterface abstract class</tocitem>
             <tocitem target="gdinterface.html">GDinterface abstract class</tocitem>
         </tocitem>
     </tocitem>    

@@ -35,47 +35,30 @@ function output = get_inshore_wave(SGo,SGi,Dims,intable,sp)
 
     %spectrum dimensions and parameter settings
     freq = Dims.freq; dir = Dims.dir; depi = Dims.depi; swl = intable.swl;
-    dir_int = abs(median(diff(dir))); %interval used to interpolate directions (deg)
-    radint = deg2rad(dir_int);
-    raddir = deg2rad(dir);
-    m0 = trapz(radint,abs(trapz(freq,SGo,2)));  %integral of offshore spectrum
-    m0i = trapz(radint,abs(trapz(freq,SGi,2))); %integral of inshore spectrum
-    SGdiro = trapz(raddir,abs(trapz(freq,raddir'.*SGo,2)));%offshore direction moment
-    SGdiri = trapz(raddir,abs(trapz(freq,raddir'.*SGi,2)));%inshore direction moment
+    p0 = wave_spectrum_params(SGo,freq,dir); %parameters of offshore spectrum
+    pi = wave_spectrum_params(SGi,freq,dir); %parameters of inshore spectrum
 
     %input parameters
     if sp.ismodel
         Hso = intable.Hs;
-        Tp = intable.Tp;
+        Tpo = intable.Tp;
         Dir0 = intable.Dir;
     else
         Hso = intable.Hs;     
-        Dir0 = rad2deg(SGdiro/m0);
-        %[~,idd] = min(abs(intable.Dir-Dir0));
-        %mnTp =1/sp.freq(idd);
-        %check Hs by integrating spectral energy: 4.sqrt(mo)
-        % cfHso = 4*sqrt(m0);
-        [~,idx] = max(intable.S); 
-        Tp = 1/sp.freq(idx);
-        %pkDir0 = intable.Dir(idx);        
+        Tpo = p0.Tp;
+        Dir0 = p0.Dir0;
     end
-    
+    T2o = p0.T2;
+
     %transfer coefficients
-    kw = sqrt(m0i/m0);                %wave transfer coefficient
-    [~,idf] = max(SGi,[],'All');      %index of peak energy
-    [idir,ifrq] = ind2sub([length(dir),length(freq)],idf);
-    Diripk = dir(idir);               %direction at inshore peak
-    Tpi =1/freq(ifrq);                %period at inshore peak
-    ktp = Tpi/Tp;                     %peak period coefficient
-    Diri = rad2deg(SGdiri/m0i);       %inshore mean direction
+    kw = sqrt(pi.m0/p0.m0);
+    Diri = pi.Dir0;
+    Diripk = pi.Dirpk;
+    Tpi = pi.Tp;
+    T2i = pi.T2;
+    ktp = Tpi/Tpo;                    %peak period coefficient
     kd = Diri-Dir0;                   %direction shift
-
-    SGif2 = trapz(radint,abs(trapz(freq,(freq.^2).*SGi,2))); %inshore f^2 moment
-    T2i = sqrt(m0i/SGif2);
-
-    SGof2 = trapz(radint,abs(trapz(freq,(freq.^2).*SGi,2))); %offshore f^2 moment
-    T2o = sqrt(m0/SGof2);
-    kt2 = T2i/T2o;                     %mean period coefficient
+    kt2 = T2i/T2o;                    %mean period coefficient
 
     Hsi = Hso*kw;                      %inshore wave height (Hmo)
     % Hmi = 4*sqrt(m0i);               %check of inshore Hs

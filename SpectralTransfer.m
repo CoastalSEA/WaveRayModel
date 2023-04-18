@@ -242,7 +242,7 @@ classdef SpectralTransfer < muiDataSet
             %add offshore and inshore plots of spectra
             [s1,s2] = off_in_plot(obj,1./Dims.freq,Dims.dir,SGo,SGi,figax,figtype);
             
-            %titles are source dependent
+            %offshore titles are source dependent
             if strcmp(sel.source,'Wave')
                 sgtxt = sprintf('%s, gamma=%.2g, and %s, n=%d ',sel.form,...
                                         sel.gamma,sel.spread,sel.nspread);
@@ -257,10 +257,12 @@ classdef SpectralTransfer < muiDataSet
                 ofd = off.tsdst;    
                 sgtxt = sprintf('Measured spectrum at %s on %s',...
                                    ofd.Description,string(ofd.RowNames));
-                st1 = title(s1,sprintf('Hso=%.2f m; Tz=%.1f s; swl=%.2f mOD',...
-                                ofd.Hs,ofd.Tz,off.swl),'Margin',1);      
+                p = wave_spectrum_params(SGo,Dims.freq,Dims.dir);
+                st1 = title(s1,sprintf('Hso=%.2f m; Tz=%.1f s; Dir=%.3g degTN; swl=%.2f mOD',...
+                                ofd.Hs,ofd.Tz,p.Dir0,off.swl),'Margin',1);      
             end
-
+            
+            %inshore titles
             sgtitle(sgtxt,'FontSize',12,'Margin',1);
             st2 = title(s2,sprintf('Hsi=%.2f m; Tp=%.1f s; Dir=%.3g degTN; hmin=%.2f m',...
                             ins.Hsi,ins.Tpi,ins.Diri,ins.depi),'Margin',1);   

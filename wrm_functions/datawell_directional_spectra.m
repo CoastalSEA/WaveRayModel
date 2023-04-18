@@ -76,7 +76,7 @@ function D = datawell_directional_spectra(dirs,isplot,varargin)
     m2 = 0.5*(ku.*sig.^4-6+8*m1);
     n2 = -sk.*((1-m2)/2).^1.5;
 
-    %compute the directional components for directiona and frequency range
+    %compute the directional components for direction and frequency range
     x = mod(dirs*pi/180,2*pi);
     ndir = length(x);
     D = zeros(ndir,nfreq);

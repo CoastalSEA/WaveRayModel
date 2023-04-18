@@ -5,7 +5,7 @@ function newray = mesh_arc_ray(cmesh,ray,tol)
 %   mesh_arc_ray.m
 % PURPOSE
 %   compute the exit position and direction of a ray entering a triangular
-%   element at the position and direction defined by the incoming ray.
+%   mesh element at the position and direction defined by the incoming ray.
 % USAGE
 %   newray = mesh_arc_ray(cgrid,ray,tol);
 % INPUTS
