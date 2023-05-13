@@ -94,6 +94,7 @@ function ison = is_axis_point(ray,uvr,tol)
 end
 %%
 function ison = IsPointOnLine(xy1,xy2,xy3)
+    %test whether point xy3 is on the line defined by xy1 and xy2
     % Line equation: y = m*x + b;  by Jan on Matlab Forum
     Limit = 100 * eps(max(abs([xy1,xy2,xy3])));
     if xy1(1) ~= xy2(1)

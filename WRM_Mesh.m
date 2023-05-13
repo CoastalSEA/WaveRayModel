@@ -73,9 +73,6 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             setClassObj(mobj,'Inputs','WRM_Bathy',obj);
         end   
 %%
-%--------------------------------------------------------------------------
-% Model implementation
-%--------------------------------------------------------------------------  
         function obj = runModel(mobj)
             %function to run a simple 2D diffusion model
             obj = WRM_Mesh.setInput(mobj);
@@ -93,14 +90,21 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             grid = getGrid(grdobj,1);                    %source grid
             if isempty(grid.z), return; end
 
-            shore_xy = getShoreline(obj,grid);           %extract shoreline
-            if isempty(shore_xy), return; end
-
-            [node,edge] = getMeshBoundary(obj,shore_xy,grid); %mesh boundary polygon
-            if isempty(node), return; end
-            %add internal refinement
-            % [node,edge,part} = add internal points
-            part{1} = 1:length(edge);
+            answer = questdlg('Load or create mesh boundary?','Mesh',...
+                                                'Load','Create','Create');
+            if strcmp(answer,'Load')
+                %load mesh boundary from a file
+                [node,edge,part] = WRM_Mesh.loadMeshBoundary;
+            else
+                shore_xy = getShoreline(obj,grid);           %extract shoreline
+                if isempty(shore_xy), return; end
+    
+                [node,edge] = getMeshBoundary(obj,shore_xy,grid); %mesh boundary polygon
+                if isempty(node), return; end
+                %add internal refinement
+                % [node,edge,part} = add internal points
+                part{1} = 1:length(edge);
+            end
 
             %now generate grid using mesh2d
             [vert,tria] = get_mesh2d(obj,node,edge,part);
@@ -126,6 +130,24 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             setDataSetRecord(obj,muicat,dst,'mesh');
             getdialog('Run complete');         
         end
+%%
+        function [node,edge,part] = loadMeshBoundary()
+            %load a mesh boundary from a text file with a two column vector
+            %listing of nodes
+            node = []; edge = []; part = [];
+            [filename,path,~] = getfiles('MultiSelect','off','PromptText','Select file:');
+            if filename==0, return; end  %user cancelled
+            dataSpec = '%f %f';
+            nhead = 1;
+            [data,~] = readinputfile([path,filename],nhead,dataSpec); %see muifunctions
+            node = [data{1},data{2}];
+            range = 1:1:size(node,1);
+            links = [2:1:size(node,1),1];
+            edge = [range',links'];
+            %add internal refinement
+            % [node,edge,part} = add internal points
+            part{1} = 1:length(edge);
+        end
     end 
 %%
     methods
@@ -147,6 +169,7 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
     
             %plot form as a contour plot
             trisurf(tria,verts(:,1),verts(:,2),zlevel);
+            view(2)
             %use the YlGnBu colormap generated in cbrewer. This then needs
             %to be interpolated to get a smooth surface plot
             cmap = cmap_selection(20);
@@ -175,15 +198,13 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             M = contourc(grid.x,grid.y,grid.z',[obj.zhw,obj.zhw]);
             hold off
             shore_xy = M(:,2:end);
-%             idx = shore_xy(1,:)==0 & shore_xy(2,:)==0;
-%             shore_xy(:,idx) = [];
             delete(hf)
             
             %create accept button figure
             figtitle = 'Mesh shoreline selection';
-            promptxt = 'Accept shoreline?';
+            promptxt = 'Accept of adjust shoreline?';
             tag = 'MeshFig'; %used for collective deletes of a group
-            butnames = {'Yes','Smooth','Quit'};
+            butnames = {'Accept','Smooth','Clean','Reset','Quit'};
             [h_plt,h_but] = acceptfigure(figtitle,promptxt,tag,butnames);
             ax = axes(h_plt);
             plot(ax,shore_xy(1,:),shore_xy(2,:))
@@ -191,21 +212,43 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             ok = 0;
             while ok<1
                 waitfor(h_but,'Tag');
-                if ~ishandle(h_but) %this handles the user deleting figure window    
-                   shore_xy = []; return;
-                elseif strcmp(h_but.Tag,'Quit')                    
-                   shore_xy = []; ok = 1;
+                if ~ishandle(h_but) %this handles the user deleting figure window
+                    shore_xy = []; return;
+                elseif strcmp(h_but.Tag,'Quit')
+                    shore_xy = []; ok = 1;
                 elseif strcmp(h_but.Tag,'Smooth')
-                   %Do something
-                   h_but.Tag = '';
-                   shore = smoothdata(shore_xy(2,:),'sgolay');
-                   hold on 
-                   plot(shore_xy(1,:),shore)
-                   hold off
-                   shore_xy(2,:) = shore;
+                    %smooth the shoreline
+                    h_but.Tag = '';
+                    shore = smoothdata(shore_xy(2,:),'sgolay','Degree',4,'SamplePoints',shore_xy(1,:));
+                    hold on
+                    plot(ax,shore_xy(1,:),shore)
+                    hold off
+                    shore_xy(2,:) = shore;
+                elseif strcmp(h_but.Tag,'Clean')
+                    %remove points outside user defined x-y range
+                    h_but.Tag = '';
+                    xmnmx = minmax(shore_xy(1,:));
+                    ymnmx = minmax(shore_xy(2,:));
+                    promptxt = {'Min-Max X','Min-Max Y'};
+                    defaults = {num2str(xmnmx),num2str(ymnmx)};
+                    answer = inputdlg(promptxt,'Shore',1,defaults);
+                    if ~isempty(answer)
+                        xx = str2num(answer{1}); %#ok<ST2NM> returns vector
+                        yy = str2num(answer{2}); %#ok<ST2NM> 
+                        idx = shore_xy(1,:)<xx(1) | shore_xy(1,:)>xx(2);
+                        idy = shore_xy(2,:)<yy(1) | shore_xy(2,:)>yy(2);
+                        idd = idx | idy;
+                        shore_xy(:,idd) = [];    
+                        [~,ic] = unique(shore_xy(1,:),'sorted');
+                        shore_xy = shore_xy(:,ic);
+                        plot(ax,shore_xy(1,:),shore_xy(2,:))
+                    end
+                elseif strcmp(h_but.Tag,'Reset')
+                    shore_xy = M(:,2:end);
+                    plot(ax,shore_xy(1,:),shore_xy(2,:))
                 else
-                   ok = 1;
-                end  
+                    ok = 1;
+                end
             end
             delete(h_plt.Parent)
         end

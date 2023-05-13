@@ -24,6 +24,8 @@ classdef Ray < handle
     properties
         Track         %table of track properties: xr,yr,alpha,k,quad,edge  
         outFlag = 0   %flag to indicate nature of ray termination
+                      % 1 - successful ray;   -1 - ray ends on shore
+                                        %-2 - radius too small; -3 - intersection not found
     end
     
     methods
@@ -51,7 +53,10 @@ classdef Ray < handle
             else
                 ray = gridRay(obj,cgrid,xys,alpha,hlimit,tol);
             end
-            
+            if obj.outFlag==0
+                %find why????????
+                fprintf('%d',height(ray))               
+            end
             obj.Track = dstable(ray,'DSproperties',modelDSproperties(obj));
         end
     end

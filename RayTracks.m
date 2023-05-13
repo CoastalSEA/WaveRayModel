@@ -146,11 +146,9 @@ classdef RayTracks < muiDataSet
             %grid with arrows showing the defined wave direction
             runobj = mobj.Inputs.WRM_FT_Params;
             promptxt = 'Select grid to use for wave model'; 
-            gridclasses = {'WRM_Bathy','GD_ImportData'};
+            gridclasses = {'WRM_Bathy','GD_ImportData','WRM_Mesh'};
             grdobj = selectCaseObj(mobj.Cases,[],gridclasses,promptxt);
             if isempty(grdobj), return; end
-            grid = getGrid(grdobj,1);
-            if isempty(grid.z), return; end
 
             %line vector of equal spaced start points
             [x_start,y_start] = RayTracks.getStartPoints(runobj.leftXY,...
@@ -175,15 +173,24 @@ classdef RayTracks < muiDataSet
             %check the depths of the bacakward ray start point for the range of
             %water levels specified
             promptxt = 'Select grid to use for wave model'; 
-            gridclasses = {'WRM_Bathy','GD_ImportData'};
+            gridclasses = {'WRM_Bathy','GD_ImportData','WRM_Mesh'};
             grdobj = selectCaseObj(mobj.Cases,[],gridclasses,promptxt);
             if isempty(grdobj), return; end
-            grid = getGrid(grdobj,1);
-            if isempty(grid.z), return; end
 
             spnt = mobj.Inputs.WRM_BT_Params.StartPoint;
-            [X,Y] = meshgrid(grid.x,grid.y);
-            bed = interp2(X,Y,grid.z',spnt(1),spnt(2),'linear');
+            if isa(grdobj,'WRM_Mesh')
+                method = 'natural';
+                mesh = grdobj.Data.Dataset.Tri{1};
+                zlevel = grdobj.Data.Dataset.zlevel{1};
+                X = mesh.Points(:,1); Y = mesh.Points(:,2);
+                bed = griddata(X,Y,zlevel,spnt(1),spnt(2),method);    
+            else
+                grid = getGrid(grdobj,1);
+                if isempty(grid.z), return; end                
+                [X,Y] = meshgrid(grid.x,grid.y);
+                bed = interp2(X,Y,grid.z',spnt(1),spnt(2),'linear');
+            end
+
             wls =  mobj.Inputs.WRM_RunParams.WaterLevelRange;
             if isscalar(wls)
                 msgtxt = sprintf('Water depth at start point: %.2f m',wls-bed); 
@@ -417,7 +424,7 @@ classdef RayTracks < muiDataSet
                         npt = height(rayobj.Track.DataTable);
                         depths(i,j,k) = rayobj.Track.DataTable.depth(1);                        
                         if islog
-                            lines = sprintf('Ray dir %.1f, period %.1f, level %.1f, points %d, outflag %d',...
+                            lines = sprintf('Ray dir %.3f, period %.1f, level %.1f, points %d, outflag %d',...
                                                  phi(i),T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
                             writelines(lines,filename,WriteMode="append")
                         end
@@ -497,7 +504,7 @@ classdef RayTracks < muiDataSet
                 axis(hsax,'off')
                 linkaxes([ax,hsax]);      %link the two overlaying axes 
                 hsax.Position = ax.Position;
-                axis tight
+                %axis tight %does not work with mesh plotted using 
 
                 %colormap(hsax,flipud(colormap(hsax)))
                 cb = colorbar(hsax,'Color',[1,1,1]);
@@ -507,14 +514,20 @@ classdef RayTracks < muiDataSet
                 clim(hsax,[min(var), max(var)]*1.05);
             elseif opt(3)==1
                 hold(ax,"on")
-                for i=1:nrays
+                zmx = ax.ZLim(2);
+                for i=1:nrays                    
                     xr = obj.Data.Dataset.xr{i,opt(1),opt(2)};
                     yr = obj.Data.Dataset.yr{i,opt(1),opt(2)};
                     plot(ax,xr,yr,'-k');
-                    if obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))<-1
-                        plot(ax,xr(end),yr(end),'vr','MarkerSize',4)
-                    elseif obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))<0    
-                        plot(ax,xr(end),yr(end),'xr','MarkerSize',4)
+                    if obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==-3
+                        %flag=-3; intersection of arc and element not found
+                        plot3(ax,xr(end),yr(end),zmx,'*r','MarkerSize',4)
+                    elseif obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==0
+                        %flag=-2; radius too small???
+                        plot3(ax,xr(end),yr(end),zmx,'vr','MarkerSize',4)
+                    elseif obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==-1
+                        %flag=-1; ray returns to shore and stops in shallow water
+                        plot3(ax,xr(end),yr(end),zmx,'xr','MarkerSize',4)
                     end
                 end
                 hold(ax,"off")

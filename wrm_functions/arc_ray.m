@@ -21,7 +21,7 @@ function newray = arc_ray(cgrid,ray,tol)
 %   newray - table of outgoing ray position (xr,yr), direction, alpha, local
 %            node index, k, quadrant being entered, quad, side of element, edge
 %            - returned empty if new point is outside grid domain
-%            - returned as -2 if radius is too small (<0.5) 
+                %            - returned as -2 if radius is too small (<0.5) 
 % NOTES
 %   Ray method based on Abernethy C L and Gilbert G, 1975, Refraction of 
 %   wave spectra, Report No: INT 117,pp. 1-166, Wallingford, UK.
@@ -77,6 +77,10 @@ function newray = arc_ray(cgrid,ray,tol)
     end
     %find the intersection of the arc segment with quad triangle
     uvray = get_intersection(ray,uvArc,[ur,vr],tol);
+    if isempty(uvray)
+        %intersection not found
+        newray = -3; return;
+    end
     xr = xi+uvray(1)*delta; yr = yi+uvray(2)*delta;
     kr = dsearchn(XY,[xr,yr]);
     %wave properties at new ray point
@@ -118,7 +122,7 @@ function [phi,r,uc,vc] = arc_properties(cgrid,ur,vr,ray,tol)
     Ndc = un*dcrx+vn*dcry;
     R = -cr/Ndc;                       %radius in grid coordinates
     r = R/delta;                       %radius in local coordinates
-    if abs(r)<tol.radius
+    if abs(r)<tol.radius               %limiting radius*
         uc = ur+r*un;
         vc = vr+r*vn;
     else
@@ -129,12 +133,12 @@ end
 function [uv_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
-    N = 20;                                       %number of points in half-Arc
+    N = 20;                                        %number of points in half-Arc
     rt2 = sqrt(2);
-    rad = abs(radius);
+    absRadius = abs(radius);
     alpha = mod(phi-pi/2,2*pi);
-    
-    if rad>=tol.radius
+
+    if absRadius>=tol.radius                       %limiting radius(*)
         %straight line segment will suffice       
         [ue,ve] = pol2cart(alpha,rt2); %vector from ray point in direction of alpha
                                        %use 2 to ensure line crosses a boundary
@@ -142,24 +146,32 @@ function [uv_arc] = get_arc(phi,radius,uc,vc,ur,vr,tol)
         [us,vs] = pol2cart(phi-pi/2,tol.dist);         
         uv_arc = [ur+us,vr+vs;ur+ue,vr+ve];       %ray vector line segment
         return;
-    elseif rad<1.0                                %radius is so small that it may not exit element
-        uv_arc = []; return;
     end
 
     phi = phi+pi;                                  %angle of normal from centre of arc
-    arcang = rt2/rad;                              %set arc segment based on radius
+    if absRadius>rt2
+        arcang = asin(min([rt2/absRadius,1]));     %set arc segment based on radius
+    else
+        arcang = 6.2;    N = 100;                  %6.2 rad = 355 deg most of circle
+    end
     %abstract Circle Function For Angles In Radians
     circr = @(radius,angle)  [radius*cos(angle)+uc,  radius*sin(angle)+vc]; 
-    r_angl = linspace(phi-arcang,phi-tol.angle, N);%angles Defining left Arc Segment (radians)
+    r_angl = linspace(phi-arcang,phi-tol.angle, N);%angles Defining right Arc Segment (radians)
     uv_arcl = circr(radius,r_angl');
-    r_angr = linspace(phi+tol.angle,phi+arcang, N);%angles Defining right Arc Segment (radians)
+    r_angr = linspace(phi+tol.angle,phi+arcang, N);%angles Defining left Arc Segment (radians)
     uv_arcr = circr(radius,r_angr');
     %find arc in direction of ray
-    ua1 = uv_arcl(1,1)-ur; va1 = uv_arcl(1,2)-vr;  %vector from ray point to first point on arc
+    dist = sqrt((uv_arcl(:,1)-ur).^2+(uv_arcl(1,2)-vr).^2);
+    [~,idx] = min(dist);                               %nearest point on arc to xr,yr
+    ua1 = uv_arcl(idx,1)-ur; va1 = uv_arcl(idx,2)-vr;  %vector from ray point to first point on arc
     arcl = mod(cart2pol(ua1,va1),2*pi);
-    ua2 = uv_arcr(1,1)-ur; va2 = uv_arcr(1,2)-vr;  %vector from ray point to first point on arc
+
+    dist = sqrt((uv_arcr(:,1)-ur).^2+(uv_arcr(1,2)-vr).^2);
+    [~,idx] = min(dist);                               %nearest point on arc to xr,yr
+    ua2 = uv_arcr(idx,1)-ur; va2 = uv_arcr(idx,2)-vr;  %vector from ray point to first point on arc
     arcr = mod(cart2pol(ua2,va2),2*pi);
-    angtol = 1.0;                                  %angle limit of +/-1.0 rads (57.3 deg)
+
+    angtol = 0.5;                                  %angle limit of +/-0.5 rads, 28.6 deg(*)
     bound = [alpha-angtol,alpha+angtol];
    
     if isangletol(arcl,bound)                      %check if arcl is within bound   
@@ -188,7 +200,7 @@ function alpha = exit_angle(phi,r,ur,vr,uvray,tol)
     % uvray - ray exit point out of element
     phi = mod(phi+pi,2*pi);                    %angle of normal from centre of arc
     L = sqrt((ur-uvray(1))^2+(vr-uvray(2))^2); %arc segment length
-    if abs(r)<tol.radius
+    if abs(r)<tol.radius                       %limiting radius(*)
         theta = 2*asin(L/2/r);                 %angle between entry and exit point
     else
         theta = 0;                             %straight line no change in direction

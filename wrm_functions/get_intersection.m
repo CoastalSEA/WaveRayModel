@@ -32,8 +32,9 @@ function uvray = get_intersection(ray,lineseg,uvr,tol)
     uvray = InterX(tri',lineseg')';
     if isempty(uvray) 
         plot_element(Tri,lineseg,uvr,ray)
-        errtxt = sprintf('quad %d uv [%.3g %.3g] with direction %.3g',ray.quad,uvr(1),uvr(2),ray.alpha);
-        error('Intersection with element not found in get_intersection 1\n%s\n',errtxt)
+%         errtxt = sprintf('quad %d uv [%.3g %.3g] with direction %.3g',ray.quad,uvr(1),uvr(2),ray.alpha);
+%         error('Intersection with element not found in get_intersection 1\n%s\n',errtxt)
+        return;
     end    
     entrypoint = ismembertol(uvray,uvr,tol.dist, 'DataScale', 1,'ByRows',true);  %tolerance 
     uvray(entrypoint,:) = [];
@@ -46,8 +47,8 @@ function uvray = get_intersection(ray,lineseg,uvr,tol)
 
     if isempty(uvray)
         plot_element(Tri,lineseg,uvr,ray)
-        errtxt = sprintf('quad %d uv [%.3g %.3g] with direction %.3g',ray.quad,uvr(1),uvr(2),ray.alpha);
-        error('Intersection with element not found in get_intersection 2\n%s\n',errtxt)
+%         errtxt = sprintf('quad %d uv [%.3g %.3g] with direction %.3g',ray.quad,uvr(1),uvr(2),ray.alpha);
+%         error('Intersection with element not found in get_intersection 2\n%s\n',errtxt)
     end      
 end
 %%

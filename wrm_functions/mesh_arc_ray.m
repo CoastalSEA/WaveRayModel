@@ -22,10 +22,11 @@ function newray = mesh_arc_ray(cmesh,ray,tol)
 %            local node index, k
 %            - returned empty if new point is outside grid domain
 %            - returned as -2 if radius is too small (<0.5) 
+%            - returned as -3 if intersection not found
 % NOTES
 %   Ray method based on Abernethy C L and Gilbert G, 1975, Refraction of 
 %   wave spectra, Report No: INT 117,pp. 1-166, Wallingford, UK.
-%   
+%   (*) indicates hard coded tolerances used for angle or distance checks
 % SEE ALSO
 %   
 %
@@ -48,11 +49,11 @@ function newray = mesh_arc_ray(cmesh,ray,tol)
 
     %get the centre of the arc that is tangential to the ray at xr,yr
     [phi,r,xc,yc] = arc_properties(cmesh,ray,tol);
-    xyArc = get_arc(phi,r,xc,yc,ray.xr,ray.yr,tol);
+    xyArc = get_arc(phi,r,xc,yc,ray,tol);
     Tri = get_element(cmesh,ray,tol);
     if isempty(Tri)
         newray = []; return; 
-    elseif any(isnan(xyArc))
+    elseif isnan(xyArc)
         plot_element(Tri,xyArc,[ray.xr,ray.yr],ray)
         error('Arc segment not found at xr=%.0f; yr=%.0f',ray.xr,ray.yr)
     elseif isempty(xyArc)
@@ -60,6 +61,10 @@ function newray = mesh_arc_ray(cmesh,ray,tol)
         newray = -2; return;
     end
     xyray = get_intersection(Tri,xyArc,[ray.xr,ray.yr],ray,tol);
+    if isempty(xyray)
+        %intersection not found
+        newray = -3; return;
+    end
     kr = nearestNeighbor(cmesh.Tri,xyray);
     %wave properties at new ray point
     xr = xyray(1); yr = xyray(2); quad = 0;
@@ -100,40 +105,48 @@ function [phi,R,xc,yc] = arc_properties(cmesh,ray,tol)
     end
 end
 %%
-function [xy_arc] = get_arc(phi,radius,xc,yc,xr,yr,tol)  
+function [xy_arc] = get_arc(phi,radius,xc,yc,ray,tol)  
     %calculate the coordinates of an arc either side of the radius vecor
     %from uc,vc to ur,vr.
-    N = 20;                                       %number of points in half-Arc
-    rt2 = tol.length;                             %maximum edge length
-    rad = abs(radius);
-    alpha = mod(phi-pi/2,2*pi);
+    N = 20;                                        %number of points in half-Arc
+    rt2 = tol.length;                              %maximum edge length
+    absRadius = abs(radius);
+    alpha = ray.alpha;
+    xr = ray.xr; yr = ray.yr;
     
-    if rad>=tol.radius
+    if absRadius>=tol.radius                       %limiting radius(*)
         %straight line segment will suffice       
         [xe,ye] = pol2cart(alpha,rt2); %vector from ray point in direction of alpha
-                                       %use 2 to ensure line crosses a boundary
-                                       %max element length is sqrt(2) 
-        [xs,ys] = pol2cart(phi-pi/2,tol.dist);    %small offset from start point      
-        xy_arc = [xr+xs,yr+ys;xr+xe,yr+ye];       %ray vector line segment
+                                       %use rt2 to ensure line crosses a boundary
+        [xs,ys] = pol2cart(alpha,tol.dist);        %small offset from start point      
+        xy_arc = [xr+xs,yr+ys;xr+xe,yr+ye];        %ray vector line segment
         return;
-    elseif rad<1.0                                %radius is so small that it may not exit element
-        xy_arc = []; return;
     end
 
     phi = phi+pi;                                  %angle of normal from centre of arc
-    arcang = rt2/rad;                              %set arc segment based on radius
+    if absRadius>rt2
+        arcang = asin(min([rt2/absRadius,1]));     %set arc segment based on radius
+    else
+        arcang = 6.2;    N = 100;                  %6.2 rad = 355 deg most of circle
+    end
     %abstract Circle Function For Angles In Radians
     circr = @(radius,angle)  [radius*cos(angle)+xc,  radius*sin(angle)+yc]; 
-    r_angl = linspace(phi-arcang,phi-tol.angle, N);%angles Defining left Arc Segment (radians)
+    r_angl = linspace(phi-arcang,phi-tol.angle, N);%angles defining right Arc Segment (radians)
     xy_arcl = circr(radius,r_angl');
-    r_angr = linspace(phi+tol.angle,phi+arcang, N);%angles Defining right Arc Segment (radians)
+    r_angr = linspace(phi+tol.angle,phi+arcang, N);%angles defining left Arc Segment (radians)
     xy_arcr = circr(radius,r_angr');
     %find arc in direction of ray
-    ua1 = xy_arcl(1,1)-xr; va1 = xy_arcl(1,2)-yr;  %vector from ray point to first point on arc
+    dist = sqrt((xy_arcl(:,1)-xr).^2+(xy_arcl(1,2)-yr).^2);
+    [~,idx] = min(dist);                               %nearest point on arc to xr,yr
+    ua1 = xy_arcl(idx,1)-xr; va1 = xy_arcl(idx,2)-yr;  %vector from ray point to first point on arc
     arcl = mod(cart2pol(ua1,va1),2*pi);
-    ua2 = xy_arcr(1,1)-xr; va2 = xy_arcr(1,2)-yr;  %vector from ray point to first point on arc
+
+    dist = sqrt((xy_arcr(:,1)-xr).^2+(xy_arcr(1,2)-yr).^2);
+    [~,idx] = min(dist);                               %nearest point on arc to xr,yr
+    ua2 = xy_arcr(idx,1)-xr; va2 = xy_arcr(idx,2)-yr;  %vector from ray point to first point on arc
     arcr = mod(cart2pol(ua2,va2),2*pi);
-    angtol = 1.0;                                  %angle limit of +/-1.0 rads (57.3 deg)
+
+    angtol = 0.5;                                  %angle limit of +/-0.5 rads, 28.6 deg(*)
     bound = [alpha-angtol,alpha+angtol];
    
     if isangletol(arcl,bound)                      %check if arcl is within bound   
@@ -141,7 +154,7 @@ function [xy_arc] = get_arc(phi,radius,xc,yc,xr,yr,tol)
     elseif isangletol(arcr,bound)                  %check if arcr is within bound   
         xy_arc = xy_arcr;
     else
-        xy_arc = [];
+        xy_arc = NaN;
         % warndlg('Arc not found in get_arc')
     end
 end
@@ -153,7 +166,7 @@ function len = maxEdge(cmesh,ray)
 
     edgeID = edges(cmesh.Tri);                   %node ids for all edges
     eids = [edgeID(edgeID(:,1)==ray.kr,:);edgeID(edgeID(:,2)==ray.kr,:)];
-    eids = eids(eids~=ray.kr);                   %node ids linked to kr
+    eids = eids(eids~=ray.kr);                   %node ids of edges linked to kr
 
     npts = length(eids);
     a = repmat(pts(ray.kr,:),npts,1);
@@ -173,16 +186,49 @@ end
 %%
 function Tri = get_element(cmesh,ray,tol)
     %
-    [xt,yt] = pol2cart(ray.alpha,tol.dist*1000); %normal vector in local coordinates *****
+    [xt,yt] = pol2cart(ray.alpha,tol.dist*1000); %vector from ray point in ray direction
     xp = ray.xr+xt;
     yp = ray.yr+yt;
-    triID = pointLocation(cmesh.Tri,xp,yp);
-    if isnan(triID), Tri = []; return; end
-    %probably need to check if along edge
+    triID = pointLocation(cmesh.Tri,xp,yp);      %Matlab function for triangular objects
+    if isnan(triID) %point is outside of mesh domain
+        Tri = []; return;
+    end
+    %pointLocation returns largest ID if ray vector is along edge
+    xystart = cmesh.Tri.Points(ray.kr,:);
+    u = ray.xr-xystart(1);  v = ray.yr-xystart(2);
+    theta = mod(cart2pol(u,v),2*pi);        %direction from origin to ray point
+    invtheta = mod(theta+pi,2*pi);          %direction from ray point to origin
 
-    tri_pt_ids = cmesh.Tri.ConnectivityList(triID,:);
-    tri_pts = cmesh.Tri.Points(tri_pt_ids,:);
-    Tri = polyshape(tri_pts);
+    tri_pt_ids = cmesh.Tri.ConnectivityList(triID,:); %ids of 3 nodes
+    tri_pts = cmesh.Tri.Points(tri_pt_ids,:);         %matrix of xy for 3 nodes
+    bound = [ray.alpha-0.01,ray.alpha+0.01];          %angle limit of +/-0.01 rads, 0.6 deg(*)
+    
+    if isangletol(theta,bound) || isangletol(invtheta,bound)
+        %find the edge that the ray point is on and the attached triangles
+        %retrun a polygon that is the union of the two triangles
+        idx = tri_pts(:,1)==xystart(1) & tri_pts(:,2)==xystart(2);
+        ndpoints = tri_pts(~idx,:);
+        xyend = [];
+        for i=1:2
+            xy2 = ndpoints(i,:);
+            ison = IsPointOnLine(xystart,xy2,[ray.xr,ray.yr]);
+            if ison, xyend = ndpoints(i,:); break; end
+        end
+        %if xyend not found point is within element and not on edge
+        if isempty(xyend), Tri = polyshape(tri_pts); return; end
+
+        startID = find(cmesh.Tri.Points(:,1)==xystart(1) & cmesh.Tri.Points(:,2)==xystart(2));
+        endID = find(cmesh.Tri.Points(:,1)==xyend(1) & cmesh.Tri.Points(:,2)==xyend(2));
+
+        triID2 = edgeAttachments(cmesh.Tri,startID,endID); %2 triangles attached to edge
+    
+        tri_pt_ids = cmesh.Tri.ConnectivityList(triID2{1},:); %ids of 4 nodes
+        tri1 = polyshape(cmesh.Tri.Points(tri_pt_ids(1,:),:));
+        tri2 =  polyshape(cmesh.Tri.Points(tri_pt_ids(2,:),:));
+        Tri = union(tri1,tri2);     
+    else 
+        Tri = polyshape(tri_pts);
+    end    
 end
 %%
 function xyray = get_intersection(Tri,lineseg,xyr,ray,tol)
@@ -191,8 +237,8 @@ function xyray = get_intersection(Tri,lineseg,xyr,ray,tol)
     xyray = InterX(tri',lineseg')';
     if isempty(xyray) 
         plot_element(Tri,lineseg,xyr,ray)
-        errtxt = sprintf('element %d uv [%.3g %.3g] with direction %.3g',ray.kr,xyr(1),xyr(2),ray.alpha);
-        error('Intersection with element not found in get_intersection 1\n%s\n',errtxt)
+%         errtxt = sprintf('Element %d xy [%.3g %.3g] depth %.3g with direction %.3g',ray.kr,xyr(1),xyr(2),ray.hr,rad2deg(ray.alpha));
+%         error('Intersection with element not found in get_intersection 1\n%s\n',errtxt)
     end    
     entrypoint = ismembertol(xyray,xyr,tol.dist, 'DataScale', 1,'ByRows',true);  %tolerance 
     xyray(entrypoint,:) = [];
@@ -205,8 +251,8 @@ function xyray = get_intersection(Tri,lineseg,xyr,ray,tol)
 
     if isempty(xyray)
         plot_element(Tri,lineseg,xyr,ray)
-        errtxt = sprintf('quad %d uv [%.3g %.3g] with direction %.3g',ray.quad,xyr(1),xyr(2),ray.alpha);
-        error('Intersection with element not found in get_intersection 2\n%s\n',errtxt)
+%         errtxt = sprintf('Element %d xy [%.3g %.3g] depth %.3g with direction %.3g',ray.kr,xyr(1),xyr(2),ray.hr,rad2deg(ray.alpha));
+%         error('Intersection with element not found in get_intersection 2\n%s\n',errtxt)
     end      
 end
 %%
@@ -226,7 +272,7 @@ function alpha = exit_angle(phi,r,xr,yr,xyray,tol)
     % uvray - ray exit point out of element
     phi = mod(phi+pi,2*pi);                    %angle of normal from centre of arc
     L = sqrt((xr-xyray(1))^2+(yr-xyray(2))^2); %arc segment length
-    if abs(r)<tol.radius
+    if abs(r)<tol.radius                       %limiting radius(*)
         theta = 2*asin(L/2/r);                 %angle between entry and exit point
     else
         theta = 0;                             %straight line no change in direction
@@ -244,6 +290,19 @@ function isoutbound = checkGridBoundary(cmesh,xye)
               xye(2)<limxy(1,2) || xye(2)>limxy(2,2);         %check y       
 end
 %%
+function ison = IsPointOnLine(xy1,xy2,xy3)
+    % test whether point xy3 is on the line defined by xy1 and xy2
+    % Line equation: y = m*x + b;  by Jan on Matlab Forum
+    Limit = 100 * eps(max(abs([xy1,xy2,xy3])));
+    if xy1(1) ~= xy2(1)
+      m = (xy2(2)-xy1(2))/(xy2(1)-xy1(1));
+      yy3 = m*xy3(1) + xy1(2) - m*xy1(1);
+      ison   = (abs(xy3(2) - yy3) < 100 * Limit);
+    else
+      ison   = abs(xy3(1)) < Limit;
+    end
+end
+%%
 function plot_element(Tri,Arc,xyr,ray)
     %plot the element and arc
     figure('Name','ArcRay','Tag','PlotFig');
@@ -255,3 +314,4 @@ function plot_element(Tri,Arc,xyr,ray)
     hold off
     title(sprintf('Element at node index %d',ray.kr))
 end
+
