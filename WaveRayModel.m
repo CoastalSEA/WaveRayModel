@@ -26,6 +26,9 @@ classdef WaveRayModel < muiModelUI
     methods (Static)
         function obj = WaveRayModel             
             %constructor function initialises GUI
+            isok = check4muitoolbox(obj);
+            if ~isok, return; end
+            %
             obj = setMUI(obj);             
         end
     end
@@ -365,6 +368,29 @@ classdef WaveRayModel < muiModelUI
         function Help(~,~,~)
             doc waveraymodel                             
         end
+
+        %% Check that toolboxes are installed------------------------------
+        function isok = check4muitoolbox(~)
+            %check that dstoolbox and muitoolbox have been installed
+            fname = 'dstable.m';
+            dstbx = which(fname);
+        
+            fname = 'muiModelUI.m';
+            muitbx = which(fname);
+        
+            if isempty(dstbx) && ~isempty(muitbx)
+                warndlg('dstoolbox has not been installed')
+                isok = false;
+            elseif ~isempty(dstbx) && isempty(muitbx)
+                warndlg('muitoolbox has not been installed')
+                isok = false;
+            elseif isempty(dstbx) && isempty(muitbx)
+                warndlg('dstoolbox and muitoolbox have not been installed')
+                isok = false;
+            else
+                isok = true;
+            end
+        end        
     end
 end    
     
