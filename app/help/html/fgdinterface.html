@@ -1,0 +1,273 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>FGDinterface</title><meta name="generator" content="MATLAB 9.13"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2023-02-23"><meta name="DC.source" content="fgdinterface.m"><style type="text/css">
+html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
+
+html { min-height:100%; margin-bottom:1px; }
+html body { height:100%; margin:0px; font-family:Arial, Helvetica, sans-serif; font-size:10px; color:#000; line-height:140%; background:#fff none; overflow-y:scroll; }
+html body td { vertical-align:top; text-align:left; }
+
+h1 { padding:0px; margin:0px 0px 25px; font-family:Arial, Helvetica, sans-serif; font-size:1.5em; color:#d55000; line-height:100%; font-weight:normal; }
+h2 { padding:0px; margin:0px 0px 8px; font-family:Arial, Helvetica, sans-serif; font-size:1.2em; color:#000; font-weight:bold; line-height:140%; border-bottom:1px solid #d6d4d4; display:block; }
+h3 { padding:0px; margin:0px 0px 5px; font-family:Arial, Helvetica, sans-serif; font-size:1.1em; color:#000; font-weight:bold; line-height:140%; }
+
+a { color:#005fce; text-decoration:none; }
+a:hover { color:#005fce; text-decoration:underline; }
+a:visited { color:#004aa0; text-decoration:none; }
+
+p { padding:0px; margin:0px 0px 20px; }
+img { padding:0px; margin:0px 0px 20px; border:none; }
+p img, pre img, tt img, li img, h1 img, h2 img { margin-bottom:0px; }
+
+ul { padding:0px; margin:0px 0px 20px 23px; list-style:square; }
+ul li { padding:0px; margin:0px 0px 7px 0px; }
+ul li ul { padding:5px 0px 0px; margin:0px 0px 7px 23px; }
+ul li ol li { list-style:decimal; }
+ol { padding:0px; margin:0px 0px 20px 0px; list-style:decimal; }
+ol li { padding:0px; margin:0px 0px 7px 23px; list-style-type:decimal; }
+ol li ol { padding:5px 0px 0px; margin:0px 0px 7px 0px; }
+ol li ol li { list-style-type:lower-alpha; }
+ol li ul { padding-top:7px; }
+ol li ul li { list-style:square; }
+
+.content { font-size:1.2em; line-height:140%; padding: 20px; }
+
+pre, code { font-size:12px; }
+tt { font-size: 1.2em; }
+pre { margin:0px 0px 20px; }
+pre.codeinput { padding:10px; border:1px solid #d3d3d3; background:#f7f7f7; }
+pre.codeoutput { padding:10px 11px; margin:0px 0px 20px; color:#4c4c4c; }
+pre.error { color:red; }
+
+@media print { pre.codeinput, pre.codeoutput { word-wrap:break-word; width:100%; } }
+
+span.keyword { color:#0000FF }
+span.comment { color:#228B22 }
+span.string { color:#A020F0 }
+span.untermstring { color:#B20000 }
+span.syscmd { color:#B28C00 }
+span.typesection { color:#A0522D }
+
+.footer { width:auto; padding:10px 0px; margin:25px 0px 0px; border-top:1px dotted #878787; font-size:0.8em; line-height:140%; font-style:italic; color:#878787; text-align:left; float:none; }
+.footer p { margin:0px; }
+.footer a { color:#878787; }
+.footer a:hover { color:#878787; text-decoration:underline; }
+.footer a:visited { color:#878787; }
+
+table th { padding:7px 5px; text-align:left; vertical-align:middle; border: 1px solid #d6d4d4; font-weight:bold; }
+table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px solid #d6d4d4; }
+
+
+
+
+
+  </style></head><body><div class="content"><h1>FGDinterface</h1><!--introduction--><p>Abstract class with properties and methods to manipulate gridded datasets for use in applications that import data, or save model ouput. The class inherits <a href="matlab:doc('muidataset')">muiDataSet</a> and <a href="matlab:doc('gdinterface')">GDinterface</a>. Together they provide an extensive set of methods to handle datasets of various types (e.g. from models or imported files).</p><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#1">Description</a></li><li><a href="#4">FGDinterface properties</a></li><li><a href="#5">FGDinterface methods</a></li><li><a href="#31">FGDinterface static methods</a></li><li><a href="#38">See Also</a></li></ul></div><h2 id="1">Description</h2><p><b>FGDinterface</b> is used as a superclass to provide data handling functionality for classes that import different types of data or models that are gridded, in order to store them in a consistent and documented format. The data are stored in a set of <a href="matlab:doc('dstable')">dstables</a>, which are assigned as a <a href="matlab:doc('struct')">struct</a> to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a> <i>Data</i> property (typically as part of a UI based on the <a href="matlab:doc('muitoolbox')">muitoolbox</a>). The core table is the <i>'Grid'</i> <a href="matlab:doc('dstable')">dstable</a> which holds the gridded data and supporting metadata - see <a href="matlab:doc('gdinterface')">GDinterface</a> documentation.</p><p>A number of additional tables support applications that represent inlet, estuary, river and valley formations. These include <i>'Hypsometry'</i> for the variation of surface area and volume as a function of elevation, <i>'SectionProps'</i> holds the variation of the width and cross-sectional area along the x-axis derived from the gridded data, <i>'Plan'</i> holds the widths along the x-axis specified in the model, or based on an exponential fit to the gridded data, <i>'WaterLevels'</i> holds the variation in water levels at high water, mean tide and low water along the x-axis, and <i>'GrossProps'</i> holds various summary properties of the form related to length, area, volume, rate of convergence, etc. The metatdata for the dstable content are defined in the <i><b>setDSproperties</b></i> method in <b>FGDinterface</b>.</p><p>
+<table border=1><tr><td><u>Note</u>: In UI's based on <a href="matlab:doc('muitoolbox')">muitoolbox</a>
+the <i>DSproperties</i> can be viewed by using the mouse button callback
+in the first column of a Case on the Cases/Data/Model tab in the main interface.
+</td></tr></table>
+</p><h2 id="4">FGDinterface properties</h2><p>The class uses the properties defined for <a href="matlab:doc('muidataset')">muiDataSet</a></p><h2 id="5">FGDinterface methods</h2><p>The methods in the abstract class include the following:</p><p>Methods to add, delete and update grids and propetry tables:</p><p><b>setGrid</b> - load the grid results into a dstable, where <i>obj</i> is any GDintereface subclass; <i>gridddata</i> is a cell array with a matrix of elevations, and any other data to be included in the dstable; <i>dims</i> is a struct for the dimensions of griddata, where the fields 'x' and 'y' are the vector dimensions of z and must be unique, and the field 't' can be datetimes, durations or values to assign to rows in dstable; and <i>meta</i> is a stuct with 'source' and 'data' fields to describe file name or model used, and additional run details, respectively.</p><pre class="language-matlab">obj = setGrid(obj,griddata,dims,meta);
+</pre><p><b>getGrid</b> - retrieve a grid, where <i>obj</i> is any GDintereface subclass; and <i>irow</i> is the row index of the dstable to extract grid from (optional). Returns grid as a struct with the fields, 'x', 'y', 'z' and 't, together with any metadata that may be assigned to the dstable, including, 'irow', the row indexin the dstable, 'desc', the dstable Description, 'ishead', a logical flag defining the x-axis orientation, 'xM', the distance to the inlet/estuary/valley mouth from the grid origin, and 'cline', a struct with the x and y coordinates of the centre-line if a meander has been added.</p><pre class="language-matlab">grid = getGrid(obj,irow);
+</pre><p><b>addGrid</b> - add a grid to an existing <a href="matlab:doc('muitoolbox')">muitoolbox</a> Case table, where <i>obj</i> is any GDintereface subclass; <i>muicat</i> is a handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>; <i>newgrid</i> is the grid to add to the dstable and should be of the same dimensions as existing grids in the table; <i>timestep</i> is the value to use for RowName in the dstable; <i>dims</i> is a struct containig xM, Lt and river properties; <i>sourcetxt</i> is the file name, or model name, to identify data source; and <i>ismsg</i> is a flag set to true to use the defualt message, and false to suppress the message.</p><pre class="language-matlab">addGrid(obj,muicat,newgrid,timestep,dims,sourcetxt,ismsg);
+</pre><p><b>deleteGrid</b> - delete a grid to an existing <a href="matlab:doc('muitoolbox')">muitoolbox</a> Case table, where <i>obj</i> is any FGDintereface subclass; <i>classrec</i> is the class record number; <i>catrec</i> is the catalogue record for the instance; and <i>muicat</i> is a handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>.</p><pre class="language-matlab">deleteGrid(obj,classrec,catrec,muicat);
+</pre><p><b>setProperties</b> - initialises the tables for derived properties of gridded data set</p><pre>  obj = setProperties(obj,zwl,Wz,limits,histint);</pre><p><b>addProperties</b> - add properties to an existing set of grid property tables</p><pre class="language-matlab">obj = addProperties(obj,irow,zwl,Wz,limits,histint);
+</pre><p>where <i>obj</i> is any class that contains a Grid dstable; <i>irow</i> is the row of Grid table to use; <i>zwl</i> is a struct or table, of water levels at zhw,zmt,zlw; <i>Wz</i> is a struct or table of width plan form data at 3 elevations' <i>limits</i> is an array for the upper and lower limits for vertical range [0=use grid; 1=prompt user; [x,y]=limits to use]; histint is the vertical interval for hypsometry (optional user prompted if not defined).</p><p><b>delProperties</b> - delete a row of properties from existing grid property tables, where <i>obj</i> is any class that contains a Grid dstable; and <i>row2use</i> is row(s) to be deleted from ALL property tables</p><pre class="language-matlab">[obj,isok] = delProperties(obj,row2use);
+</pre><p><b>addFormProps</b> - add form properties to a gridded data set (needs to be a suitable dtm, ie inlet, estuary, valley), where <i>obj</i> is any FGDintereface subclass; and <i>muicat</i> is the handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>.</p><pre class="language-matlab">addFormProps(obj,muicat);
+</pre><p><b>delFormProperties</b> - delete ALL property tables associated with a selected gridded data set, where <i>obj</i> is any FGDintereface subclass; and <i>muicat</i> is a handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>.</p><pre class="language-matlab">delFormProperties(obj,muicat);
+</pre><p><b>setModelFormProps</b> -add a set of Hypsometry, Section and Gross form properties (this function is used from models such as CF_TransModel) where <i>obj</i> is any FGDintereface subclass.</p><pre class="language-matlab">obj = setModelFormProps(obj);
+</pre><p><b>editGridInletData</b> - UI to edit, definition of channel head, x-distance to mouth and definition of centre-line (if used).</p><pre class="language-matlab">editGridInletData(obj);
+</pre><p>Methods to manipulate grids use the GDinterface class  - see <a href="matlab:doc('gdinterface')">GDinterface</a> documentation.</p><h2 id="31">FGDinterface static methods</h2><p>The additional static methods in the abstract class include the following:</p><p><b>addValleyBase</b> - use an xyz definition of the channel thalweg to create a valley base this is used to modify an existing valley defined above MHW to include the valley form down to the pre-Holocene surface (i.e. below the existing channel bed), where <i>muicat</i> is a handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>; <i>gridclasses</i> is a cell array of clases to be used for case selection.</p><pre class="language-matlab">FGDinterface.addValleyBase(muicat,gridclasses);
+</pre><p><b>addShore</b> - add a strip to shore side of a grid by extrapolating from the neighbouring strip, where <i>muicat</i> is a handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>; <i>gridclasses</i> is a cell array of clases to be used for case selection.</p><pre class="language-matlab">FGDinterface.addShore(muicat,gridclasses);
+</pre><p><b>formMenuOptions</b> - handles the menu calls for the default menu of Form based Grid Tools, where <i>mobj</i> is a mui model instance, <i>src</i> is a handle to the calling menu option, and <i>gridclasses</i> is a cell array of classes to use in the case selection.</p><pre class="language-matlab">FGDinterface.formMenuOptions(mobj,src,gridclasses);
+</pre><h2 id="38">See Also</h2><p>Some classes that use <b>FGDinterface</b> and related functions are detailed in the help for <a href="matlab:doc('grid_class_fcns')">Grid classes and functions</a>.</p><p class="footer"><br><a href="https://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2022b</a><br></p></div><!--
+##### SOURCE BEGIN #####
+%% FGDinterface
+% Abstract class with properties and methods to manipulate gridded datasets 
+% for use in applications that import data, or save model ouput. The class 
+% inherits <matlab:doc('muidataset') muiDataSet> and <matlab:doc('gdinterface') GDinterface>. Together they provide 
+% an extensive set of methods to handle datasets of various types (e.g. 
+% from models or imported files).
+
+%% Description
+% *FGDinterface* is used as a superclass to provide data handling 
+% functionality for classes that import different types of data or models
+% that are gridded, in order to store them in a consistent and documented format.
+% The data are stored in a set of <matlab:doc('dstable') dstables>, which
+% are assigned as a <matlab:doc('struct') struct> to the <matlab:doc('muicatalogue') muiCatalogue>
+% _Data_ property (typically as part of a UI based on the <matlab:doc('muitoolbox') muitoolbox>). 
+% The core table is the _'Grid'_ <matlab:doc('dstable') dstable> which holds the
+% gridded data and supporting metadata - see <matlab:doc('gdinterface')
+% GDinterface> documentation.
+%%
+% A number of additional tables support applications that represent
+% inlet, estuary, river and valley formations. These include _'Hypsometry'_ for the
+% variation of surface area and volume as a function of elevation,
+% _'SectionProps'_ holds the variation of the width and cross-sectional area
+% along the x-axis derived from the gridded data, _'Plan'_ holds the widths along 
+% the x-axis specified in the model, or based on an exponential fit to the
+% gridded data, _'WaterLevels'_ holds the variation in water levels at high
+% water, mean tide and low water along the x-axis, and _'GrossProps'_ holds
+% various summary properties of the form related to length, area, volume,
+% rate of convergence, etc. The metatdata for the dstable content are
+% defined in the _*setDSproperties*_ method in *FGDinterface*. 
+%% 
+% <html>
+% <table border=1><tr><td><u>Note</u>: In UI's based on <a href="matlab:doc('muitoolbox')">muitoolbox</a>
+% the <i>DSproperties</i> can be viewed by using the mouse button callback 
+% in the first column of a Case on the Cases/Data/Model tab in the main interface.
+% </td></tr></table>
+% </html>
+
+%% FGDinterface properties
+% The class uses the properties defined for <matlab:doc('muidataset') muiDataSet> 
+
+%% FGDinterface methods
+% The methods in the abstract class include the following:
+%%
+% Methods to add, delete and update grids and propetry tables:
+
+%%
+% *setGrid* - load the grid results into a dstable, where _obj_ is any 
+% GDintereface subclass; _gridddata_ is a cell array with a matrix of
+% elevations, and any other data to be included in the dstable; _dims_ is a
+% struct for the dimensions of griddata, where the fields 'x' and 'y' are the 
+% vector dimensions of z and must be unique, and the field 't' can be 
+% datetimes, durations or values to assign to rows in dstable; and 
+% _meta_ is a stuct with 'source' and 'data' fields to describe file name or model
+% used, and additional run details, respectively.
+%%
+%   obj = setGrid(obj,griddata,dims,meta);
+
+%%
+% *getGrid* - retrieve a grid, where _obj_ is any GDintereface subclass;
+% and _irow_ is the row index of the dstable to extract grid from
+% (optional). Returns grid as a struct with the fields, 'x', 'y', 'z' and
+% 't, together with any metadata that may be assigned to the dstable,
+% including, 'irow', the row indexin the dstable, 'desc', the dstable Description, 'ishead',
+% a logical flag defining the x-axis orientation, 'xM', the distance to 
+% the inlet/estuary/valley mouth from the grid origin, and 'cline', a struct 
+% with the x and y coordinates of the centre-line if a meander has been added.
+%%
+%   grid = getGrid(obj,irow);
+
+%%
+% *addGrid* - add a grid to an existing <matlab:doc('muitoolbox') muitoolbox> 
+% Case table, where _obj_ is any GDintereface subclass; _muicat_ is a 
+% handle to the <matlab:doc('muicatalogue') muiCatalogue>; _newgrid_ is the
+% grid to add to the dstable and should be of the same dimensions as
+% existing grids in the table; _timestep_ is the value to use for RowName
+% in the dstable; _dims_ is a struct containig xM, Lt and river properties; 
+% _sourcetxt_ is the file name, or model name, to identify 
+% data source; and _ismsg_ is a flag set to true to use the defualt message, 
+% and false to suppress the message.
+%%
+%   addGrid(obj,muicat,newgrid,timestep,dims,sourcetxt,ismsg);
+
+%%
+% *deleteGrid* - delete a grid to an existing <matlab:doc('muitoolbox') muitoolbox>
+% Case table, where _obj_ is any FGDintereface subclass; _classrec_ is the
+% class record number; _catrec_ is the catalogue record for the instance; and 
+% _muicat_ is a handle to the <matlab:doc('muicatalogue') muiCatalogue>.
+%%
+%   deleteGrid(obj,classrec,catrec,muicat);
+
+%%
+% *setProperties* - initialises the tables for derived properties of gridded data set
+
+%%
+%    obj = setProperties(obj,zwl,Wz,limits,histint);
+
+%%
+% *addProperties* - add properties to an existing set of grid property tables
+%%
+%   obj = addProperties(obj,irow,zwl,Wz,limits,histint);
+
+%%
+% where _obj_ is any class that contains a Grid dstable; _irow_ is the row of 
+% Grid table to use; _zwl_ is a struct or 
+% table, of water levels at zhw,zmt,zlw; _Wz_ is a struct or table of 
+% width plan form data at 3 elevations' _limits_ is an array for the upper 
+% and lower limits for vertical range [0=use grid; 1=prompt user; [x,y]=limits to use];         
+% histint is the vertical interval for hypsometry (optional user prompted
+% if not defined).
+
+%%
+% *delProperties* - delete a row of properties from existing grid property
+% tables, where _obj_ is any class that contains a Grid dstable; and
+% _row2use_ is row(s) to be deleted from ALL property tables
+%%
+%   [obj,isok] = delProperties(obj,row2use);
+
+%% 
+% *addFormProps* - add form properties to a gridded data set (needs to be a
+% suitable dtm, ie inlet, estuary, valley), where _obj_ is any FGDintereface subclass; 
+% and _muicat_ is the handle to the <matlab:doc('muicatalogue') muiCatalogue>.
+%%
+%   addFormProps(obj,muicat);
+
+%%
+% *delFormProperties* - delete ALL property tables associated with a 
+% selected gridded data set, where _obj_ is any FGDintereface subclass; and 
+% _muicat_ is a handle to the <matlab:doc('muicatalogue') muiCatalogue>.
+%%
+%   delFormProperties(obj,muicat);
+
+%%
+% *setModelFormProps* -add a set of Hypsometry, Section and Gross form properties 
+% (this function is used from models such as CF_TransModel)
+% where _obj_ is any FGDintereface subclass.
+%%
+%   obj = setModelFormProps(obj);
+
+%%
+% *editGridInletData* - UI to edit, definition of channel head, x-distance 
+% to mouth and definition of centre-line (if used).
+%%
+%   editGridInletData(obj);
+
+
+%%
+% Methods to manipulate grids use the GDinterface class  - see <matlab:doc('gdinterface')
+% GDinterface> documentation.
+
+
+%% FGDinterface static methods
+% The additional static methods in the abstract class include the following:
+
+
+%%
+% *addValleyBase* - use an xyz definition of the channel thalweg to create 
+% a valley base this is used to modify an existing valley defined above MHW 
+% to include the valley form down to the pre-Holocene surface (i.e. below the
+% existing channel bed), where _muicat_ is a handle to the <matlab:doc('muicatalogue') muiCatalogue>; 
+% _gridclasses_ is a cell array of clases to be used for case selection.
+%%
+%   FGDinterface.addValleyBase(muicat,gridclasses);
+
+%%
+% *addShore* - add a strip to shore side of a grid by extrapolating from the
+% neighbouring strip, where _muicat_ is a handle to the <matlab:doc('muicatalogue') muiCatalogue>; 
+% _gridclasses_ is a cell array of clases to be used for case selection.
+%%
+%   FGDinterface.addShore(muicat,gridclasses);
+
+%%
+% *formMenuOptions* - handles the menu calls for the default menu of Form based Grid
+% Tools, where _mobj_ is a mui model instance, _src_ is a handle to the calling 
+% menu option, and _gridclasses_ is a cell array of classes to use in the case
+% selection.
+%%
+%   FGDinterface.formMenuOptions(mobj,src,gridclasses);
+
+
+%% See Also
+% Some classes that use *FGDinterface* and related functions are detailed in
+% the help for <matlab:doc('grid_class_fcns') Grid classes and functions>.
+##### SOURCE END #####
+--></body></html>
