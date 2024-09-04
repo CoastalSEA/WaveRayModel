@@ -1,0 +1,3 @@
+[submodule "app/mesh2d"]
+	path = app/mesh2d
+	url = https://github.com/dengwirda/mesh2d
