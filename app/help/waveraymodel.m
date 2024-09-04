@@ -1,5 +1,8 @@
 %% WaveRayModel
-% Toolbox for 
+% The WaveRayModel App is a coastal wave model that uses forward and 
+% backward tracking of wave rays (orthogonals to wave crest) over a 
+% bathymetric depth grid. In backtracking mode offshore wave spectra can 
+% be transformed to inshore points.
 
 %% Licence
 % The code is provided as Open Source code (issued under a BSD 3-clause License).
