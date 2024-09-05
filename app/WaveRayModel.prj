@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="3762184407" file="D:\Matlab Code\muiModels\WaveRayModel\app\WaveRayModel.prj" location="D:\Matlab Code\muiModels\WaveRayModel\app" name="WaveRayModel" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="1444490782" file="D:\Matlab Code\muiModels\WaveRayModel\app\WaveRayModel.prj" location="D:\Matlab Code\muiModels\WaveRayModel\app" name="WaveRayModel" target="target.mlapps" target-name="Package App">
     <param.appname>WaveRayModel</param.appname>
     <param.authnamewatermark>Ian Townend</param.authnamewatermark>
     <param.email>i.townend@soton.ac.uk</param.email>
