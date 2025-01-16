@@ -42,13 +42,7 @@ classdef WRM_WaveModel < muiDataSet
 %-------------------------------------------------------------------------- 
             %get the timeseries input data and site parameters
             %Note: getInputData calls setRunParam
-            [tsdst,inputxt,source] = getInputData(obj,mobj);
-            
-            %get the refraction transfer table
-            promptxt = 'Select a Transfer Table Case to use:';             
-            sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
-            msgtxt = 'Spectral Transfer Table not found';
-            if isempty(sptobj), warndlg(msgtxt); return; end
+            [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj);
                  
             if strcmp(source,'Measured spectra')
                 select = WRM_WaveModel.getSprectraConditions();   
@@ -240,14 +234,14 @@ classdef WRM_WaveModel < muiDataSet
     end 
 %%    
     methods (Access = private)
-        function [tsdst,inputxt,source] = getInputData(obj,mobj)
+        function [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj)
             %prompt user to select wave and water level data and return in
             %input dstable of data and metadata for inputs used
             tsdst = []; inputxt = []; source = [];
             muicat = mobj.Cases;
             promptxt = 'Select input wave data set:';           
             [wv_caserec,ok] = selectRecord(muicat,'PromptText',promptxt,...
-                           'CaseClass',{'ctWaveData'},'ListSize',[300,100]);                                    
+                           'CaseClass',{'ctWaveData','muiUserModel'},'ListSize',[300,100]);                                    
             if ok<1, return; end
             wvdst = getDataset(muicat,wv_caserec,1);  %1 selects first dataset in struct
             wvtime = wvdst.RowNames;
@@ -260,7 +254,8 @@ classdef WRM_WaveModel < muiDataSet
 
             promptxt = 'Select input water level data set (Cancel to use SWL=0):';           
             [wl_crec,ok] = selectRecord(muicat,'PromptText',promptxt,...
-                                'CaseClass',{'ctWaterLevelData','ctTidalAnalysis'},...
+                                'CaseClass',{'ctWaterLevelData','ctTidalAnalysis',...
+                                              'muiUserModel'},...
                                 'ListSize',[300,100]); 
 
             swl = zeros(size(wvtime));               
@@ -310,11 +305,20 @@ classdef WRM_WaveModel < muiDataSet
             end
             tsdst = activatedynamicprops(tsdst);
 
+            %get the refraction transfer table
+            promptxt = 'Select a Transfer Table Case to use:';             
+            sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
+            msgtxt = 'Spectral Transfer Table not found';
+            if isempty(sptobj), warndlg(msgtxt); return; end
+            inputxt = sprintf('%s, %s used for spectral transfer',inputxt,...
+                                      sptobj.Data.Inshore.Description);
+                
             %assign the run parameters to the model instance
+            spt_caserec = caseRec(mobj.Cases,sptobj.CaseIndex);
             if wl_crec==0
-                setRunParam(obj,mobj,wv_caserec);
+                setRunParam(obj,mobj,wv_caserec,spt_caserec);
             else
-                setRunParam(obj,mobj,wv_caserec,wl_crec); %input caserecs passed as varargin     
+                setRunParam(obj,mobj,wv_caserec,wl_crec,spt_caserec); %input caserecs passed as varargin     
             end
         end
 %%

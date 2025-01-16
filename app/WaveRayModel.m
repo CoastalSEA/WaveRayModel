@@ -38,9 +38,7 @@ classdef WaveRayModel < muiModelUI
     methods (Access = protected)
         function obj = setMUI(obj)
             %initialise standard figure and menus    
-            %classes required to run model, format:
-            %obj.ModelInputs.<model classname> = {'Param_class1',Param_class2',etc}
-            %                                        % << Edit to model and input parameters classnames 
+            %classes required to run model:
             obj.ModelInputs.RayTracks = {'WRM_RunParams'};
             obj.ModelInputs.WRM_Bathy = {'GD_GridProps'};
             obj.ModelInputs.SpectralTransfer = {''};

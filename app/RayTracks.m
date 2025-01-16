@@ -237,16 +237,8 @@ classdef RayTracks < muiDataSet
             end
             gobj = getCase(muicat,caserec);
 
-            %set >Figure button and create axes
-            if strcmp(src.Tag,'Plot') || strcmp(src.Tag,'FigButton')
-                tabcb  = @(src,evdat)tabPlot(obj,src,mobj);            
-                ax = tabfigureplot(obj,src,tabcb,false);
-                ax.NextPlot = 'add';
-            else
-                ax = src; %user passing an axis as src rather than a uicontrol
-            end
-            %use tabPlot in WRM_Bathy to plot the bathymetry grid
-            tabPlot(gobj,ax);
+            %use tabPlot in WRM_Bathy or GD_ImportData to plot the bathymetry grid
+            tabPlot(gobj,src);
             %use the YlGnBu colormap generated in cbrewer. This then needs
             %to be interpolated to get a smooth surface plot
             ax = gca;
@@ -571,6 +563,7 @@ function options = get_selection(obj)
                                  'Style',{'popupmenu','popupmenu','popupmenu'},...
                                  'ActionButtons', {'Select','Cancel'},...
                                  'DefaultInputs',{string(T),string(zwl),var},...
+                                 'InputOrder',[],...
                                  'PromptText','Select values to use');
             if isempty(selection)
                 options = []; 
@@ -679,7 +672,7 @@ function options = get_selection(obj)
             uni = ones(size(xst));
             %plot array of arrows
             hold on
-            quiver(ax,xst,yst,uni*dx,uni*dy,'AutoScale',0)
+            quiver(ax,xst,yst,uni*dx,uni*dy,'AutoScaleFactor',0.5)
             hold off
         end   
     end

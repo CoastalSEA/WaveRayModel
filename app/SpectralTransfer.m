@@ -60,7 +60,8 @@ classdef SpectralTransfer < muiDataSet
             indst.Dimensions.WaterLevel = rayobj.Data.Dataset.Dimensions.WaterLevel; 
             %assign metadata about model
             indst.Source = metaclass(obj).Name;
-            indst.MetaData = sprintf('Derived using Case ID %d',rayobj.CaseIndex);
+            indst.MetaData = sprintf('Derived using %s (cid: %d)',...
+                          rayobj.Data.Dataset.Description,rayobj.CaseIndex);
             indst.UserData.Location = [inprops{1},inprops{2}];
             indst.UserData.Depths = inprops{3};
             indst.UserData.ShoreAngle = rayobj.RunParam.WRM_RunParams.ShorelineAngle;
@@ -72,7 +73,8 @@ classdef SpectralTransfer < muiDataSet
             offdst.Dimensions.WaterLevel = rayobj.Data.Dataset.Dimensions.WaterLevel;                        
             %assign metadata about model
             offdst.Source = metaclass(obj).Name;
-            offdst.MetaData = sprintf('Derived using Case ID %d',rayobj.CaseIndex);
+            offdst.MetaData = sprintf('Derived using %s (cid: %d)',...
+                        rayobj.Data.Dataset.Description,rayobj.CaseIndex);
 %--------------------------------------------------------------------------
 % Save results
 %--------------------------------------------------------------------------  

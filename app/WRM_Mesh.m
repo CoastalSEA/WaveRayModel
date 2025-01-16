@@ -1,4 +1,4 @@
-classdef WRM_Mesh < muiPropertyUI & muiDataSet      
+classdef WRM_Mesh < muiPropertyUI & muiDataSet & matlab.mixin.Copyable 
 %
 %-------class help---------------------------------------------------------
 % NAME
@@ -21,13 +21,13 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
         PropertyLabels = {'Upper shore level',...
                           'Shore mesh size',...
                           'Boundary mesh size',...
+                          'Offshore boundary (1=bottom,2=left,3=top,4=right)',...
                           'Maximum radius-edge ratio',...
                           'Gradient limit',...
                           'Edge-Element length threshold',...
                           'Tria-Element length threshold',...
                           'Include mesh optimisation (1/0)',...
                           };
-
         %abstract properties in muiPropertyUI for tab display
         TabDisplay   %structure defines how the property table is displayed 
 %         Tri          %triangulation object
@@ -41,9 +41,10 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
     end
 
     properties
-        zhw = 5             %zhw is highest bed level to define shoreline
+        zhw                 %zhw is highest bed level to define shoreline
         minshore = 50       %mesh size along shoreline
         minbound = 1000     %mesh size along boundaries        
+        offshore = 1        %offshore boundary 1=bottom, 2=left, 3=top, 4=right
         rho2 = 1.025        %the maximum allowable radius-edge ratio
         dhdx = 0.2          %scalar gradient-limit used in limhfn2
         siz1 = 1.333        %normalised rel. length threshold for edge-elements
@@ -70,13 +71,16 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
                 obj = editProperties(obj);  
                 %add any additional manipulation of the input here
             end
-            setClassObj(mobj,'Inputs','WRM_Bathy',obj);
+            setClassObj(mobj,'Inputs','WRM_Mesh',obj);
         end   
 %%
         function obj = runModel(mobj)
             %function to run a simple 2D diffusion model
             obj = WRM_Mesh.setInput(mobj);
-            if isempty(obj.zhw), return; end
+            if isempty(obj.zhw) 
+                warndlg('Some mesh input values not defined (e.g. Upper shore level)')
+                return;
+            end
             muicat = mobj.Cases;
             setRunParam(obj,mobj);             
 %--------------------------------------------------------------------------
@@ -87,19 +91,31 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
             if isempty(grdobj), return; end
 
-            grid = getGrid(grdobj,1);                    %source grid
+            grid = getGrid(grdobj,1);                        %source grid
             if isempty(grid.z), return; end
 
             answer = questdlg('Load or create mesh boundary?','Mesh',...
-                                                'Load','Create','Create');
-            if strcmp(answer,'Load')
-                %load mesh boundary from a file
+                              'Load boundary','Load shore','Create','Create');
+            if strcmp(answer,'Load boundary')
+                %load mesh boundary from a file. Boundary should include
+                %islands and boundary has points spaced as required for grid
                 [node,edge,part] = WRM_Mesh.loadMeshBoundary;
+            elseif strcmp(answer,'Load shore')
+                shore_xy = WRM_Mesh.loadMeshBoundary;        %x,y column vectors
+                if isempty(shore_xy), return; end
+                gdims = gd_dimensions(grid);
+                shore_xy = clipShore(obj,shore_xy,gdims);    %ensure within grid limits
+
+                [node,edge] = getMeshBoundary(obj,shore_xy,grid,0); %mesh boundary polygon
+                if isempty(node), return; end
+                %add internal refinement
+                % [node,edge,part} = add internal points
+                part{1} = 1:length(edge);
             else
                 shore_xy = getShoreline(obj,grid);           %extract shoreline
-                if isempty(shore_xy), return; end
+                if isempty(shore_xy), return; end            %x,y column vectors
     
-                [node,edge] = getMeshBoundary(obj,shore_xy,grid); %mesh boundary polygon
+                [node,edge] = getMeshBoundary(obj,shore_xy,grid,1); %mesh boundary polygon
                 if isempty(node), return; end
                 %add internal refinement
                 % [node,edge,part} = add internal points
@@ -197,8 +213,10 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             hold on 
             M = contourc(grid.x,grid.y,grid.z',[obj.zhw,obj.zhw]);
             hold off
-            shore_xy = M(:,2:end);
+            shore_xy = M(:,2:end)';          %x,y column vectors
             delete(hf)
+            gdims = gd_dimensions(grid);
+            shore_xy = clipShore(obj,shore_xy,gdims);
             
             %create accept button figure
             figtitle = 'Mesh shoreline selection';
@@ -207,7 +225,7 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             butnames = {'Accept','Smooth','Clean','Reset','Quit'};
             [h_plt,h_but] = acceptfigure(figtitle,promptxt,tag,butnames);
             ax = axes(h_plt);
-            plot(ax,shore_xy(1,:),shore_xy(2,:))
+            plot(ax,shore_xy(:,1),shore_xy(:,2))
 
             ok = 0;
             while ok<1
@@ -219,33 +237,32 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
                 elseif strcmp(h_but.Tag,'Smooth')
                     %smooth the shoreline
                     h_but.Tag = '';
-                    shore = smoothdata(shore_xy(2,:),'sgolay','Degree',4,'SamplePoints',shore_xy(1,:));
+                    icol = [1,2];  %smooth along the dominant axis based on offshore boundary
+                    if obj.offshore==2 || obj.offshore==4
+                        icol = [2,1];
+                    end
+                    shore = smoothdata(shore_xy(:,icol(2)),'sgolay','Degree',4,'SamplePoints',shore_xy(:,icol(1)));
                     hold on
-                    plot(ax,shore_xy(1,:),shore)
+                    plot(ax,shore_xy(:,1),shore)
                     hold off
-                    shore_xy(2,:) = shore;
+                    shore_xy(:,2) = shore;
                 elseif strcmp(h_but.Tag,'Clean')
                     %remove points outside user defined x-y range
                     h_but.Tag = '';
-                    xmnmx = minmax(shore_xy(1,:));
-                    ymnmx = minmax(shore_xy(2,:));
+                    xmnmx = minmax(shore_xy(:,1));
+                    ymnmx = minmax(shore_xy(:,2));
                     promptxt = {'Min-Max X','Min-Max Y'};
                     defaults = {num2str(xmnmx),num2str(ymnmx)};
                     answer = inputdlg(promptxt,'Shore',1,defaults);
                     if ~isempty(answer)
                         xx = str2num(answer{1}); %#ok<ST2NM> returns vector
                         yy = str2num(answer{2}); %#ok<ST2NM> 
-                        idx = shore_xy(1,:)<xx(1) | shore_xy(1,:)>xx(2);
-                        idy = shore_xy(2,:)<yy(1) | shore_xy(2,:)>yy(2);
-                        idd = idx | idy;
-                        shore_xy(:,idd) = [];    
-                        [~,ic] = unique(shore_xy(1,:),'sorted');
-                        shore_xy = shore_xy(:,ic);
-                        plot(ax,shore_xy(1,:),shore_xy(2,:))
+                        shore_xy = clipShore(obj,shore_xy,num2cell([xx,yy]));
+                        plot(ax,shore_xy(:,1),shore_xy(:,2))
                     end
                 elseif strcmp(h_but.Tag,'Reset')
                     shore_xy = M(:,2:end);
-                    plot(ax,shore_xy(1,:),shore_xy(2,:))
+                    plot(ax,shore_xy(:,1),shore_xy(:,2))
                 else
                     ok = 1;
                 end
@@ -253,9 +270,9 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             delete(h_plt.Parent)
         end
 %%
-        function [node,edge] = getMeshBoundary(obj,shore_xy,grid)
+        function [node,edge] = getMeshBoundary(obj,shore_xy,grid,isextract)
             %construct defintion of nodes and edges for mesh
-            node = setBoundary(obj,shore_xy);            
+            node = setBoundary(obj,shore_xy,grid);            
             % node = [[0,0];newshore_xy;[max(x),0]];
 
             %edge is an E-by-2 array of edge indexing, where each row in edge
@@ -272,8 +289,10 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             [h_plt,h_but] = acceptfigure(figtitle,promptxt,tag,butnames);
             ax = axes(h_plt);
             hp = plot(ax,node(:,1),node(:,2),'.-');
-            ax.XLim = ax.XLim*1.05 - ax.XLim(2)*0.025;
-            ax.YLim = ax.YLim*1.05 - ax.YLim(2)*0.025;
+            %add offset to axis limits around boundary
+            nint = obj.minbound; 
+            ax.XLim(1) = ax.XLim(1)-nint;  ax.XLim(2) = ax.XLim(2)+nint; 
+            ax.YLim(1) = ax.YLim(1)-nint;  ax.YLim(2) = ax.YLim(2)+nint; 
 
             ok = 0;
             while ok<1
@@ -284,12 +303,14 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
                     node = []; ok = 1;
                 elseif strcmp(h_but.Tag,'Adjust')
                     obj = editProperties(obj);
-                    shore_xy = getShoreline(obj,grid);           %extract shoreline
-                    if isempty(shore_xy)
-                        node = []; 
-                        delete(h_plt.Parent); return; 
+                    if isextract
+                        shore_xy = getShoreline(obj,grid);           %extract shoreline
+                        if isempty(shore_xy)
+                            node = []; 
+                            delete(h_plt.Parent); return; 
+                        end
                     end
-                    node = setBoundary(obj,shore_xy);
+                    node = setBoundary(obj,shore_xy,grid);
                     hp.XData = node(:,1);
                     hp.YData = node(:,2);
                 else
@@ -299,30 +320,90 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet
             delete(h_plt.Parent)
         end
 %%
-        function node = setBoundary(obj,shore_xy)
+    function shore_xy = clipShore(obj,shore_xy,gd)
+        %ensure that the shoreline data points do not go outside of grid
+        if ~istable(gd)
+            gd = table(gd{:},'VariableNames',{'xmin','xmax','ymin','ymax'});
+        end
+        idx = shore_xy(:,1)<gd.xmin | shore_xy(:,1)>gd.xmax;
+        idy = shore_xy(:,2)<gd.ymin | shore_xy(:,2)>gd.ymax;
+        idd = idx | idy;
+        shore_xy(idd,:) = [];    
+        icol = 1;                    %dominant axis is x-axis
+        if obj.offshore==2 || obj.offshore==4
+            icol = 2;                %dominant axis is y-axis
+        end
+        [~,ic] = unique(shore_xy(:,icol),'sorted'); %sort over dominant axis
+        shore_xy = shore_xy(ic,:);
+
+    end
+%%
+        function node = setBoundary(obj,shore_xy,grid)
             %create the boundary with specified limits
 
-            shorelength = sum(vecnorm(diff(shore_xy'),2,2));
+            shorelength = sum(vecnorm(diff(shore_xy),2,2));
             %interpolate shoreline to user specified mesh size
             shorepts = round(shorelength/obj.minshore);
-            newshore_xy = curvspace(shore_xy',shorepts);
+            newshore_xy = curvspace(shore_xy,shorepts);
+            
+            gd = gd_dimensions(grid);  %table of dimensions for grid
+        
+            %construct boundaries of mesh using user defined mesh sizes
+            %convention for shore vector:
+            %increases from xmin for offshore = 1 or 3 and 
+            %increases from ymin for offshore = 2 or 4
+            %boundargy convention is them:
+            %start at xmin for offshore = 1 or 3 and 
+            %start at ymin for offshore = 2 or 4
+            %vector proceeds clockwise for 1 and 4 and anticlockwise when
+            %offshore is 2 or 3           
+            if obj.offshore==1 || obj.offshore==3
+                if newshore_xy(1,1)>newshore_xy(end,1)  %test x-order
+                    newshore_xy = flipud(newshore_xy);
+                end
+            else
+                if newshore_xy(1,2)>newshore_xy(end,2)  %test y-order
+                    newshore_xy = flipud(newshore_xy);
+                end
+            end
+            xs = newshore_xy(:,1);
+            ys = newshore_xy(:,2);
 
-            %construct seaward boundaries of mesh using user define mesh sizes
-            xmax = max(newshore_xy(:,1));
-            lbound = 0:obj.minbound:newshore_xy(1,2);
-            left_bound = zeros(length(lbound),2);
-            left_bound(:,2) = lbound;
-            rbound = fliplr(0:obj.minbound:newshore_xy(end,2));
-            right_bound = ones(length(rbound),2);
-            right_bound(:,2) = rbound;
-            right_bound(:,1) = right_bound(:,1)*xmax;
-            sbound = fliplr(0:obj.minbound:xmax);
-            sea_bound = zeros(length(sbound)-2,2);
-            sea_bound(:,1) = sbound(2:end-1);
+            if obj.offshore==1 || obj.offshore==3
+                if obj.offshore==1
+                    ystart = min(gd.ymin,min(ys)-obj.minbound);
+                    sy1 = ystart:obj.minbound:ys(1);
+                    sy3 = fliplr(gd.ymin:obj.minbound:ys(end));                    
+                else
+                    ystart = max(gd.ymax,max(ys)+obj.minbound);
+                    sy1 = fliplr(ys(1):obj.minbound:ystart);
+                    sy3 = ys(end):obj.minbound:ystart;
+                end
+                sx1 = ones(size(sy1))*gd.xmin;
+                sx3 = ones(size(sy3))*gd.xmax;
+                sx4 = fliplr(gd.xmin:obj.minbound:gd.xmax);
+                sy4 = ones(size(sx4))*ystart;
+            else  %offshore is 2 or 4
+                if obj.offshore==2
+                    xstart = min(gd.xmin,min(xs)-obj.minbound);
+                    sx1 = xstart:obj.minbound:xs(1);
+                    sx3 = fliplr(gd.xmin:obj.minbound:xs(end));                    
+                else
+                    xstart = max(gd.xmax,max(xs)+obj.minbound);
+                    sx1 = fliplr(xs(1):obj.minbound:xstart);
+                    sx3 = xs(end):obj.minbound:xstart;
+                end
+                sy1 = ones(size(sx1))*gd.ymin;
+                sy3 = ones(size(sx3))*gd.ymax;
+                sy4 = fliplr(gd.ymin:obj.minbound:gd.ymax);
+                sx4 = ones(size(sy4))*xstart;
+            end
 
             %initialise inputs for refine2
             %node defines mesh boundary as an N-by-2 array of polygonal vertices
-            node = [left_bound;newshore_xy;right_bound;sea_bound];    
+            node = [sx1',sy1'; xs,ys; sx3',sy3'; sx4',sy4'];
+            % Find unique rows
+            node = unique(node, 'rows');
         end
 %%
         function [vert,tria] = get_mesh2d(obj,node,edge,part)
