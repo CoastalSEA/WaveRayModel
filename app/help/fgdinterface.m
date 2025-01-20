@@ -49,7 +49,10 @@
 % elevations, and any other data to be included in the dstable; _dims_ is a
 % struct for the dimensions of griddata, where the fields 'x' and 'y' are the 
 % vector dimensions of z and must be unique, and the field 't' can be 
-% datetimes, durations or values to assign to rows in dstable; and 
+% datetimes, durations or values to assign to rows in dstable, 'ishead' is
+% a logical flag defining the x-axis orientation, 'xM' is the distance to 
+% the inlet/estuary/valley mouth from the grid origin, and 'cline' is a struct 
+% with the x and y coordinates of the centre-line; and 
 % _meta_ is a stuct with 'source' and 'data' fields to describe file name or model
 % used, and additional run details, respectively.
 %%
@@ -60,10 +63,10 @@
 % and _irow_ is the row index of the dstable to extract grid from
 % (optional). Returns grid as a struct with the fields, 'x', 'y', 'z' and
 % 't, together with any metadata that may be assigned to the dstable,
-% including, 'irow', the row indexin the dstable, 'desc', the dstable Description, 'ishead',
+% including, 'irow', the row index in the dstable, 'desc', the dstable Description, 'ishead',
 % a logical flag defining the x-axis orientation, 'xM', the distance to 
 % the inlet/estuary/valley mouth from the grid origin, and 'cline', a struct 
-% with the x and y coordinates of the centre-line if a meander has been added.
+% with the x and y coordinates of the centre-line.
 %%
 %   grid = getGrid(obj,irow);
 

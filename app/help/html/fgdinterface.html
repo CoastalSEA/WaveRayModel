@@ -6,7 +6,7 @@
    <!--
 This HTML was auto-generated from MATLAB code.
 To make changes, update the MATLAB code and republish this document.
-      --><title>FGDinterface</title><meta name="generator" content="MATLAB 9.13"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2023-02-23"><meta name="DC.source" content="fgdinterface.m"><style type="text/css">
+      --><title>FGDinterface</title><meta name="generator" content="MATLAB 9.13"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2025-01-20"><meta name="DC.source" content="fgdinterface.m"><style type="text/css">
 html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
 
 html { min-height:100%; margin-bottom:1px; }
@@ -72,8 +72,8 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 the <i>DSproperties</i> can be viewed by using the mouse button callback
 in the first column of a Case on the Cases/Data/Model tab in the main interface.
 </td></tr></table>
-</p><h2 id="4">FGDinterface properties</h2><p>The class uses the properties defined for <a href="matlab:doc('muidataset')">muiDataSet</a></p><h2 id="5">FGDinterface methods</h2><p>The methods in the abstract class include the following:</p><p>Methods to add, delete and update grids and propetry tables:</p><p><b>setGrid</b> - load the grid results into a dstable, where <i>obj</i> is any GDintereface subclass; <i>gridddata</i> is a cell array with a matrix of elevations, and any other data to be included in the dstable; <i>dims</i> is a struct for the dimensions of griddata, where the fields 'x' and 'y' are the vector dimensions of z and must be unique, and the field 't' can be datetimes, durations or values to assign to rows in dstable; and <i>meta</i> is a stuct with 'source' and 'data' fields to describe file name or model used, and additional run details, respectively.</p><pre class="language-matlab">obj = setGrid(obj,griddata,dims,meta);
-</pre><p><b>getGrid</b> - retrieve a grid, where <i>obj</i> is any GDintereface subclass; and <i>irow</i> is the row index of the dstable to extract grid from (optional). Returns grid as a struct with the fields, 'x', 'y', 'z' and 't, together with any metadata that may be assigned to the dstable, including, 'irow', the row indexin the dstable, 'desc', the dstable Description, 'ishead', a logical flag defining the x-axis orientation, 'xM', the distance to the inlet/estuary/valley mouth from the grid origin, and 'cline', a struct with the x and y coordinates of the centre-line if a meander has been added.</p><pre class="language-matlab">grid = getGrid(obj,irow);
+</p><h2 id="4">FGDinterface properties</h2><p>The class uses the properties defined for <a href="matlab:doc('muidataset')">muiDataSet</a></p><h2 id="5">FGDinterface methods</h2><p>The methods in the abstract class include the following:</p><p>Methods to add, delete and update grids and propetry tables:</p><p><b>setGrid</b> - load the grid results into a dstable, where <i>obj</i> is any GDintereface subclass; <i>gridddata</i> is a cell array with a matrix of elevations, and any other data to be included in the dstable; <i>dims</i> is a struct for the dimensions of griddata, where the fields 'x' and 'y' are the vector dimensions of z and must be unique, and the field 't' can be datetimes, durations or values to assign to rows in dstable, 'ishead' is a logical flag defining the x-axis orientation, 'xM' is the distance to the inlet/estuary/valley mouth from the grid origin, and 'cline' is a struct with the x and y coordinates of the centre-line; and <i>meta</i> is a stuct with 'source' and 'data' fields to describe file name or model used, and additional run details, respectively.</p><pre class="language-matlab">obj = setGrid(obj,griddata,dims,meta);
+</pre><p><b>getGrid</b> - retrieve a grid, where <i>obj</i> is any GDintereface subclass; and <i>irow</i> is the row index of the dstable to extract grid from (optional). Returns grid as a struct with the fields, 'x', 'y', 'z' and 't, together with any metadata that may be assigned to the dstable, including, 'irow', the row index in the dstable, 'desc', the dstable Description, 'ishead', a logical flag defining the x-axis orientation, 'xM', the distance to the inlet/estuary/valley mouth from the grid origin, and 'cline', a struct with the x and y coordinates of the centre-line.</p><pre class="language-matlab">grid = getGrid(obj,irow);
 </pre><p><b>addGrid</b> - add a grid to an existing <a href="matlab:doc('muitoolbox')">muitoolbox</a> Case table, where <i>obj</i> is any GDintereface subclass; <i>muicat</i> is a handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>; <i>newgrid</i> is the grid to add to the dstable and should be of the same dimensions as existing grids in the table; <i>timestep</i> is the value to use for RowName in the dstable; <i>dims</i> is a struct containig xM, Lt and river properties; <i>sourcetxt</i> is the file name, or model name, to identify data source; and <i>ismsg</i> is a flag set to true to use the defualt message, and false to suppress the message.</p><pre class="language-matlab">addGrid(obj,muicat,newgrid,timestep,dims,sourcetxt,ismsg);
 </pre><p><b>deleteGrid</b> - delete a grid to an existing <a href="matlab:doc('muitoolbox')">muitoolbox</a> Case table, where <i>obj</i> is any FGDintereface subclass; <i>classrec</i> is the class record number; <i>catrec</i> is the catalogue record for the instance; and <i>muicat</i> is a handle to the <a href="matlab:doc('muicatalogue')">muiCatalogue</a>.</p><pre class="language-matlab">deleteGrid(obj,classrec,catrec,muicat);
 </pre><p><b>setProperties</b> - initialises the tables for derived properties of gridded data set</p><pre>  obj = setProperties(obj,zwl,Wz,limits,histint);</pre><p><b>addProperties</b> - add properties to an existing set of grid property tables</p><pre class="language-matlab">obj = addProperties(obj,irow,zwl,Wz,limits,histint);
@@ -138,7 +138,10 @@ in the first column of a Case on the Cases/Data/Model tab in the main interface.
 % elevations, and any other data to be included in the dstable; _dims_ is a
 % struct for the dimensions of griddata, where the fields 'x' and 'y' are the 
 % vector dimensions of z and must be unique, and the field 't' can be 
-% datetimes, durations or values to assign to rows in dstable; and 
+% datetimes, durations or values to assign to rows in dstable, 'ishead' is
+% a logical flag defining the x-axis orientation, 'xM' is the distance to 
+% the inlet/estuary/valley mouth from the grid origin, and 'cline' is a struct 
+% with the x and y coordinates of the centre-line; and 
 % _meta_ is a stuct with 'source' and 'data' fields to describe file name or model
 % used, and additional run details, respectively.
 %%
@@ -149,10 +152,10 @@ in the first column of a Case on the Cases/Data/Model tab in the main interface.
 % and _irow_ is the row index of the dstable to extract grid from
 % (optional). Returns grid as a struct with the fields, 'x', 'y', 'z' and
 % 't, together with any metadata that may be assigned to the dstable,
-% including, 'irow', the row indexin the dstable, 'desc', the dstable Description, 'ishead',
+% including, 'irow', the row index in the dstable, 'desc', the dstable Description, 'ishead',
 % a logical flag defining the x-axis orientation, 'xM', the distance to 
 % the inlet/estuary/valley mouth from the grid origin, and 'cline', a struct 
-% with the x and y coordinates of the centre-line if a meander has been added.
+% with the x and y coordinates of the centre-line.
 %%
 %   grid = getGrid(obj,irow);
 

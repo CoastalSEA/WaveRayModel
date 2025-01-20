@@ -55,6 +55,20 @@
 % Tools. 
 
 %%
+% *GD_ImportData* class inherits GDinterface abstract class (see above)
+% to load xyz data from a file. Methods within the class include:
+%%
+% * loadData - set up a new dataset by loading data from a file. 
+% * addData - add additional data to an existing dataset.
+% * tabPlots - plots the grid as a filled contour plot (can be overloaded if
+% required for a specific application).
+
+%%
+% These methods are supplemented by the methods available in
+% <matlab:doc('muidataset') muiDataSet> as well as the
+% <matlab:doc('gdinterface') GDinterface> summarised above.
+
+%%
 % *FGDinterface*: an abstract class to support classes that need additional
 % functionality to handle grids. The class inherits *GDinterface*, to extend 
 % the grid handling methods, to extract inlet/channel properties
@@ -70,8 +84,8 @@
 % * addFormProps - add form properties to a gridded data set
 % * delFormProperties - delete ALL property tables associated with a 
 % selected gridded data set
-% *s etModelFormProps -add a set of Hypsometry, Section and Gross form properties 
-% * ditGridInletData - UI to edit, definition of channel head, x-distance 
+% * setModelFormProps -add a set of Hypsometry, Section and Gross form properties 
+% * editGridInletData - UI to edit, definition of channel head, x-distance 
 % to mouth and definition of centre-line (if used).
 
 %%
@@ -87,7 +101,7 @@
 % Tools. 
 
 %%
-% *GD_ImportData* class inherits FGDinterface abstract class (see above)
+% *FGD_ImportData* class inherits FGDinterface abstract class (see above)
 % to load xyz data from a file. Methods within the class include:
 %%
 % * loadData - set up a new dataset by loading data from a file. 
