@@ -41,7 +41,7 @@ function D = datawell_directional_spectra(dirs,isplot,varargin)
         isplot = false;
     end
 
-    if length(varargin)==1
+    if isscalar(varargin)
         dst = varargin{1};
         f = dst.Spectra.Dimensions.freq;
         m = dst.Spectra.Dir;

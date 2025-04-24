@@ -60,6 +60,8 @@
 % * _deanbeachprofile_ - find the bed slope across the surf zone.
 %   the profile is based on a user defined slope between Hw and SWL (0mOD)
 %   and a Dean profile below this level. 
+% * _extract_wave_data_ - extract Hs, Tp and Dir from a dataset that does not use default naming
+%   convention (e.g. Copernicus re-analysis data).
 
 %% Grid Classes
 % Classes used to manipulate cartesian grids can be found in the

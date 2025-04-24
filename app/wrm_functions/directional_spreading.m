@@ -19,7 +19,7 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 %   theta = the angles used to define the function (degTN)
 % NOTES
 %   Donelan, Hamilton and Hui, R.Soc, 1985, A315, 509-562
-%   US Army Corps, Shore Protection Manual, 1984
+%   US Army Corps, Shore Protection Manual (SPM), 1984
 % SEE ALSO
 %   wave_spectrum.m. Used in WaveRayModel
 %
@@ -39,7 +39,7 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
     end
     
     if iscos        
-        gfun = @(ang) cos(gamma*ang).^nspread;    %SMP cosine function
+        gfun = @(ang) cos(gamma*ang).^nspread;    %SPM cosine function
     else
         gfun = @(ang) sech(beta*ang).^nspread;    %Donelan secant function
     end

@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="2530827287" file="D:\Matlab Code\muiModels\WaveRayModel\app\WaveRayModel.prj" location="D:\Matlab Code\muiModels\WaveRayModel\app" name="WaveRayModel" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="2607635233" file="D:\Matlab Code\muiModels\WaveRayModel\app\WaveRayModel.prj" location="D:\Matlab Code\muiModels\WaveRayModel\app" name="WaveRayModel" target="target.mlapps" target-name="Package App">
     <param.appname>WaveRayModel</param.appname>
     <param.authnamewatermark>Ian Townend</param.authnamewatermark>
     <param.email>i.townend@soton.ac.uk</param.email>
@@ -13,7 +13,7 @@
     <param.summary>Wave ray tracing model to generate forward and backward tracking rays over a coastal bathymetry and transfer wave data to a neashore point.</param.summary>
     <param.description>WaveRayModel is a MatlabTM App to examine wave refraction and shoaling over coastal bathymetries. Using a ray tracing method forward and backward tracking rays can be generated for a range of wave periods (frequencies), directions and water levels. Forward tracking provides a spatial visualisation of how waves approach the shore. Backward tracking is used to construct transfer tables that allow inshore wave conditions to be estimated from an offshore timeseries of waves (height, period and direction). Several different definitions of the offshore wave spectrum are provided and depth saturation can also be included (TMA spectrum). The App includes options to plot the offshore and inshore spectrums and the various transfer coefficients as a function of wave period, mean directions and water level. Note, however, that this implementation does not include processes of wave reflection, wave diffraction and wave breaking, although the latter is implicitly captured by including depth saturation using the TMA spectrum.</param.description>
     <param.screenshot>${PROJECT_ROOT}\WRM_logo.jpg</param.screenshot>
-    <param.version>1.07</param.version>
+    <param.version>1.08</param.version>
     <param.products.name />
     <param.products.id />
     <param.products.version />
@@ -58,7 +58,7 @@
     </build-deliverables>
     <workflow />
     <matlab>
-      <root>C:\Program Files\MATLAB\R2022b</root>
+      <root>C:\Program Files\MATLAB\R2024b</root>
       <toolboxes />
     </matlab>
     <platform>

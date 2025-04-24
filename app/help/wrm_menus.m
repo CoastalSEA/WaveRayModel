@@ -57,6 +57,8 @@
 % or minimum set of values;
 % * *Grid Tools > Add Surface*: add horizontal surface to an extisting
 % grid;
+% * *Grid Tools > Infill Surface*: spatial interpolation to infill
+% areas with no data;
 % * *Grid Tools > To curvilinear*: map grid from cartesian to curvilinear coordinates; 
 % * *Grid Tools > From curvilinear*: map grid from curvilinear to cartesian
 % coordinates;

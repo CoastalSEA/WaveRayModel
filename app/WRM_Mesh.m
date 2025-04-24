@@ -76,23 +76,25 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet & matlab.mixin.Copyable
 %%
         function obj = runModel(mobj)
             %function to run a simple 2D diffusion model
+            muicat = mobj.Cases;                      
+%--------------------------------------------------------------------------
+% Model code 
+%--------------------------------------------------------------------------
+            errtxt = 'No grid data available for selected case';
+            promptxt = 'Select grid to use for wave model'; 
+            gridclasses = {'WRM_Bathy','GD_ImportData'};
+            grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
+            if isempty(grdobj), warndlg(errtxt); return; end
+
+            grid = getGrid(grdobj,1);                        %source grid
+            if isempty(grid.z), warndlg(errtxt); return; end
+
             obj = WRM_Mesh.setInput(mobj);
             if isempty(obj.zhw) 
                 warndlg('Some mesh input values not defined (e.g. Upper shore level)')
                 return;
             end
-            muicat = mobj.Cases;
-            setRunParam(obj,mobj);             
-%--------------------------------------------------------------------------
-% Model code 
-%--------------------------------------------------------------------------
-            promptxt = 'Select grid to use for wave model'; 
-            gridclasses = {'WRM_Bathy','GD_ImportData'};
-            grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
-            if isempty(grdobj), return; end
-
-            grid = getGrid(grdobj,1);                        %source grid
-            if isempty(grid.z), return; end
+            setRunParam(obj,mobj);   
 
             answer = questdlg('Load or create mesh boundary?','Mesh',...
                               'Load boundary','Load shore','Create','Create');
@@ -112,9 +114,11 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet & matlab.mixin.Copyable
                 % [node,edge,part} = add internal points
                 part{1} = 1:length(edge);
             else
-                shore_xy = getShoreline(obj,grid);           %extract shoreline
+                %shore_xy = getShoreline(obj,grid);           %extract shoreline
+                paneltxt = 'Mesh shoreline selection';
+                shore_xy = gd_boundary(grid,paneltxt,1,true);
                 if isempty(shore_xy), return; end            %x,y column vectors
-    
+
                 [node,edge] = getMeshBoundary(obj,shore_xy,grid,1); %mesh boundary polygon
                 if isempty(node), return; end
                 %add internal refinement
@@ -204,70 +208,69 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet & matlab.mixin.Copyable
     methods (Access=private)
         function shore_xy = getShoreline(obj,grid)
             %get contour at zhw to define shoreline     
-            %could add option to select smoothing method and window size**
-            [X,Y] = meshgrid(grid.x,grid.y);
-
-            hf = figure('Name','Search','Tag','PlotFig','Visible','off');
-            ax = axes(hf);
-            surf(ax,X,Y,grid.z'); shading interp; colorbar;
-            hold on 
-            M = contourc(grid.x,grid.y,grid.z',[obj.zhw,obj.zhw]);
-            hold off
-            shore_xy = M(:,2:end)';          %x,y column vectors
-            delete(hf)
-            gdims = gd_dimensions(grid);
-            shore_xy = clipShore(obj,shore_xy,gdims);
-            
-            %create accept button figure
-            figtitle = 'Mesh shoreline selection';
-            promptxt = 'Accept of adjust shoreline?';
-            tag = 'MeshFig'; %used for collective deletes of a group
-            butnames = {'Accept','Smooth','Clean','Reset','Quit'};
-            [h_plt,h_but] = acceptfigure(figtitle,promptxt,tag,butnames);
-            ax = axes(h_plt);
-            plot(ax,shore_xy(:,1),shore_xy(:,2))
-
-            ok = 0;
-            while ok<1
-                waitfor(h_but,'Tag');
-                if ~ishandle(h_but) %this handles the user deleting figure window
-                    shore_xy = []; return;
-                elseif strcmp(h_but.Tag,'Quit')
-                    shore_xy = []; ok = 1;
-                elseif strcmp(h_but.Tag,'Smooth')
-                    %smooth the shoreline
-                    h_but.Tag = '';
-                    icol = [1,2];  %smooth along the dominant axis based on offshore boundary
-                    if obj.offshore==2 || obj.offshore==4
-                        icol = [2,1];
-                    end
-                    shore = smoothdata(shore_xy(:,icol(2)),'sgolay','Degree',4,'SamplePoints',shore_xy(:,icol(1)));
-                    hold on
-                    plot(ax,shore_xy(:,1),shore)
-                    hold off
-                    shore_xy(:,2) = shore;
-                elseif strcmp(h_but.Tag,'Clean')
-                    %remove points outside user defined x-y range
-                    h_but.Tag = '';
-                    xmnmx = minmax(shore_xy(:,1));
-                    ymnmx = minmax(shore_xy(:,2));
-                    promptxt = {'Min-Max X','Min-Max Y'};
-                    defaults = {num2str(xmnmx),num2str(ymnmx)};
-                    answer = inputdlg(promptxt,'Shore',1,defaults);
-                    if ~isempty(answer)
-                        xx = str2num(answer{1}); %#ok<ST2NM> returns vector
-                        yy = str2num(answer{2}); %#ok<ST2NM> 
-                        shore_xy = clipShore(obj,shore_xy,num2cell([xx,yy]));
-                        plot(ax,shore_xy(:,1),shore_xy(:,2))
-                    end
-                elseif strcmp(h_but.Tag,'Reset')
-                    shore_xy = M(:,2:end);
-                    plot(ax,shore_xy(:,1),shore_xy(:,2))
-                else
-                    ok = 1;
-                end
-            end
-            delete(h_plt.Parent)
+%             [X,Y] = meshgrid(grid.x,grid.y);
+% 
+%             hf = figure('Name','Search','Tag','PlotFig','Visible','off');
+%             ax = axes(hf);
+%             surf(ax,X,Y,grid.z'); shading interp; colorbar;
+%             hold on 
+%             M = contourc(grid.x,grid.y,grid.z',[obj.zhw,obj.zhw]);
+%             hold off
+%             shore_xy = M(:,2:end)';          %x,y column vectors
+%             delete(hf)
+%             gdims = gd_dimensions(grid);
+%             shore_xy = clipShore(obj,shore_xy,gdims);
+%             
+%             %create accept button figure
+%             figtitle = 'Mesh shoreline selection';
+%             promptxt = 'Accept of adjust shoreline?';
+%             tag = 'MeshFig'; %used for collective deletes of a group
+%             butnames = {'Accept','Smooth','Clean','Reset','Quit'};
+%             [h_plt,h_but] = acceptfigure(figtitle,promptxt,tag,butnames);
+%             ax = axes(h_plt);
+%             plot(ax,shore_xy(:,1),shore_xy(:,2))
+% 
+%             ok = 0;
+%             while ok<1
+%                 waitfor(h_but,'Tag');
+%                 if ~ishandle(h_but) %this handles the user deleting figure window
+%                     shore_xy = []; return;
+%                 elseif strcmp(h_but.Tag,'Quit')
+%                     shore_xy = []; ok = 1;
+%                 elseif strcmp(h_but.Tag,'Smooth')
+%                     %smooth the shoreline
+%                     h_but.Tag = '';
+%                     icol = [1,2];  %smooth along the dominant axis based on offshore boundary
+%                     if obj.offshore==2 || obj.offshore==4
+%                         icol = [2,1];
+%                     end
+%                     shore = smoothdata(shore_xy(:,icol(2)),'sgolay','Degree',4,'SamplePoints',shore_xy(:,icol(1)));
+%                     hold on
+%                     plot(ax,shore_xy(:,1),shore)
+%                     hold off
+%                     shore_xy(:,2) = shore;
+%                 elseif strcmp(h_but.Tag,'Clean')
+%                     %remove points outside user defined x-y range
+%                     h_but.Tag = '';
+%                     xmnmx = minmax(shore_xy(:,1));
+%                     ymnmx = minmax(shore_xy(:,2));
+%                     promptxt = {'Min-Max X','Min-Max Y'};
+%                     defaults = {num2str(xmnmx),num2str(ymnmx)};
+%                     answer = inputdlg(promptxt,'Shore',1,defaults);
+%                     if ~isempty(answer)
+%                         xx = str2num(answer{1}); %#ok<ST2NM> returns vector
+%                         yy = str2num(answer{2}); %#ok<ST2NM> 
+%                         shore_xy = clipShore(obj,shore_xy,num2cell([xx,yy]));
+%                         plot(ax,shore_xy(:,1),shore_xy(:,2))
+%                     end
+%                 elseif strcmp(h_but.Tag,'Reset')
+%                     shore_xy = M(:,2:end);
+%                     plot(ax,shore_xy(:,1),shore_xy(:,2))
+%                 else
+%                     ok = 1;
+%                 end
+%             end
+%             delete(h_plt.Parent)
         end
 %%
         function [node,edge] = getMeshBoundary(obj,shore_xy,grid,isextract)
@@ -304,7 +307,9 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet & matlab.mixin.Copyable
                 elseif strcmp(h_but.Tag,'Adjust')
                     obj = editProperties(obj);
                     if isextract
-                        shore_xy = getShoreline(obj,grid);           %extract shoreline
+                        %shore_xy = getShoreline(obj,grid);           %extract shoreline
+                        paneltxt = 'Mesh shoreline selection';
+                        shore_xy = gd_boundary(grid,paneltxt,1,true);
                         if isempty(shore_xy)
                             node = []; 
                             delete(h_plt.Parent); return; 
@@ -340,7 +345,6 @@ classdef WRM_Mesh < muiPropertyUI & muiDataSet & matlab.mixin.Copyable
 %%
         function node = setBoundary(obj,shore_xy,grid)
             %create the boundary with specified limits
-
             shorelength = sum(vecnorm(diff(shore_xy),2,2));
             %interpolate shoreline to user specified mesh size
             shorepts = round(shorelength/obj.minshore);

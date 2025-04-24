@@ -7,7 +7,7 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
 %   construct the offshore and inshore spectra for given wave conditions or
 %   wave buoy spectral data
 % USAGE
-%   [SGo,SGi,Dims] = get_inshore_spectrum(transtable,input,sp)
+%   [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
 % INPUTS
 %   sptobj - SpectralTransfer class object
 %            Data - inshore and offshore transfer tables
@@ -282,7 +282,8 @@ function spectrum_inputs = setInputParams(input,sp)
     %check for invalid conditions when timeseries wave or wind 
     %data used to define conditions
     if istable(input) 
-        if strcmp(sp.source,'Wave') && any(isnan(input{1,[1,3,5,9]})) %offshore waves  
+        idvar = ismatch(input.Properties.VariableNames,{'Hs','Dir','Tp','swl'});
+        if strcmp(sp.source,'Wave') && any(isnan(input{1,idvar})) %offshore waves  
             return;
         elseif strcmp(sp.source,'Wind') && any(isnan(input{1,[1,2]})) %wind input  
             return;

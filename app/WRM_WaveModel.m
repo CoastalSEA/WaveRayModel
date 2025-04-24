@@ -19,9 +19,9 @@ classdef WRM_WaveModel < muiDataSet
         %Additional properties:   
     end
     
-%     properties (Hidden)
-%         ModelType        %model used for the particular instance
-%     end
+    properties (Hidden)
+        ModelType        %model used for the particular instance
+    end
     
     methods (Access={?muiDataSet,?muiStats})
         function obj = WRM_WaveModel()                    
@@ -43,7 +43,8 @@ classdef WRM_WaveModel < muiDataSet
             %get the timeseries input data and site parameters
             %Note: getInputData calls setRunParam
             [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj);
-                 
+            if isempty(tsdst), return; end   %user cancelled data selection
+
             if strcmp(source,'Measured spectra')
                 select = WRM_WaveModel.getSprectraConditions();   
                 select.freq = tsdst.Dimensions.freq;
@@ -96,7 +97,8 @@ classdef WRM_WaveModel < muiDataSet
 % Save results
 %--------------------------------------------------------------------------  
             %save results
-            setDataSetRecord(obj,mobj.Cases,dst,'Inwave_model');
+            obj.ModelType = 'Inwave_model';               %added to match ctWaveModel
+            setDataSetRecord(obj,mobj.Cases,dst,'model');
             getdialog('Run complete');
         end
 %--------------------------------------------------------------------------
@@ -186,43 +188,49 @@ classdef WRM_WaveModel < muiDataSet
     end
 %%
     methods
-%         function [tsdst,caserec] = getWaveModelDataset(obj,mobj,type,varnames,caserec)
-%             %prompt user to select a model wave dataset and add Tp if inshore
-%             muicat = mobj.Cases;
-%             if nargin<4
-%                 varnames = {'Tp'};  %default is to add Tp
-%             end
-%             %
-%             if nargin<5   %no caserec to prompt for selection
-%                 [wvobj,wvdst,ok] = selectClassInstance(obj,'ModelType',type);
-%                 if ok<1, tsdst = []; return; end
-%                 caserec = caseRec(muicat,wvobj.CaseIndex);
-%             else
-%                 wvobj = getCase(muicat,caserec);
-%                 wvdst = wvobj.Data.Dataset;
-%             end
-%             
-%             
-%             %if inshore wave dataset add variables requested otherwise just
-%             %copy dstable
-%             tsdst = copy(wvdst);
-%             if strcmp(type,'Inwave_model')
-%                 inpwavecid = wvobj.RunParam.ctWaveData.caseid;
-%                 inpwaverec = caseRec(muicat,inpwavecid);
-%                 inpdst = getDataset(muicat,inpwaverec,1);
-%                 dstnames = inpdst.VariableNames;
-%                 for i=1:length(varnames)                    
-%                     if any(strcmp(dstnames,varnames{i})) && ...
-%                                             ~isempty(inpdst.(varnames{i}))
-%                         tsdst = addvars(tsdst,inpdst.(varnames{i}),...
-%                                            'NewVariableNames',varnames{i});
-%                     else
-%                         warndlg('Variable %s not found so not added to wave dataset',...
-%                                                            varnames{i});
-%                     end
-%                 end
-%             end
-%         end
+        function [tsdst,caserec] = getWaveModelDataset(obj,mobj,type,addnames,caserec)
+            %prompt user to select a model wave dataset and add Tp if inshore
+            muicat = mobj.Cases;
+            if nargin<4
+                addnames = {'Tp'};  %default is to add Tp
+            end
+            %
+            if nargin<5   %no caserec to prompt for selection
+                [wvobj,wvdst,ok] = selectClassInstance(obj,'ModelType',type);
+                if ok<1, tsdst = []; return; end
+                caserec = caseRec(muicat,wvobj.CaseIndex);
+            else
+                wvobj = getCase(muicat,caserec);
+                wvdst = wvobj.Data.Dataset;
+            end
+
+            %if inshore wave dataset add variables requested otherwise just
+            %copy dstable
+            tsdst = copy(wvdst);
+            if strcmp(type,'Inwave_model')
+                inpwavecid = wvobj.RunParam.ctWaveData.caseid;
+                inpwaverec = caseRec(muicat,inpwavecid);
+                inpdst = getDataset(muicat,inpwaverec,1);
+                dstnames = inpdst.VariableNames;
+                varnames = tsdst.VariableNames;
+                for i=1:length(addnames)                    
+                    if any(strcmp(varnames,addnames{i}))
+                        continue;
+                    elseif any(contains(varnames,addnames{i})) && ...
+                                      ~any(strcmp(varnames,addnames{i}))  
+                        idx = contains(varnames,addnames{i});
+                        tsdst.VariableNames{idx} = addnames{i};
+                    elseif any(strcmp(dstnames,addnames{i})) && ...
+                                            ~isempty(inpdst.(addnames{i}))
+                        tsdst = addvars(tsdst,inpdst.(addnames{i}),...
+                                           'NewVariableNames',addnames{i});
+                    else
+                        warndlg('Variable %s not found so not added to wave dataset',...
+                                                           addnames{i});
+                    end
+                end
+            end
+        end
 %%        
         function tabPlot(obj,src) %abstract class for muiDataSet
             %generate plot for display on Q-Plot tab
@@ -237,7 +245,7 @@ classdef WRM_WaveModel < muiDataSet
         function [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj)
             %prompt user to select wave and water level data and return in
             %input dstable of data and metadata for inputs used
-            tsdst = []; inputxt = []; source = [];
+            tsdst = []; sptobj = []; inputxt = []; source = [];
             muicat = mobj.Cases;
             promptxt = 'Select input wave data set:';           
             [wv_caserec,ok] = selectRecord(muicat,'PromptText',promptxt,...
@@ -250,6 +258,12 @@ classdef WRM_WaveModel < muiDataSet
             source = 'Measured waves';
             if isfield(wvdst.Dimensions,'freq')
                 source = 'Measured spectra';
+            end
+            
+            varnames = wvdst.VariableNames;
+            if strcmp(source,'Measured waves') && ~any(strcmp(varnames,'Hs'))
+                wvdst = extract_wave_data(wvdst);
+                if isempty(wvdst), return; end
             end
 
             promptxt = 'Select input water level data set (Cancel to use SWL=0):';           

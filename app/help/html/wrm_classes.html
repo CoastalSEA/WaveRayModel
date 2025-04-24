@@ -1,12 +1,17 @@
-
-<!DOCTYPE html
-  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html><head>
-      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-   <!--
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<META http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<!--
 This HTML was auto-generated from MATLAB code.
 To make changes, update the MATLAB code and republish this document.
-      --><title>WaveRayModel Classes and Functions</title><meta name="generator" content="MATLAB 9.13"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2023-04-18"><meta name="DC.source" content="wrm_classes.m"><style type="text/css">
+      -->
+<title>WaveRayModel Classes and Functions</title>
+<meta name="generator" content="MATLAB 24.2">
+<link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
+<meta name="DC.date" content="2025-04-24">
+<meta name="DC.source" content="wrm_classes.m">
+<style type="text/css">
 html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
 
 html { min-height:100%; margin-bottom:1px; }
@@ -67,7 +72,235 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 
 
 
-  </style></head><body><div class="content"><h1>WaveRayModel Classes and Functions</h1><!--introduction--><p>The WaveRayModel App is built using the <a href="matlab:doc('muitoolbox')">muitoolbox</a>, the <a href="matlab:doc('dstoolbox')">dstoolbox</a> and a number of model specific classes.</p><!--/introduction--><h2>Contents</h2><div><ul><li><a href="#1">WaveRayModel classes</a></li><li><a href="#2">WaveRayModel functions</a></li><li><a href="#4">Additional Coastal Classes</a></li><li><a href="#6">Additional Coastal Functions</a></li><li><a href="#8">Grid Classes</a></li><li><a href="#10">Grid Functions</a></li><li><a href="#13">See Also</a></li></ul></div><h2 id="1">WaveRayModel classes</h2><div><ul><li><b>WaveRayModel</b>: defines the behaviour of the main UI.</li><li><b>MS_RunParams</b>: UI to set pareameters used for the skill score</li><li><b>Ray</b>: creates individual ray objects. Called by RayTracks and uses arc_ray function.</li><li><b>RayTracks</b>: constructing array of wave ray tracks as a function of wave direction, wave period and water level, working in forward or backward ray tracking mode.</li><li><b>SpectralTransfer</b>: builds the offshore and inshore Transfer Tables from a backward ray tracking data set (class RayTracks) for use in WRM_WaveModel. Also has a method to create plots of the transfer coefficients for a unit wave height.</li><li><b>WRM_Bathy</b>: generate idealised bathymetries using a linear slope or Dean's profile on a linear or crenulate shoreline. Also includes an option for a mound on a linear slope.</li><li><b>WRM_BT_Params</b>: parameters define initial positions and direction of backward tracking rays.</li><li><b>WRM_FT_Params</b>: parameters define initial positions and direction of forward tracking rays.</li><li><b>WRM_Mesh</b>: generate triangular mesh of nearshore area from a Cartesian grid.</li><li><b>WRM_RunParams</b>: run parameters for the WaveRayModel.</li><li><b>WRM_WaveModel</b>: Class for wave refraction using backward ray transfer function. Constructs inshore time series from an offshore timeseries. Also includes methods to plot the offshore and inshore spectra.</li></ul></div><h2 id="2">WaveRayModel functions</h2><p>Functions to construct rays, wave sprectra and generate plots</p><div><ul><li><i>arc_ray</i> &#8211; compute the exit position and direction of a ray entering a triangular element at the position and direction defined by the incoming ray.</li><li><i>celerity_grid</i> &#8211; calculate the celerity and group celerity over a bathymetry grid for a range of wave periods and a range of water levels.</li><li><i>celerity_mesh</i> - calculate the celerity and group celerity over a bathymetry mesh for a range of wave periods and a range of water levels</li><li><i>compass2trig</i> &#8211; convert compass directions to trigonometric angles, or vice versa.</li><li><i>curvspace</i> -  evenly spaced points along an existing curve in 2D or 3D., Author: Yo Fukushima, 2005, <a href="https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace">https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace</a></li><li><i>datawell_directional_spectra</i> - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.</li><li><i>directional_spreading</i> &#8211; sample a directional spreading function at selected direction intervals.</li><li><i>get_element</i> &#8211; define triangular polyshape based on quadrant being entered by ray.</li><li><i>get_inshore_spectrum</i> - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.</li><li><i>get_inshore_wave</i> - integrate the 2-D spectra to obtain wave parameters and transfer coefficients.</li><li><i>get_intersection</i> &#8211; find intersection of a triangle element and a line segment that can be a straight line or an arc segment.</li><li><i>get_quadrant</i> &#8211; find the quadrant that the start point lies in or on. Once first intersection has been found subsequent quadrants are defined in next_element, which calls get_quadrant if ray direction is aligned to axis.</li><li><i>interpolate_cbrewer</i> &#8211; interpolate a colorbrewer map to ncolors levels, Charles Robert, 2011, part of  cbrewer from Matlab&#8482; Exchange Forum.</li><li><i>is_axis_point</i> &#8211; find whether point lies on an axis and is travelling in the direction of that axis.</li><li><i>isangletol</i> &#8211; boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.</li><li><i>isclosetol</i> &#8211; boolean check of whether an x,y point lies close to another x,y point</li><li><i>mesh_arc_ray</i> &#8211; compute the exit position and direction of a ray entering a trian.gular mesh element at the position and direction defined by the incoming.</li><li><i>mesh2d</i> &#8211; generate triangular mesh, Author: Darren Engwirda, 2017, <a href="https://github.com/dengwirda/mesh2d">https://github.com/dengwirda/mesh2d</a>. NB: the mesh2d folder in the App is empty and this set of functions needs to be downloaded from the source and installed in the designated sub-folder of the WaveRayModel App.</li><li><i>PoolWaitbar</i> - initiallises and updates a waitbar when running a loop using parfor, Matlab&#8482; Forum: Edric Ellis, 2019</li><li><i>trigradient</i> &#8211; compute the gradients in the x and y directions using triangular mesh as input, Author: Mick Warehime, 2013, <a href="https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m">https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m</a> .</li><li><i>wave_spectrum</i> &#8211; calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).</li><li><i>wave_spectrum_params</i> - integrate a 2-D spectra to obtain wave parameters</li><li><i>wrm_animation</i> - animation of model spectra timeseries.</li><li><i>wrm_runmovie</i> - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.</li></ul></div><h2 id="4">Additional Coastal Classes</h2><p>In the folder ../muiAppCoastalClasses.</p><div><ul><li><b>ctWaterLevelData</b> &#8211; import water level data</li><li><b>ctWaveData</b> &#8211; import wave data</li><li><b>ctWindData</b> &#8211; import wind data</li></ul></div><h2 id="6">Additional Coastal Functions</h2><p>In the folder ../muiAppCoastalFcns.</p><div><ul><li><i>celerity</i> - calculate the wave celerity using Hunt's equation.</li><li><i>crenulate_bay</i> - generate the shoreline for an equilibrium crenulate bay using the method of Hsu and Evans, 1989 (Hsu and Evans, 1989).</li><li><i>data_cleanup</i> &#8211; set of functions to help clean up timeseries</li><li><i>deanbeachprofile</i> - find the bed slope across the surf zone.   the profile is based on a user defined slope between Hw and SWL (0mOD)   and a Dean profile below this level.</li></ul></div><h2 id="8">Grid Classes</h2><p>Classes used to manipulate cartesian grids can be found in the <i>muiAppGridFcns</i> folder and include the following:</p><div><ul><li><b>GD_GridProps</b>: class inherits <a href="matlab:doc('muipropertyui')">muiPropertyUI</a> abstract class, providing an interface to define the extent and intervals of a cartesian grid.</li><li><b>FGDinterface</b>: an abstract class to support classes that need additional functionality to handle grids. The class inherits <b>GDinterface</b>, which in turn inherits <a href="matlab:doc('muidataset')">muiDataSet</a> to provide an extensive set of methods to handle datasets of various types (eg from models or imported files).</li><li><b>GD_ImportData</b>: class inherits <a href="matlab:doc('fgdinterface')">FGDinterface</a> abstract class (see above) to load xyz data from a file.</li></ul></div><h2 id="10">Grid Functions</h2><p>Functions used to manipulate cartesian grids can be found in the <i>muiAppGridFcns</i> folder and include the following:</p><div><ul><li><i>gd_ax_dir</i> - check direction of grid axes and reverse if descending, OR find grid orientation using ishead and direction of x-axis, OR check a grid axis direction by prompting user.</li><li><i>gd_basin_hypsometry</i> - compute area and volume hypsometry from gridded elevation data.</li><li><i>gd_basin_indices</i> - get the indices of the grid x-axis that fall within the basin or channel, when the mouth is offset from the grid origin. (NB: assumes basin/channel is aligned iwth the x-axis). Also returns the index of mouth position on the x-axis.</li><li><i>gd_basin_properties</i> - use the basin hypsometry from gd_basin_hypsometry to compute several along-channel/x-axis morphological properties.</li><li><i>gd_colormap</i> - check if Mapping toolbox is installed to use land/sea colormap, or call <i>cmap_selection</i> (see <a href="matlab:doc('psfunctions')">Plotting and statistical functions</a> in the <a href="matlab:doc('muitoolbox')">muitoolbox</a>) if not available.</li><li><i>gd_digitisepoints</i> - creates figure to interactively digitise points on a grid and add elevations if required.</li><li><i>gd_dimensions</i> - get the grid dimsnions for a grid struct (as used in GDinterface).</li><li><i>gd_grid_line</i> - create a grid from scattered data points input as xyz tuples.</li><li><i>gd_gross_properties</i> - compute the gross properties of a gridded bathymetry.</li><li><i>gd_plan_form</i> - compute planform variation along the x-axis at specified planar levels.</li><li><i>gd_plotgrid</i> - create pcolor plot of gridded surface.</li><li><i>gd_plotsections</i> - display grid and allow user to interactively define start and end points of a section line to be plotted in a figure.</li><li><i>gd_property_plots</i> - plots displayed on Proprety tab or stand-alone figure in Apps that use GDinterface, such as ChannelForm and ModelSkill.</li><li><i>gd_section_properties</i> - compute the width, cross-sectional area and prism along channel.</li><li><i>gd_selectpoints</i> - accept figure to interactively select one or more points on a grid.</li><li><i>gd_setpoint</i> - interactively select a point on a plot and return the point coordinates. Includes an option to enter an additional value at the selected point (e.g. for elevation).</li><li><i>gd_startendpoints</i> - accept figure to interactively select start and end points on a grid.</li><li><i>gd_subdomain</i> - accept figure to interactively select a subdomain of a grid.</li><li><i>gd_property_plots</i> - plots displayed on Proprety tab in ChannelForm model and on a figure in ModelSkill.</li><li><i>gd_xy2sn</i> - map grid from cartesian to curvilinear coordinates with option to return the elevations on the source cartesian grid, or as a curvilinear grid.</li><li><i>gd_sn2xy</i> - map grid from curvilinear to cartesian coordinates.</li><li><i>getconvergencelength</i> - least squares fit using fminsearch to % find the convergence length of a channel from a distance-width xy data set.</li><li><i>getsubgrid</i> - extract a subdomain from a grid and return the extracted grid and the source grid indices of the bounding rectangle.</li><li><i>a_star</i> - implements the A* search algorithm to find the shortest path given constraints (inaccessible cells) and a cost function (e.g. water depths). Author: Alex Ranaldi, 2022, <a href="https://github.com/alexranaldi/A_STAR">https://github.com/alexranaldi/A_STAR</a></li><li><i>InterX</i> - intersection of two curves. MATLAB Central File Exchange, Author: NS, 2010, <a href="https://www.mathworks.com/matlabcentral/fileexchange/22441-curve-intersections">https://www.mathworks.com/matlabcentral/fileexchange/22441-curve-intersections</a>.</li><li><i>xy2sn</i> - Bart Vermeulen,2022, Cartesian to Curvilinear   coordinate forward and backward transformation.   <a href="https://www.mathworks.com/matlabcentral/fileexchange/55039-cartesian-to-curvilinear-coordinate-forward-and-backward-transformation">https://www.mathworks.com/matlabcentral/fileexchange/55039-cartesian-to-curvilinear-coordinate-forward-and-backward-transformation</a></li><li><i>sn2xy</i> - as above.</li></ul></div><p>Further details can be found in <a href="matlab:doc('grid_class_fcns')">Grid classes and functions</a></p><h2 id="13">See Also</h2><p>The ModelSkill <a href="matlab:wrm_open_manual">manual</a>, which provides further details of setup and configuration of the model.</p><p class="footer"><br><a href="https://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2022b</a><br></p></div><!--
+  </style>
+</head>
+<body>
+<div class="content">
+<h1>WaveRayModel Classes and Functions</h1>
+<!--introduction-->
+<p>The WaveRayModel App is built using the <a href="matlab:doc('muitoolbox')">muitoolbox</a>, the <a href="matlab:doc('dstoolbox')">dstoolbox</a> and a number of model specific classes.</p>
+<!--/introduction-->
+<h2>Contents</h2>
+<div>
+<ul>
+<li>
+<a href="#1">WaveRayModel classes</a>
+</li>
+<li>
+<a href="#2">WaveRayModel functions</a>
+</li>
+<li>
+<a href="#4">Additional Coastal Classes</a>
+</li>
+<li>
+<a href="#6">Additional Coastal Functions</a>
+</li>
+<li>
+<a href="#8">Grid Classes</a>
+</li>
+<li>
+<a href="#10">Grid Functions</a>
+</li>
+<li>
+<a href="#13">See Also</a>
+</li>
+</ul>
+</div>
+<h2 id="1">WaveRayModel classes</h2>
+<div>
+<ul>
+<li>
+<b>WaveRayModel</b>: defines the behaviour of the main UI.</li>
+<li>
+<b>MS_RunParams</b>: UI to set pareameters used for the skill score</li>
+<li>
+<b>Ray</b>: creates individual ray objects. Called by RayTracks and uses arc_ray function.</li>
+<li>
+<b>RayTracks</b>: constructing array of wave ray tracks as a function of wave direction, wave period and water level, working in forward or backward ray tracking mode.</li>
+<li>
+<b>SpectralTransfer</b>: builds the offshore and inshore Transfer Tables from a backward ray tracking data set (class RayTracks) for use in WRM_WaveModel. Also has a method to create plots of the transfer coefficients for a unit wave height.</li>
+<li>
+<b>WRM_Bathy</b>: generate idealised bathymetries using a linear slope or Dean's profile on a linear or crenulate shoreline. Also includes an option for a mound on a linear slope.</li>
+<li>
+<b>WRM_BT_Params</b>: parameters define initial positions and direction of backward tracking rays.</li>
+<li>
+<b>WRM_FT_Params</b>: parameters define initial positions and direction of forward tracking rays.</li>
+<li>
+<b>WRM_Mesh</b>: generate triangular mesh of nearshore area from a Cartesian grid.</li>
+<li>
+<b>WRM_RunParams</b>: run parameters for the WaveRayModel.</li>
+<li>
+<b>WRM_WaveModel</b>: Class for wave refraction using backward ray transfer function. Constructs inshore time series from an offshore timeseries. Also includes methods to plot the offshore and inshore spectra.</li>
+</ul>
+</div>
+<h2 id="2">WaveRayModel functions</h2>
+<p>Functions to construct rays, wave sprectra and generate plots</p>
+<div>
+<ul>
+<li>
+<i>arc_ray</i> &ndash; compute the exit position and direction of a ray entering a triangular element at the position and direction defined by the incoming ray.</li>
+<li>
+<i>celerity_grid</i> &ndash; calculate the celerity and group celerity over a bathymetry grid for a range of wave periods and a range of water levels.</li>
+<li>
+<i>celerity_mesh</i> - calculate the celerity and group celerity over a bathymetry mesh for a range of wave periods and a range of water levels</li>
+<li>
+<i>compass2trig</i> &ndash; convert compass directions to trigonometric angles, or vice versa.</li>
+<li>
+<i>curvspace</i> - evenly spaced points along an existing curve in 2D or 3D., Author: Yo Fukushima, 2005, <a href="https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace">https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace</a>
+</li>
+<li>
+<i>datawell_directional_spectra</i> - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.</li>
+<li>
+<i>directional_spreading</i> &ndash; sample a directional spreading function at selected direction intervals.</li>
+<li>
+<i>get_element</i> &ndash; define triangular polyshape based on quadrant being entered by ray.</li>
+<li>
+<i>get_inshore_spectrum</i> - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.</li>
+<li>
+<i>get_inshore_wave</i> - integrate the 2-D spectra to obtain wave parameters and transfer coefficients.</li>
+<li>
+<i>get_intersection</i> &ndash; find intersection of a triangle element and a line segment that can be a straight line or an arc segment.</li>
+<li>
+<i>get_quadrant</i> &ndash; find the quadrant that the start point lies in or on. Once first intersection has been found subsequent quadrants are defined in next_element, which calls get_quadrant if ray direction is aligned to axis.</li>
+<li>
+<i>interpolate_cbrewer</i> &ndash; interpolate a colorbrewer map to ncolors levels, Charles Robert, 2011, part of cbrewer from Matlab&trade; Exchange Forum.</li>
+<li>
+<i>is_axis_point</i> &ndash; find whether point lies on an axis and is travelling in the direction of that axis.</li>
+<li>
+<i>isangletol</i> &ndash; boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.</li>
+<li>
+<i>isclosetol</i> &ndash; boolean check of whether an x,y point lies close to another x,y point</li>
+<li>
+<i>mesh_arc_ray</i> &ndash; compute the exit position and direction of a ray entering a trian.gular mesh element at the position and direction defined by the incoming.</li>
+<li>
+<i>mesh2d</i> &ndash; generate triangular mesh, Author: Darren Engwirda, 2017, <a href="https://github.com/dengwirda/mesh2d">https://github.com/dengwirda/mesh2d</a>. NB: the mesh2d folder in the App is empty and this set of functions needs to be downloaded from the source and installed in the designated sub-folder of the WaveRayModel App.</li>
+<li>
+<i>PoolWaitbar</i> - initiallises and updates a waitbar when running a loop using parfor, Matlab&trade; Forum: Edric Ellis, 2019</li>
+<li>
+<i>trigradient</i> &ndash; compute the gradients in the x and y directions using triangular mesh as input, Author: Mick Warehime, 2013, <a href="https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m">https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m</a> .</li>
+<li>
+<i>wave_spectrum</i> &ndash; calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).</li>
+<li>
+<i>wave_spectrum_params</i> - integrate a 2-D spectra to obtain wave parameters</li>
+<li>
+<i>wrm_animation</i> - animation of model spectra timeseries.</li>
+<li>
+<i>wrm_runmovie</i> - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.</li>
+</ul>
+</div>
+<h2 id="4">Additional Coastal Classes</h2>
+<p>In the folder ../muiAppCoastalClasses.</p>
+<div>
+<ul>
+<li>
+<b>ctWaterLevelData</b> &ndash; import water level data</li>
+<li>
+<b>ctWaveData</b> &ndash; import wave data</li>
+<li>
+<b>ctWindData</b> &ndash; import wind data</li>
+</ul>
+</div>
+<h2 id="6">Additional Coastal Functions</h2>
+<p>In the folder ../muiAppCoastalFcns.</p>
+<div>
+<ul>
+<li>
+<i>celerity</i> - calculate the wave celerity using Hunt's equation.</li>
+<li>
+<i>crenulate_bay</i> - generate the shoreline for an equilibrium crenulate bay using the method of Hsu and Evans, 1989 (Hsu and Evans, 1989).</li>
+<li>
+<i>data_cleanup</i> &ndash; set of functions to help clean up timeseries</li>
+<li>
+<i>deanbeachprofile</i> - find the bed slope across the surf zone. the profile is based on a user defined slope between Hw and SWL (0mOD) and a Dean profile below this level.</li>
+<li>
+<i>extract_wave_data</i> - extract Hs, Tp and Dir from a dataset that does not use default naming convention (e.g. Copernicus re-analysis data).</li>
+</ul>
+</div>
+<h2 id="8">Grid Classes</h2>
+<p>Classes used to manipulate cartesian grids can be found in the <i>muiAppGridFcns</i> folder and include the following:</p>
+<div>
+<ul>
+<li>
+<b>GD_GridProps</b>: class inherits <a href="matlab:doc('muipropertyui')">muiPropertyUI</a> abstract class, providing an interface to define the extent and intervals of a cartesian grid.</li>
+<li>
+<b>FGDinterface</b>: an abstract class to support classes that need additional functionality to handle grids. The class inherits <b>GDinterface</b>, which in turn inherits <a href="matlab:doc('muidataset')">muiDataSet</a> to provide an extensive set of methods to handle datasets of various types (eg from models or imported files).</li>
+<li>
+<b>GD_ImportData</b>: class inherits <a href="matlab:doc('fgdinterface')">FGDinterface</a> abstract class (see above) to load xyz data from a file.</li>
+</ul>
+</div>
+<h2 id="10">Grid Functions</h2>
+<p>Functions used to manipulate cartesian grids can be found in the <i>muiAppGridFcns</i> folder and include the following:</p>
+<div>
+<ul>
+<li>
+<i>gd_ax_dir</i> - check direction of grid axes and reverse if descending, OR find grid orientation using ishead and direction of x-axis, OR check a grid axis direction by prompting user.</li>
+<li>
+<i>gd_basin_hypsometry</i> - compute area and volume hypsometry from gridded elevation data.</li>
+<li>
+<i>gd_basin_indices</i> - get the indices of the grid x-axis that fall within the basin or channel, when the mouth is offset from the grid origin. (NB: assumes basin/channel is aligned iwth the x-axis). Also returns the index of mouth position on the x-axis.</li>
+<li>
+<i>gd_basin_properties</i> - use the basin hypsometry from gd_basin_hypsometry to compute several along-channel/x-axis morphological properties.</li>
+<li>
+<i>gd_colormap</i> - check if Mapping toolbox is installed to use land/sea colormap, or call <i>cmap_selection</i> (see <a href="matlab:doc('psfunctions')">Plotting and statistical functions</a> in the <a href="matlab:doc('muitoolbox')">muitoolbox</a>) if not available.</li>
+<li>
+<i>gd_digitisepoints</i> - creates figure to interactively digitise points on a grid and add elevations if required.</li>
+<li>
+<i>gd_dimensions</i> - get the grid dimsnions for a grid struct (as used in GDinterface).</li>
+<li>
+<i>gd_grid_line</i> - create a grid from scattered data points input as xyz tuples.</li>
+<li>
+<i>gd_gross_properties</i> - compute the gross properties of a gridded bathymetry.</li>
+<li>
+<i>gd_plan_form</i> - compute planform variation along the x-axis at specified planar levels.</li>
+<li>
+<i>gd_plotgrid</i> - create pcolor plot of gridded surface.</li>
+<li>
+<i>gd_plotsections</i> - display grid and allow user to interactively define start and end points of a section line to be plotted in a figure.</li>
+<li>
+<i>gd_property_plots</i> - plots displayed on Proprety tab or stand-alone figure in Apps that use GDinterface, such as ChannelForm and ModelSkill.</li>
+<li>
+<i>gd_section_properties</i> - compute the width, cross-sectional area and prism along channel.</li>
+<li>
+<i>gd_selectpoints</i> - accept figure to interactively select one or more points on a grid.</li>
+<li>
+<i>gd_setpoint</i> - interactively select a point on a plot and return the point coordinates. Includes an option to enter an additional value at the selected point (e.g. for elevation).</li>
+<li>
+<i>gd_startendpoints</i> - accept figure to interactively select start and end points on a grid.</li>
+<li>
+<i>gd_subdomain</i> - accept figure to interactively select a subdomain of a grid.</li>
+<li>
+<i>gd_property_plots</i> - plots displayed on Proprety tab in ChannelForm model and on a figure in ModelSkill.</li>
+<li>
+<i>gd_xy2sn</i> - map grid from cartesian to curvilinear coordinates with option to return the elevations on the source cartesian grid, or as a curvilinear grid.</li>
+<li>
+<i>gd_sn2xy</i> - map grid from curvilinear to cartesian coordinates.</li>
+<li>
+<i>getconvergencelength</i> - least squares fit using fminsearch to % find the convergence length of a channel from a distance-width xy data set.</li>
+<li>
+<i>getsubgrid</i> - extract a subdomain from a grid and return the extracted grid and the source grid indices of the bounding rectangle.</li>
+<li>
+<i>a_star</i> - implements the A* search algorithm to find the shortest path given constraints (inaccessible cells) and a cost function (e.g. water depths). Author: Alex Ranaldi, 2022, <a href="https://github.com/alexranaldi/A_STAR">https://github.com/alexranaldi/A_STAR</a>
+</li>
+<li>
+<i>InterX</i> - intersection of two curves. MATLAB Central File Exchange, Author: NS, 2010, <a href="https://www.mathworks.com/matlabcentral/fileexchange/22441-curve-intersections">https://www.mathworks.com/matlabcentral/fileexchange/22441-curve-intersections</a>.</li>
+<li>
+<i>xy2sn</i> - Bart Vermeulen,2022, Cartesian to Curvilinear coordinate forward and backward transformation. <a href="https://www.mathworks.com/matlabcentral/fileexchange/55039-cartesian-to-curvilinear-coordinate-forward-and-backward-transformation">https://www.mathworks.com/matlabcentral/fileexchange/55039-cartesian-to-curvilinear-coordinate-forward-and-backward-transformation</a>
+</li>
+<li>
+<i>sn2xy</i> - as above.</li>
+</ul>
+</div>
+<p>Further details can be found in <a href="matlab:doc('grid_class_fcns')">Grid classes and functions</a>
+</p>
+<h2 id="13">See Also</h2>
+<p>The ModelSkill <a href="matlab:wrm_open_manual">manual</a>, which provides further details of setup and configuration of the model.</p>
+<p class="footer">
+<br>
+<a href="https://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2024b</a>
+<br>
+</p>
+</div>
+<!--
 ##### SOURCE BEGIN #####
 %% WaveRayModel Classes and Functions
 % The WaveRayModel App is built using the <matlab:doc('muitoolbox') muitoolbox>, 
@@ -131,6 +364,8 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 % * _deanbeachprofile_ - find the bed slope across the surf zone.
 %   the profile is based on a user defined slope between Hw and SWL (0mOD)
 %   and a Dean profile below this level. 
+% * _extract_wave_data_ - extract Hs, Tp and Dir from a dataset that does not use default naming
+%   convention (e.g. Copernicus re-analysis data).
 
 %% Grid Classes
 % Classes used to manipulate cartesian grids can be found in the
@@ -236,4 +471,6 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 % The ModelSkill <matlab:wrm_open_manual manual>, which provides further details 
 % of setup and configuration of the model.
 ##### SOURCE END #####
---></body></html>
+-->
+</body>
+</html>
