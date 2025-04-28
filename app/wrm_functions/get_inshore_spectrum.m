@@ -49,7 +49,8 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
     InDir = offdst.RowNames;  %inshore directions are held in the offshore table    
 
     %check limits for valid rays based on depth and shoreline angle  
-    idx = offdst.DataTable.depth<=0;        %parfor not finding dynamic property, so use table
+    %parfor not finding dynamic property, so use table
+    idx = offdst.DataTable.depth<=0 | isnan(offdst.DataTable.depth);        
 
     %variable definitions:
     % InDir - transfer table inshore directions (degTN)

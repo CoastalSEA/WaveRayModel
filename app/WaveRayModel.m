@@ -147,18 +147,19 @@ classdef WaveRayModel < muiModelUI
             
             %% Run menu ---------------------------------------------------
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
-                                'Check Start Depth','Backward Rays',...
+                                'Check Start Depth','Backward Rays','Batch Run',...
                                 'Transfer Table','Run Wave Timeseries',...
                                 'Create Mesh','Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,9]);            
+            menucall = repmat({@obj.runMenuOptions},[1,10]);            
             menu.Run(1).Callback = menucall;
-            menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off',...
+            menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off','off'...
                                               'on','off','on','off','on'}];
             %% Plot menu --------------------------------------------------  
-            menu.Analysis(1).List = {'Plots','Statistics','Ray Plots','Spectral Plots'};
-            menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,3]),...
+            menu.Analysis(1).List = {'Plots','Statistics','Plot Mesh',...
+                                              'Ray Plots','Spectral Plots'};
+            menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,4]),...
                                                                 {'gcbo;'}];
-            menu.Analysis(1).Separator = {'off','off','on','off'};
+            menu.Analysis(1).Separator = {'off','off','on','off','off'};
             
             %submenu for Spectral Plots
             menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients',...
@@ -184,7 +185,9 @@ classdef WaveRayModel < muiModelUI
             %format for subtabs: 
             %    subtabs.<tagname>(i,:) = {<subtab label>,<callback function>};
             %where <tagname> is the struct fieldname for the top level tab.
-            tabs.Cases  = {'   Cases  ',@obj.refresh};        % << Edit tabs to suit model 
+            tabs.Data  = {'   Data  ',@obj.refresh}; 
+            tabs.Rays  = {'   Rays  ',@obj.refresh}; 
+            tabs.Transfer  = {' Transfer ',@obj.refresh}; 
             tabs.Inputs = {'  Inputs  ',@obj.InputTabSummary};
             tabs.Plot   = {'  Q-Plot  ',@obj.getTabData};
             tabs.Stats = {'   Stats   ',@obj.setTabAction};
@@ -313,13 +316,15 @@ classdef WaveRayModel < muiModelUI
                 case 'Check Start Points'
                     RayTracks.checkStart(obj);
                 case 'Forward Rays'
-                    RayTracks.runModel(obj,src); 
+                    RayTracks.runModel(obj,src,[],[]); 
                 case 'Check Start Depth'
                     RayTracks.startDepth(obj);
                 case 'Backward Rays'                    
-                    RayTracks.runModel(obj,src);
+                    RayTracks.runModel(obj,src,[],[]);
+                case 'Batch Run'
+                    RayTracks.batchRun(obj);
                 case 'Transfer Table'
-                    SpectralTransfer.runModel(obj);
+                    SpectralTransfer.runModel(obj,[],[]);
                 case 'Run Wave Timeseries'
                     WRM_WaveModel.runModel(obj);
                 case 'Create Mesh'
@@ -340,10 +345,16 @@ classdef WaveRayModel < muiModelUI
                     obj.mUI.PlotsUI = muiPlotsUI.getPlotsUI(obj);
                 case 'Statistics'
                     obj.mUI.StatsUI = muiStatsUI.getStatsUI(obj);
+                case 'Plot Mesh'
+                    [cobj,~] = selectCaseObj(obj.Cases,[],{'WRM_Mesh'},promptxt);
+                    if isempty(cobj), return; end
+                    hf = figure('Name','Mesh','Tag','PlotFig');
+                    ax = axes(hf);
+                    tabPlot(cobj,ax);
                 case 'Ray Plots'                    
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'RayTracks'},promptxt);
                     if isempty(cobj), return; end
-                    hf = figure('Name','SpecTrans','Tag','PlotFig');
+                    hf = figure('Name','RayTracks','Tag','PlotFig');
                     ax = axes(hf);
                     tabPlot(cobj,ax,obj);
                 case 'Transfer Table'
@@ -394,7 +405,118 @@ classdef WaveRayModel < muiModelUI
             else
                 isok = true;
             end
-        end        
+        end   
+%% ------------------------------------------------------------------------
+% Overload muiModelUI.MapTable to customise Tab display of records (if required)
+%--------------------------------------------------------------------------     
+        function MapTable(obj,ht)
+            %create tables for Data and Model tabs - called by DrawMap
+            % load case descriptions
+            muicat = obj.Cases;
+            caserec = find(tabSubset(obj,ht.Tag));
+            caseid = muicat.Catalogue.CaseID(caserec);
+            casedesc = muicat.Catalogue.CaseDescription(caserec);
+            caseclass = muicat.Catalogue.CaseClass(caserec);
+
+            %intiailise blank row of data
+            if strcmp(ht.Tag,'Rays')
+                headers = {'ID','Case Description','Type','Dir','Nray','Nper','Nwl'};
+                cwidth = {25 230 70 60 60 60 60};
+                cdata = {'0','Description of individual cases','Type','#','#','#','#'};
+            elseif strcmp(ht.Tag,'Transfer')
+                headers = {'ID','Case Description','Dir','Nray','Nper','Nwl'};
+                cwidth = {25 250 80 70 70 70};
+                cdata = {'0','Description of individual cases','#','#','#','#'};
+            else
+                headers = {'ID','Data Class','Data Description','Nrec', 'Start','End'};
+                cwidth = {25 100 230 50 80 80};
+                cdata = {'0','Type','Description of individual cases','#','#','#'};
+            end
+            % cdata = {'0','Type','Description of individual cases','#','#','#'};
+            %ecdata = {'0','Type','Description of individual cases','#','#','xxx'};
+            irec = 1;
+            for i=1:length(caseid)
+                case_id = num2str(caseid(i));
+                if ~isfield(muicat.DataSets,caseclass{i}) || ...
+                                  isempty(muicat.DataSets.(caseclass{i}))
+                    type = 'New';
+                else
+                    type = caseclass{i};
+                end
+                %
+                if strcmp(ht.Tag,'Rays') 
+                    cobj = getCase(muicat,caserec(i));
+                    dst = cobj.Data.Dataset;
+                    raytype = dst.RowDescription;
+                    nray = height(dst);
+                    if strcmp(raytype,'Forward ray')
+                        raytype = 'Forward';
+                        dir = num2str(cobj.RunParam.WRM_FT_Params.dir0TN);
+                    else
+                        raytype = 'Backward';
+                        dir = num2str(cobj.RunParam.WRM_BT_Params.DirectionRange);
+                    end 
+                    nper = cobj.RunParam.WRM_RunParams.nPeriod;
+                    nwl  = cobj.RunParam.WRM_RunParams.nWaterLevel;
+                    cdata(irec,:) = {case_id,char(casedesc{i}),raytype,dir,nray,nper,nwl};
+                    
+                elseif strcmp(ht.Tag,'Transfer')
+                    cobj = getCase(muicat,caserec(i));
+                    dst = cobj.Data.Offshore;
+                    raytype = dst.RowDescription;
+                    nray = height(dst);
+                    dir = num2str([dst.RowRange{:}]);
+                    nper = length(dst.Dimensions.Period);
+                    nwl = length(dst.Dimensions.WaterLevel);
+                    cdata(irec,:) = {case_id,char(casedesc{i}),dir,nray,nper,nwl};
+
+                else
+                    dst = getDataset(muicat,caserec(i),1);
+                    if isempty(dst), continue; end
+                    reclen = num2str(height(dst.DataTable));
+                    range = dst.RowRange;
+                    if ~isempty(range) && isdatetime(range{1})                 
+                        stdate = char(range{1},'dd-MMM-yyyy'); %control ouput format
+                        endate = char(range{2},'dd-MMM-yyyy');  
+                    else
+                        stdate = '';
+                        endate = '';
+                    end
+                    cdata(irec,:) = {case_id,type,char(casedesc{i}),reclen,stdate,endate};
+                    
+                end
+                irec = irec+1;
+            end
+            
+            % draw table of case descriptions
+            tc=uitable('Parent',ht,'Units','normalized',...
+                'CellSelectionCallback',@obj.caseCallback,...
+                'Tag','cstab');
+            tc.ColumnName = headers;
+            tc.RowName = {};
+            tc.Data = cdata;
+            tc.ColumnWidth = cwidth;
+            tc.RowStriping = 'on';
+            tc.Position(3:4)=[0.935 0.8];    %may need to use tc.Extent?
+            tc.Position(2)=0.9-tc.Position(4);
+        end   
+%%
+        function subset = tabSubset(obj,srctxt)  
+            %get the cases of a given CaseType and return as logical array
+            %in CoastalTools seperate data from everything else
+            % srctxt - Tag for selected tab (eg src.Tag)
+            % Called by MapTable. Separate function so that it can be 
+            % overloaded from muiModelUI version.
+            caseclass = obj.Cases.Catalogue.CaseClass;
+            switch srctxt
+                case 'Rays'
+                    subset = contains(caseclass,'RayTracks');  
+                case 'Transfer'
+                    subset = contains(caseclass,'SpectralTransfer');  
+                otherwise
+                    subset = ~contains(caseclass,{'RayTracks','SpectralTransfer'});  
+            end
+        end
     end
 end    
     

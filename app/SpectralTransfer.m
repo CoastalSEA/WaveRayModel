@@ -33,7 +33,7 @@ classdef SpectralTransfer < muiDataSet
 %--------------------------------------------------------------------------
 % Model to construct spectral transfer table
 %--------------------------------------------------------------------------   
-        function obj = runModel(mobj)
+        function obj = runModel(mobj,rayobj,sptname)
             %function to run a simple 2D diffusion model
             obj = SpectralTransfer;                           
             muicat = mobj.Cases;    
@@ -41,9 +41,11 @@ classdef SpectralTransfer < muiDataSet
 % Model code>
 %--------------------------------------------------------------------------
             %select back tracking ray case to use
-            promptxt = 'Select Backward Ray Trace Dataset:';
-            rayobj = selectCaseObj(muicat,{'backward_model'},[],promptxt);                                                    
-            if isempty(rayobj), return; end
+            if isempty(rayobj)
+                promptxt = 'Select Backward Ray Trace Dataset:';
+                rayobj = selectCaseObj(muicat,{'backward_model'},[],promptxt); 
+                if isempty(rayobj), return; end
+            end            
             rayrec = caseRec(muicat,rayobj.CaseIndex);
             %assign the run parameters to the model instance
             setRunParam(obj,mobj,rayrec); %input caserecs passed as varargin 
@@ -81,8 +83,14 @@ classdef SpectralTransfer < muiDataSet
             dst.Inshore = indst;
             dst.Offshore = offdst;
             %save results
-            setDataSetRecord(obj,muicat,dst,'spectral_model');
-            getdialog('Run complete');
+
+            if isempty(sptname)            %single case
+                sptname = sprintf('Transfer %s',rayobj.Data.Dataset.Description);
+                setDataSetRecord(obj,muicat,dst,'spectral_model',{sptname},false);
+                getdialog('Run complete');
+            else                           %part of a batch run
+                setDataSetRecord(obj,muicat,dst,'spectral_model',{sptname},true);
+            end          
         end    
     end
 %%
@@ -622,15 +630,18 @@ classdef SpectralTransfer < muiDataSet
             s4 = subplot(2,2,4);
             var = output.kd(:,:,ki);
             check_plot(obj,T,Dir,var,{'Direction shift (deg)',labelx,labely},s4);
-            sg1 = sprintf('Transfer Coefficients(Mean Direction, Period) for swl=%g mOD',zwl(ki));
-            if contains({'JONSWAP fetch limited','TMA shallow water'},sel.form)
-                sgtxt = sprintf('%s\n%s, gamma=%.2g, and %s, n=%d',sg1,...
-                                sel.form,sel.gamma,sel.spread,sel.nspread);
+            %plot title
+            desc = obj.Data.Inshore.Description;
+            sg1 = sprintf('Transfer Coefficients(Tp,Dir) for %s at swl=%g mOD',desc,zwl(ki));
+            exptxt = 'Coefficients: kw-wave height; ktp-peak period; kt2-mean period';
+            if any(contains({'JONSWAP fetch limited','TMA shallow water'},sel.form))
+                sgtxt = sprintf('%s\n%s, gamma=%.2g, and %s, n=%d\n%s',sg1,...
+                                sel.form,sel.gamma,sel.spread,sel.nspread,exptxt);
             else
-                sgtxt = sprintf('%s\n%s, and %s, n=%d',sg1,...
-                                sel.form,sel.spread,sel.nspread);
+                sgtxt = sprintf('%s\n%s, and %s, n=%d\n%s',sg1,...
+                                sel.form,sel.spread,sel.nspread,exptxt);
             end
-            sgtitle(sgtxt,'FontSize',12,'Margin',1);
+            sgtitle(sgtxt,'FontSize',11,'Margin',1);
         end
 %%
         function check_plot(~,T,phi,var,varname,ax)

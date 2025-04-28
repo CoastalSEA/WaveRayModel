@@ -34,7 +34,7 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
 % Model implementation
 %--------------------------------------------------------------------------         
-        function obj = runModel(mobj,src)
+function obj = runModel(mobj,src,grdobj,rayname)
             %function to run a simple forwared and backward ray tracing
             obj = RayTracks;                          
 
@@ -49,11 +49,17 @@ classdef RayTracks < muiDataSet
 % Model code 
 %--------------------------------------------------------------------------
             runobj = mobj.Inputs.WRM_RunParams;
-            promptxt = 'Select grid to use for wave model'; 
-            gridclasses = {'WRM_Bathy','GD_ImportData','WRM_Mesh'};
-            grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
-            if isempty(grdobj), return; end
-            grdrec = caseRec(muicat,grdobj.CaseIndex);            
+            islog = false;
+            if isempty(grdobj)
+                promptxt = 'Select grid to use for wave model'; 
+                gridclasses = {'WRM_Bathy','GD_ImportData','WRM_Mesh'};
+                grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
+                if isempty(grdobj), return; end
+                answer = questdlg('Write log to file?','Rays','Yes','No','No');                
+                if strcmp(answer,'Yes'), islog = true; end
+            end
+            grdrec = caseRec(muicat,grdobj.CaseIndex); 
+
             %assign the run parameters to the model instance
             switch src.Text
                 case 'Forward Rays'
@@ -63,10 +69,6 @@ classdef RayTracks < muiDataSet
             end
             setRunParam(obj,mobj,grdrec);      %input caserecs passed as varargin 
 
-            answer = questdlg('Write log to file?','Rays','Yes','No','No');
-            islog = false;
-            if strcmp(answer,'Yes'), islog = true; end
-            
             if isprop(grdobj,'kind')
                 cgrid.Tri = grdobj.Data.Dataset.Tri{1};
                 cgrid.z = grdobj.Data.Dataset.zlevel{1};
@@ -134,12 +136,47 @@ classdef RayTracks < muiDataSet
             dst.MetaData = modeltype;
             dst.UserData.prop = modelprop; %direction or av. depth of point
             dst.UserData.flag = outflag;   %flag to define ray termination
-            setDataSetRecord(obj,muicat,dst,modeltype);
-            getdialog('Run complete');
+            if isempty(rayname)            %single case
+                setDataSetRecord(obj,muicat,dst,modeltype);
+                getdialog('Run complete');
+            else                           %part of a batch run
+                setDataSetRecord(obj,muicat,dst,modeltype,{rayname},true);
+            end           
         end
 %--------------------------------------------------------------------------
 % End of runModel
 %--------------------------------------------------------------------------
+%%      
+        function batchRun(mobj)
+            %run model in backward mode for several points
+            localsrc.Text = 'Backward Rays';
+            muicat = mobj.Cases;
+            promptxt = 'Select grid to use for wave model'; 
+            gridclasses = {'WRM_Bathy','GD_ImportData','WRM_Mesh'};
+            grdobj = selectCaseObj(muicat,[],gridclasses,promptxt);
+            if isempty(grdobj), return; end
+
+            [fname,path,nfiles] = getfiles('MultiSelect','off','FileType','*.txt;',...
+                                      'PromptText','Select backtracking start points file:');
+            if nfiles<1, return; end
+            xypnts = readmatrix([path,fname]); 
+
+            hw = waitbar(0,'Starting batch run');
+            ncase = length(xypnts);
+            for i=1:ncase
+                x = xypnts(i,1);
+                y = xypnts(i,2);
+                mobj.Inputs.WRM_BT_Params.StartPoint = xypnts(i,:);
+                rayname = sprintf('BRays-%d x%d y%d',i,x,y);
+                rayobj = RayTracks.runModel(mobj,localsrc,grdobj,rayname);
+                sptname = sprintf('Transfer-%d x%d y%d',i,x,y);
+                SpectralTransfer.runModel(mobj,rayobj,sptname);
+                waitbar(i/ncase,hw,sprintf('Case %d completed',i));
+            end
+            delete(hw)
+            getdialog('Run complete');
+        end
+
 %%
         function checkStart(mobj)
             %create a plot of the start points on the selected bathymetry
