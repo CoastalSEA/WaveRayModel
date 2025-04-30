@@ -241,13 +241,13 @@ function obj = runModel(mobj,src,grdobj,rayname)
             tabPlot(grdobj,src)
             %add start point to figure
             ax = findobj(hf.Children,'Type','axes');
-            axis tight
+            axis equal tight
             hold on
             plot (ax,spnt(1),spnt(2),'xr','LineWidth',1,'MarkerSize',8)
             plot (ax,spnt(1),spnt(2),'ok','LineWidth',1,'MarkerSize',8)            
-            xtxt = ax.XLim(2)*0.05;
-            ytxt = ax.YLim(2)*0.95;
-            text(ax,xtxt,ytxt,msgtxt);
+            xtxt = ax.XLim(1)+(ax.XLim(2)-ax.XLim(1))*0.02;
+            ytxt = ax.YLim(1)+(ax.YLim(2)-ax.YLim(1))*0.95;
+            text(ax,xtxt,ytxt,msgtxt,'BackgroundColor','w');
             hold off              
         end    
     end
@@ -427,11 +427,15 @@ function obj = runModel(mobj,src,grdobj,rayname)
             %transform wave direction to grid (trigonometric) direction
            %[~,alpha]  = compass2trig(phi); %change input 'from' to ray 'to'           
             alpha = mod(compass2trig(phi),2*pi); %ray directions 'to'
-
-            filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));                       
+            if islog
+                filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));  
+                header = sprintf('Ray dir\t Period\t Water level\t nPoints\t Outflag');
+                writelines(header,filename,WriteMode="append")
+            end
             %check plot - comment out when using parfor in loop
             % hf = figure('Name','Search','Tag','PlotFig');
-            % ax = axes(hf);
+            % ax = axes(hf); 
+            % axis equal
             % set(ax,'xgrid','on')
             % set(ax,'ygrid','on')
             %--------------------------------------------------------------
@@ -453,8 +457,8 @@ function obj = runModel(mobj,src,grdobj,rayname)
                         npt = height(rayobj.Track.DataTable);
                         depths(i,j,k) = rayobj.Track.DataTable.depth(1);                        
                         if islog
-                            lines = sprintf('Ray dir %.3f, period %.1f, level %.1f, points %d, outflag %d',...
-                                                 phi(i),T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
+                            lines = sprintf('%.3f\t%.1f\t%.1f\t%d\t%d',...
+                                    phi(i),T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
                             writelines(lines,filename,WriteMode="append")
                         end
                                                 
@@ -467,7 +471,9 @@ function obj = runModel(mobj,src,grdobj,rayname)
                         % xr = rayobj.Track.xr;
                         % yr = rayobj.Track.yr;
                         % plot(ax,xr,yr,'-k')
-                        % hold off   
+                        % hold off  
+                        fprintf('Dir: %.3f; Period: %.1f, WL: %.2f\n',...
+                                                       phi(i),T(j),zwl(k));
                         %--------------------------------------------------
                         rays{i,j,k} = rayobj;
                     end

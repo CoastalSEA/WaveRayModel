@@ -116,16 +116,17 @@ classdef Ray < handle
             ray = table(xr,yr,alpha,kr,quad,r,hr,cr,cgr);%grid properties of ray position
 
             %check plot for finding ray errors - comment out when not required
-%             hf = figure('Name','Search','Tag','PlotFig');
-%             ax = axes(hf);
-%             Tri = cmesh.Tri;
-%             save('trigrid_input','Tri')
-%             pts = cmesh.Tri.Points;
-%             tria = cmesh.Tri.ConnectivityList;
-%             trimesh(tria,pts(:,1),pts(:,2),'Color','k')
-%             hold on
-%             plot(ax,ray.xr(1),ray.yr(1),'ob')
-%             hold off
+            % Tri = cmesh.Tri;
+            % pts = cmesh.Tri.Points;
+            % tria = cmesh.Tri.ConnectivityList;
+            % % save('trigrid_input','Tri') %if required for checing save mesh
+            %
+            % hf = figure('Name','Search','Tag','PlotFig');
+            % ax = axes(hf);                     
+            % trimesh(tria,pts(:,1),pts(:,2),'Color','k')
+            % hold on
+            % plot(ax,ray.xr(1),ray.yr(1),'ob')
+            % hold off
             %--------------------------------------------------------------
             
             while hr>hlimit
@@ -136,10 +137,15 @@ classdef Ray < handle
                     obj.outFlag = newray; hr = hlimit; continue; 
                 end
                 ray = [ray;newray]; %#ok<AGROW> 
+                %in very shallow water there are a few instances where the
+                %end point gets stuck. If ray is not moving, terminate
+                if diff(ray.xr(end-1:end))<eps && diff(ray.yr(end-1:end))<eps
+                    newray.hr = hlimit;  %force a break
+                end                
                 %check plot for finding ray errors - comment out when not required
-%                 hold on
-%                 plot(ax,newray.xr,newray.yr,'+r')
-%                 hold off   
+                % hold on
+                % plot(ax,newray.xr,newray.yr,'+r')
+                % hold off   
                 %----------------------------------------------------------                
                 hr = newray.hr;
                 if hr<=hlimit, obj.outFlag = -1; end
