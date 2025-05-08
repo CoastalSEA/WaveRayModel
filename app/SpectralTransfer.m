@@ -354,9 +354,14 @@ classdef SpectralTransfer < muiDataSet
                 spectra.gamma = str2double(selection{5});
                 spectra.ismodel = true;
                 spectra.issat = false;
+                satxt = 'excluding depth saturation';
                 if strcmp(spectra.form,'TMA shallow water')
                     spectra.issat = true;
+                    satxt = 'including depth saturation';
                 end
+                spectra.txt = sprintf('%s using %s (%s)\nSpreading function is %s with an exponent of %s. Jonswap gamma = %s',...
+                                 sp{selection{1}},src{selection{2}},satxt,...
+                                 spr{selection{3}},nsp{selection{4}},selection{5});
             end 
         end
     end

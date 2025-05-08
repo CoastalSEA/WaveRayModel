@@ -55,6 +55,8 @@ classdef WRM_WaveModel < muiDataSet
                 if isempty(select), return; end       %user cancelled
                 ModelType = 'transfer timeseries';
             end
+            inputxt = sprintf('%s\n%s',inputxt,select.txt); %add spectral selection to meta data
+
             answer = questdlg('Save the spectra?','Wave model','Yes','No','No');
             if strcmp(answer,'Yes'), select.issave=true; else, select.issave=false; end
             [Sot,Sit,Dims,results] = runWaves(sptobj,tsdst,select);
@@ -511,6 +513,11 @@ function [subdst,timerange] = getSubSet(~,tsdst)
             inputs.form = 'Measured';           %initialise select properties
             inputs.source = 'Spectrum';         
             inputs.ismodel = false;
+            if inputs.issat
+                inputs.txt = 'Measured spectrum and including depth saturation';
+            else
+                inputs.txt = 'Measured spectrum and excluding depth saturation';
+            end
         end
 %%
         function off = addWaveConditions(SGo,Dims,off)
