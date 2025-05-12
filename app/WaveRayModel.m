@@ -135,9 +135,10 @@ classdef WaveRayModel < muiModelUI
             menu.Setup(7).Separator = [repmat({'off'},[1,7]),...
                        {'on','off','on','off','off','off','on','on','on'}]; %separator preceeds item  
             % submenu for Run Parameters
-            menu.Setup(8).List = {'Run Conditions','Forward Tracking','Backward Tracking'};
-            menu.Setup(8).Callback = repmat({@obj.setupMenuOptions},[1,3]);
-            menu.Setup(8).Separator = repmat({'off'},[1,3]);
+            menu.Setup(8).List = {'Run Conditions','Forward Tracking',...
+                                          'Backward Tracking','Batch Start Points'};
+            menu.Setup(8).Callback = repmat({@obj.setupMenuOptions},[1,4]);
+            menu.Setup(8).Separator = [repmat({'off'},[1,3]),{'on'}];
             % submenu for Data clean-up
             menu.Setup(9).List = {'Concatenate two timeseries',...
                             'Resample timeseries','Patch timeseries',...                
@@ -263,7 +264,9 @@ classdef WaveRayModel < muiModelUI
                     WRM_BT_Params.setInput(obj);  
                     %update tab display with input data
                     tabsrc = findobj(obj.mUI.Tabs,'Tag','Inputs');
-                    InputTabSummary(obj,tabsrc);                
+                    InputTabSummary(obj,tabsrc);  
+                case 'Batch Start Points'
+                    WRM_BT_Params.batchPoints(obj); 
                 case 'Model Constants'
                     obj.Constants = setInput(obj.Constants);
             end
@@ -463,7 +466,6 @@ classdef WaveRayModel < muiModelUI
                 elseif strcmp(ht.Tag,'Transfer')
                     cobj = getCase(muicat,caserec(i));
                     dst = cobj.Data.Offshore;
-                    raytype = dst.RowDescription;
                     nray = height(dst);
                     dir = num2str([dst.RowRange{:}]);
                     nper = length(dst.Dimensions.Period);

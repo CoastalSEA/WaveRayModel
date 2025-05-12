@@ -100,7 +100,7 @@ classdef SpectralTransfer < muiDataSet
 %--------------------------------------------------------------------------         
         function [Sot,Sit,Dims,output] = runWaves(obj,tsdst,select)
             %run the spectral transfer model for a timeseries of offshore
-            %wave conditions and return a table of wave conditions
+            %wave conditions and return a table of wave conditions            
             Sot = []; Sit = []; Dims = [];
             islog = false;  filename = [];
             if select.issave
@@ -124,9 +124,9 @@ classdef SpectralTransfer < muiDataSet
                 if select.issave
                     if isempty(SGo)
                         Sot(i,:,:) = blank; Sit(i,:,:) = blank;
-                        if islog
+                        if islog && ~verLessThan('matlab','2022a')
                             lines = sprintf('%s',tsdst.RowNames(i)); %#ok<PFBNS> 
-                            writelines(lines,filename,WriteMode="append")
+                            %writelines(lines,filename,WriteMode="append")%v2022a or later
                         end
                         continue; 
                     end  

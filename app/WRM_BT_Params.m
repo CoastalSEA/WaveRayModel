@@ -61,6 +61,34 @@ classdef WRM_BT_Params < muiPropertyUI
                 %add any additional manipulation of the input here
             end
             setClassObj(mobj,'Inputs',classname,obj);
-        end     
+        end  
+   
+%%
+        function batchPoints(mobj)
+            %use PL_Boundary to extract contour and set-up a backtracking
+            %start points text file.
+            muicat = mobj.Cases;   %handle to muiCatalogue
+            gridclasses = {'GD_ImportData','WRM_Bathy'}; %add other classes if needed
+            promptxt = 'Select a Case to use to define boundary:';
+            [cobj,~] = selectCaseObj(muicat,[],gridclasses,promptxt);
+            if isempty(cobj) || ~isfield(cobj.Data,'Grid')
+                warndlg('No grid for selected case'); return;
+            end
+            grid = getGrid(cobj,1);             %grid for estuary
+              
+            %call boundary figure to create points
+            prmpt = 'Backtracking start points extraction';
+            coords = PL_Boundary.Figure(grid,prmpt,1,false);
+            coords(end,:) = [];  %remove NaN line termination
+            
+            promptxt = {'Path','File name'};
+            defaults = {pwd,'BT_startpoints'};
+            answer = inputdlg(promptxt,'BTpoints',1,defaults);
+            path = answer{1};
+            fname = answer{2};
+            filename = [path,filesep,fname];
+            writematrix(coords,filename,'FileType','text');           
+            getdialog(sprintf('Data saved to %s.txt',filename));
+        end
     end   
 end

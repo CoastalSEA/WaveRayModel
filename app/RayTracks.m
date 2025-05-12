@@ -353,7 +353,6 @@ function obj = runModel(mobj,src,grdobj,rayname)
         function [rays,rownames] = forwardTrack(obj,cgrid,T,zwl,hlimit,islog)
             %construct set of ray tracks for given wave direction and a set
             %of start points using forward wave ray tracing
-            
             ftrobj = obj.RunParam.WRM_FT_Params;
             %line vector of equal spaced start points
             [x_start,y_start] = RayTracks.getStartPoints(ftrobj.leftXY,...
@@ -386,10 +385,10 @@ function obj = runModel(mobj,src,grdobj,rayname)
                         rayobj = Ray.setRay(agrid,xys,alpha,hlimit,obj.tol);
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
-                        if islog
+                        if islog && ~verLessThan('matlab','2022a')
                             lines = sprintf('Ray no: %d, period %.1f, level %.1f, points %d, outflag %d',...
                                                  i,T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
-                            writelines(lines,filename,WriteMode="append")
+                            %writelines(lines,filename,WriteMode="append") %v2022a or later
                         end
                         
                         if isempty(rayobj)
@@ -412,7 +411,7 @@ function obj = runModel(mobj,src,grdobj,rayname)
 %%
         function [rays,rownames,depths] = backwardTrack(obj,cgrid,T,zwl,hlimit,islog)
             %construct set of ray tracks from a point and a set inshore wave
-            %directions using backward wave ray tracing
+            %directions using backward wave ray tracing            
             btrobj = obj.RunParam.WRM_BT_Params;
             xys = btrobj.StartPoint;
 
@@ -420,17 +419,17 @@ function obj = runModel(mobj,src,grdobj,rayname)
             phi = btrobj.DirectionRange;
             if length(phi)>1
                 dirng = num2cell(btrobj.DirectionRange);
-                phi = linspace(dirng{:},btrobj.nDirections)';  
-            end  
+                phi = linspace(dirng{:},btrobj.nDirections)';  %spacing between the points is (x2-x1)/(n-1).
+            end                                                %e.g. for 15 to 70 deg @5deg, n=12
             rownames = round(phi',1);
 
             %transform wave direction to grid (trigonometric) direction
            %[~,alpha]  = compass2trig(phi); %change input 'from' to ray 'to'           
             alpha = mod(compass2trig(phi),2*pi); %ray directions 'to'
-            if islog
+            if islog && ~verLessThan('matlab','2022a')
                 filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));  
                 header = sprintf('Ray dir\t Period\t Water level\t nPoints\t Outflag');
-                writelines(header,filename,WriteMode="append")
+                %writelines(header,filename,WriteMode="append") %v2022a or later 
             end
             %check plot - comment out when using parfor in loop
             % hf = figure('Name','Search','Tag','PlotFig');
@@ -456,10 +455,10 @@ function obj = runModel(mobj,src,grdobj,rayname)
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
                         depths(i,j,k) = rayobj.Track.DataTable.depth(1);                        
-                        if islog
+                        if islog && ~verLessThan('matlab','2022a')
                             lines = sprintf('%.3f\t%.1f\t%.1f\t%d\t%d',...
                                     phi(i),T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
-                            writelines(lines,filename,WriteMode="append")
+                            %writelines(lines,filename,WriteMode="append") %v2022a or later
                         end
                                                 
                         if isempty(rayobj)
