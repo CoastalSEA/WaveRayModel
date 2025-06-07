@@ -9,7 +9,7 @@ To make changes, update the MATLAB code and republish this document.
 <title>WaveRayModel Classes and Functions</title>
 <meta name="generator" content="MATLAB 24.2">
 <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
-<meta name="DC.date" content="2025-04-24">
+<meta name="DC.date" content="2025-05-27">
 <meta name="DC.source" content="wrm_classes.m">
 <style type="text/css">
 html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
@@ -130,6 +130,8 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <li>
 <b>WRM_RunParams</b>: run parameters for the WaveRayModel.</li>
 <li>
+<b>WRM_SedimentTransport</b>: compute alongshore and cross-shore transport for an array of points on the edge of the surf zone. Uses the output of a Batch Wave Run as the nearshore wave input.</li>
+<li>
 <b>WRM_WaveModel</b>: Class for wave refraction using backward ray transfer function. Constructs inshore time series from an offshore timeseries. Also includes methods to plot the offshore and inshore spectra.</li>
 </ul>
 </div>
@@ -186,6 +188,8 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <i>wrm_animation</i> - animation of model spectra timeseries.</li>
 <li>
 <i>wrm_runmovie</i> - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.</li>
+<li>
+<i>wrm_transport_plots</i> - uses the sediment transport results for a set of points along the coast to examine drift rates, the divergence of drift and the Peclet number (indicates balance of advection and diffusion).</li>
 </ul>
 </div>
 <h2 id="4">Additional Coastal Classes</h2>
@@ -317,6 +321,7 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 % * *WRM_FT_Params*: parameters define initial positions and direction of forward tracking rays.
 % * *WRM_Mesh*: generate triangular mesh of nearshore area from a Cartesian grid.
 % * *WRM_RunParams*: run parameters for the WaveRayModel.
+% * *WRM_SedimentTransport*: compute alongshore and cross-shore transport for an array of points on the edge of the surf zone. Uses the output of a Batch Wave Run as the nearshore wave input.
 % * *WRM_WaveModel*: Class for wave refraction using backward ray transfer function. Constructs inshore time series from an offshore timeseries. Also includes methods to plot the offshore and inshore spectra.
 
 %% WaveRayModel functions
@@ -346,7 +351,8 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 % * _wave_spectrum_params_ - integrate a 2-D spectra to obtain wave parameters
 % * _wrm_animation_ - animation of model spectra timeseries.
 % * _wrm_runmovie_ - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.
-
+% * _wrm_transport_plots_ - uses the sediment transport results for a set of points along the coast to 
+% examine drift rates, the divergence of drift and the Peclet number (indicates balance of advection and diffusion).
 
 %% Additional Coastal Classes
 % In the folder ../muiAppCoastalClasses.

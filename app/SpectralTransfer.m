@@ -124,9 +124,9 @@ classdef SpectralTransfer < muiDataSet
                 if select.issave
                     if isempty(SGo)
                         Sot(i,:,:) = blank; Sit(i,:,:) = blank;
-                        if islog && ~verLessThan('matlab','2022a')
+                        if islog
                             lines = sprintf('%s',tsdst.RowNames(i)); %#ok<PFBNS> 
-                            %writelines(lines,filename,WriteMode="append")%v2022a or later
+                            writelines(lines,filename,WriteMode="append")%v2022a or later
                         end
                         continue; 
                     end  

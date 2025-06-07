@@ -13,6 +13,7 @@
 % * *WRM_FT_Params*: parameters define initial positions and direction of forward tracking rays.
 % * *WRM_Mesh*: generate triangular mesh of nearshore area from a Cartesian grid.
 % * *WRM_RunParams*: run parameters for the WaveRayModel.
+% * *WRM_SedimentTransport*: compute alongshore and cross-shore transport for an array of points on the edge of the surf zone. Uses the output of a Batch Wave Run as the nearshore wave input.
 % * *WRM_WaveModel*: Class for wave refraction using backward ray transfer function. Constructs inshore time series from an offshore timeseries. Also includes methods to plot the offshore and inshore spectra.
 
 %% WaveRayModel functions
@@ -42,7 +43,8 @@
 % * _wave_spectrum_params_ - integrate a 2-D spectra to obtain wave parameters
 % * _wrm_animation_ - animation of model spectra timeseries.
 % * _wrm_runmovie_ - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.
-
+% * _wrm_transport_plots_ - uses the sediment transport results for a set of points along the coast to 
+% examine drift rates, the divergence of drift and the Peclet number (indicates balance of advection and diffusion).
 
 %% Additional Coastal Classes
 % In the folder ../muiAppCoastalClasses.

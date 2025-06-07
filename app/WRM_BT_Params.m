@@ -78,7 +78,9 @@ classdef WRM_BT_Params < muiPropertyUI
               
             %call boundary figure to create points
             prmpt = 'Backtracking start points extraction';
-            coords = PL_Boundary.Figure(grid,prmpt,1,false);
+            coords = PL_Boundary.Figure(grid,prmpt,1,true);
+            %coords = PL_Editor.Figure(grid,prmpt,1,false,true);
+            if isempty(coords), return; end  %user cancelled or did not save
             coords(end,:) = [];  %remove NaN line termination
             
             promptxt = {'Path','File name'};
@@ -87,7 +89,7 @@ classdef WRM_BT_Params < muiPropertyUI
             path = answer{1};
             fname = answer{2};
             filename = [path,filesep,fname];
-            writematrix(coords,filename,'FileType','text');           
+            writematrix(coords,filename,'FileType','text','Delimiter',' ');           
             getdialog(sprintf('Data saved to %s.txt',filename));
         end
     end   

@@ -25,7 +25,7 @@ classdef Ray < handle
         Track         %table of track properties: xr,yr,alpha,k,quad,edge  
         outFlag = 0   %flag to indicate nature of ray termination
                       % 1 - successful ray;   -1 - ray ends on shore
-                                        %-2 - radius too small; -3 - intersection not found
+                      % -2 - radius too small; -3 - intersection not found
     end
     
     methods
@@ -71,7 +71,7 @@ classdef Ray < handle
             elseif ~isa(ray,'table')
                 error('Ray start position outside grid domain')
             end   
-            tol.radius = 1e3;
+
             %check plot for finding ray errors - comment out when not required
             % hf = figure('Name','Search','Tag','PlotFig');
             % ax = axes(hf);
@@ -88,6 +88,11 @@ classdef Ray < handle
                     obj.outFlag = newray; hr = hlimit; continue; 
                 end
                 ray = [ray;newray]; %#ok<AGROW> 
+                %there are a few instances where the ray gets stuck. 
+                %If ray is not moving, terminate
+                if abs(diff(ray.xr(end-1:end)))<tol.dist && abs(diff(ray.yr(end-1:end)))<tol.dist
+                    obj.outFlag = -4; hr = hlimit; continue; %force a break
+                end    
                 %check plot for finding ray errors - comment out when not required
                 % hold on
                 % plot(ax,newray.xr,newray.yr,'+k')
@@ -108,8 +113,7 @@ classdef Ray < handle
             kr = nearestNeighbor(cmesh.Tri,xys);
 
             %wave properties at start point
-            tol.radius = 1e6;
-            r = inf;                                     %intial radius
+            r = inf;            %intial radius
             xr = xys(1); yr = xys(2); quad = 0;
             [hr,cr,cgr] = raypoint_properties(obj,cmesh,xr,yr);
             %initialise ray table            
@@ -120,7 +124,7 @@ classdef Ray < handle
             % pts = cmesh.Tri.Points;
             % tria = cmesh.Tri.ConnectivityList;
             % % save('trigrid_input','Tri') %if required for checing save mesh
-            %
+            % 
             % hf = figure('Name','Search','Tag','PlotFig');
             % ax = axes(hf);                     
             % trimesh(tria,pts(:,1),pts(:,2),'Color','k')
@@ -137,10 +141,10 @@ classdef Ray < handle
                     obj.outFlag = newray; hr = hlimit; continue; 
                 end
                 ray = [ray;newray]; %#ok<AGROW> 
-                %in very shallow water there are a few instances where the
-                %end point gets stuck. If ray is not moving, terminate
-                if diff(ray.xr(end-1:end))<eps && diff(ray.yr(end-1:end))<eps
-                    newray.hr = hlimit;  %force a break
+                %there are a few instances where the ray gets stuck. 
+                %If ray is not moving, terminate
+                if abs(diff(ray.xr(end-1:end)))<tol.dist && abs(diff(ray.yr(end-1:end)))<tol.dist
+                    obj.outFlag = -4; hr = hlimit; continue; %force a break
                 end                
                 %check plot for finding ray errors - comment out when not required
                 % hold on

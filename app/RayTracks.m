@@ -17,16 +17,14 @@ classdef RayTracks < muiDataSet
 %--------------------------------------------------------------------------
 %     
     properties
-        tol          %distance tolerance (m) scaled in setTolerances to 
-                     %create struct for angle and distance tolerances 
-                     %dependent on the model grid size
+        tol          %struct for dist and angle fields which are set in 
+                     %runModel using the value of distTol defined in the
+                     %WRM_runParams class
     end
     
     methods (Access = private)
         function obj = RayTracks()                
             %class constructor 
-            obj.tol.dist = 1e-9;
-            obj.tol.angle = atan(obj.tol.dist);
         end
     end      
 %%
@@ -49,6 +47,7 @@ function obj = runModel(mobj,src,grdobj,rayname)
 % Model code 
 %--------------------------------------------------------------------------
             runobj = mobj.Inputs.WRM_RunParams;
+            % islog = false;
             islog = false;
             if isempty(grdobj)
                 promptxt = 'Select grid to use for wave model'; 
@@ -57,6 +56,8 @@ function obj = runModel(mobj,src,grdobj,rayname)
                 if isempty(grdobj), return; end
                 answer = questdlg('Write log to file?','Rays','Yes','No','No');                
                 if strcmp(answer,'Yes'), islog = true; end
+            else
+                islog = true;   %force log when debugging using parfor
             end
             grdrec = caseRec(muicat,grdobj.CaseIndex); 
 
@@ -98,8 +99,10 @@ function obj = runModel(mobj,src,grdobj,rayname)
                 zwl = round(zwl,1);
             end   
 
-            %cutoff depth for wave ray tracing
+            %cutoff depth and tolerances for wave ray tracing
             hlimit = runobj.hCutOff;
+            obj.tol.dist = runobj.distTol;
+            obj.tol.angle = atan(obj.tol.dist);           
 
             %get the celerity, group celerity and celeirty gradient grids
             if isprop(grdobj,'kind')
@@ -212,30 +215,11 @@ function obj = runModel(mobj,src,grdobj,rayname)
             promptxt = 'Select grid to use for wave model'; 
             gridclasses = {'WRM_Bathy','GD_ImportData','WRM_Mesh'};
             grdobj = selectCaseObj(mobj.Cases,[],gridclasses,promptxt);
-            if isempty(grdobj), return; end
-
-            spnt = mobj.Inputs.WRM_BT_Params.StartPoint;
-            if isa(grdobj,'WRM_Mesh')
-                method = 'natural';
-                mesh = grdobj.Data.Dataset.Tri{1};
-                zlevel = grdobj.Data.Dataset.zlevel{1};
-                X = mesh.Points(:,1); Y = mesh.Points(:,2);
-                bed = griddata(X,Y,zlevel,spnt(1),spnt(2),method);    
-            else
-                grid = getGrid(grdobj,1);
-                if isempty(grid.z), return; end                
-                [X,Y] = meshgrid(grid.x,grid.y);
-                bed = interp2(X,Y,grid.z',spnt(1),spnt(2),'linear');
+            if isempty(grdobj)
+                warndlg('No grid available'); return; 
             end
-
-            wls =  mobj.Inputs.WRM_RunParams.WaterLevelRange;
-            if isscalar(wls)
-                msgtxt = sprintf('Water depth at start point: %.2f m',wls-bed); 
-            else
-                msgtxt = sprintf('Water depths at start point: min=%.2f m; max=%0.2f m',...
-                                               wls(1)-bed,wls(2)-bed);
-            end
-        
+            
+            %create figure and axes
             hf = figure('Name','Start','Tag','PlotFig');  
             src = axes(hf);
             tabPlot(grdobj,src)
@@ -243,12 +227,61 @@ function obj = runModel(mobj,src,grdobj,rayname)
             ax = findobj(hf.Children,'Type','axes');
             axis equal tight
             hold on
-            plot (ax,spnt(1),spnt(2),'xr','LineWidth',1,'MarkerSize',8)
-            plot (ax,spnt(1),spnt(2),'ok','LineWidth',1,'MarkerSize',8)            
-            xtxt = ax.XLim(1)+(ax.XLim(2)-ax.XLim(1))*0.02;
-            ytxt = ax.YLim(1)+(ax.YLim(2)-ax.YLim(1))*0.95;
-            text(ax,xtxt,ytxt,msgtxt,'BackgroundColor','w');
-            hold off              
+            
+            %determine figure type - single or multi point
+            answer = questdlg('Import batch data points?','Backtrack','Yes','No','No');
+            if strcmp(answer,'No') && isfield(mobj.Inputs,'WRM_BT_Params')
+                %plot single point specified in WRM_BT_Params
+                spnt = mobj.Inputs.WRM_BT_Params.StartPoint;
+                if isa(grdobj,'WRM_Mesh')
+                    method = 'natural';
+                    mesh = grdobj.Data.Dataset.Tri{1};
+                    zlevel = grdobj.Data.Dataset.zlevel{1};
+                    X = mesh.Points(:,1); Y = mesh.Points(:,2);
+                    bed = griddata(X,Y,zlevel,spnt(1),spnt(2),method);    
+                else
+                    grid = getGrid(grdobj,1);
+                    if isempty(grid.z), return; end                
+                    [X,Y] = meshgrid(grid.x,grid.y);
+                    bed = interp2(X,Y,grid.z',spnt(1),spnt(2),'linear');
+                end
+                
+                if  isfield(mobj.Inputs,'WRM_RunParams')
+                    wls =  mobj.Inputs.WRM_RunParams.WaterLevelRange;
+                    if isscalar(wls)
+                        msgtxt = sprintf('Water depth at start point: %.2f m',wls-bed); 
+                    else
+                        msgtxt = sprintf('Water depths at start point: min=%.2f m; max=%0.2f m',...
+                                                       wls(1)-bed,wls(2)-bed);
+                    end  
+                else
+                    msgtxt = 'Water levels not defined';
+                end
+
+                plot (ax,spnt(1),spnt(2),'xr','LineWidth',1,'MarkerSize',8)
+                plot (ax,spnt(1),spnt(2),'ok','LineWidth',1,'MarkerSize',8)            
+                xtxt = ax.XLim(1)+(ax.XLim(2)-ax.XLim(1))*0.02;
+                ytxt = ax.YLim(1)+(ax.YLim(2)-ax.YLim(1))*0.95;
+                text(ax,xtxt,ytxt,msgtxt,'BackgroundColor','w');
+                 
+            elseif strcmp(answer,'Yes') %plot points defined in start point batch file
+                ok = 0;
+                while ok<1
+                    [fname,path,nfiles] = getfiles('MultiSelect','off','FileType','*.txt;',...
+                                            'PromptText','Select backtracking start points file:');
+                    if nfiles<1, return; end
+                    xypnts = readmatrix([path,fname]);
+                    % plot(ax,xypnts(:,1),xypnts(:,2),'xr','LineWidth',1,'MarkerSize',4)
+                    plot(ax,xypnts(:,1),xypnts(:,2),'.k','LineWidth',1,'MarkerSize',6)
+                    for i=1:size(xypnts,1)
+                        text(ax,xypnts(i,1),xypnts(i,2),sprintf(' %d',i),...
+                            'FontSize',8)
+                    end
+                    answ = questdlg('Load another file?','Backtrack','Yes','No','No');
+                    if strcmp(answ,'No'), ok = 1; end
+                end
+            end
+            hold off  
         end    
     end
 %%
@@ -276,15 +309,14 @@ function obj = runModel(mobj,src,grdobj,rayname)
 
             %use tabPlot in WRM_Bathy or GD_ImportData to plot the bathymetry grid
             tabPlot(gobj,src);
-            %use the YlGnBu colormap generated in cbrewer. This then needs
-            %to be interpolated to get a smooth surface plot
+            %use the YlGnBu colormap generated in cbrewer.
             ax = gca;
             cmap = cmap_selection(20);       
             [interpcmap]=interpolate_cbrewer(cmap, 'spline', 200);            
             colormap(ax,interpcmap)
-            shading interp
+            ax.Children.Annotation.LegendInformation.IconDisplayStyle = 'off';  
             
-            %add the start arrows
+            %add the start arrows or start point
             if isprop(gobj,'kind')
                 delta = gobj.minshore;
             else
@@ -296,24 +328,37 @@ function obj = runModel(mobj,src,grdobj,rayname)
                 plotArrow(obj,ax,delta);
             else
                 plotStartPoint(obj,ax)
-            end
+            end            
+
             %add the rays
             [~,np,nq] = size(obj.Data.Dataset.xr);
-            if np>1 || nq>1
-                options = get_selection(obj);
-                if isempty(options), return; end    %user cancelled selection
-            else
-                options = [1,1,2];
+            ok = 0;
+            count = 1;
+            legtxt = {};
+            while ok<1
+                if np>1 || nq>1
+                    options = get_selection(obj);
+                    if isempty(options), ok = 1; continue; end    %user cancelled selection
+                else
+                    options = [1,1,1];   %period, water level, variable
+                    ok = 1;
+                end
+                T = obj.Data.Dataset.Dimensions.Period(options(1));
+                zwl = obj.Data.Dataset.Dimensions.WaterLevel(options(2));
+                txt = sprintf('Period %.3g s; SWL %.3g mOD',T,zwl);
+                legtxt = [legtxt;{txt}]; %#ok<AGROW>
+                ax = plotRay(obj,ax,options,count,legtxt);
+                if options(3)>1, ok=1; continue; end
+                count = count+1;
             end
-            ax = plotRay(obj,ax,options);
             %update title
-            if options(3)~=2
+            if isempty(options) || options(3)==2
+                ttxt = sprintf('Rays for %s',obj.Data.Dataset.Description);    
+            else
                 T = obj.Data.Dataset.Dimensions.Period(options(1));
                 zwl = obj.Data.Dataset.Dimensions.WaterLevel(options(2));
                 ttxt = sprintf('Rays for %s, period %.3g s; swl %.3g mOD',...
                                    obj.Data.Dataset.Description,T,zwl);
-            else
-                ttxt = sprintf('Rays for %s',obj.Data.Dataset.Description);
             end
             title(ax,ttxt);
         end
@@ -385,10 +430,10 @@ function obj = runModel(mobj,src,grdobj,rayname)
                         rayobj = Ray.setRay(agrid,xys,alpha,hlimit,obj.tol);
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
-                        if islog && ~verLessThan('matlab','2022a')
+                        if islog
                             lines = sprintf('Ray no: %d, period %.1f, level %.1f, points %d, outflag %d',...
                                                  i,T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
-                            %writelines(lines,filename,WriteMode="append") %v2022a or later
+                            writelines(lines,filename,WriteMode="append") %v2022a or later
                         end
                         
                         if isempty(rayobj)
@@ -426,10 +471,10 @@ function obj = runModel(mobj,src,grdobj,rayname)
             %transform wave direction to grid (trigonometric) direction
            %[~,alpha]  = compass2trig(phi); %change input 'from' to ray 'to'           
             alpha = mod(compass2trig(phi),2*pi); %ray directions 'to'
-            if islog && ~verLessThan('matlab','2022a')
-                filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));  
+            filename = sprintf('Backtrack_log_%s.txt',char(datetime,"ddMMMyy_HH-mm")); %used in parfor loop so must exist 
+            if islog             
                 header = sprintf('Ray dir\t Period\t Water level\t nPoints\t Outflag');
-                %writelines(header,filename,WriteMode="append") %v2022a or later 
+                writelines(header,filename,WriteMode="append") %v2022a or later 
             end
             %check plot - comment out when using parfor in loop
             % hf = figure('Name','Search','Tag','PlotFig');
@@ -455,10 +500,15 @@ function obj = runModel(mobj,src,grdobj,rayname)
                         increment(hpw);
                         npt = height(rayobj.Track.DataTable);
                         depths(i,j,k) = rayobj.Track.DataTable.depth(1);                        
-                        if islog && ~verLessThan('matlab','2022a')
-                            lines = sprintf('%.3f\t%.1f\t%.1f\t%d\t%d',...
-                                    phi(i),T(j),zwl(k),npt,rayobj.outFlag); %#ok<PFBNS> 
-                            %writelines(lines,filename,WriteMode="append") %v2022a or later
+                        if islog
+                            if isempty(rayobj)
+                                lines = sprintf('%.3f\t%.1f\t%.1f\t%d\t%d',...
+                                    phi(i),T(j),zwl(k),npt,-999);
+                            else
+                                lines = sprintf('%.3f\t%.1f\t%.1f\t%d\t%d',...
+                                    phi(i),T(j),zwl(k),npt,rayobj.outFlag); 
+                            end
+                            writelines(lines,filename,WriteMode="append") %v2022a or later
                         end
                                                 
                         if isempty(rayobj)
@@ -503,18 +553,22 @@ function obj = runModel(mobj,src,grdobj,rayname)
             xs = obj.Data.Dataset.xr{1,1,1}(1);
             ys = obj.Data.Dataset.yr{1,1,1}(1);
             hold(ax,"on")
-            plot(ax,xs,ys,'or')
-            plot(ax,xs,ys,'.g')
+            h1 = plot(ax,xs,ys,'or');
+            h1.Annotation.LegendInformation.IconDisplayStyle = 'off';  
+            h2 = plot(ax,xs,ys,'.g');
+            h2.Annotation.LegendInformation.IconDisplayStyle = 'off';  
             hold(ax,'off')
         end
 %%
-        function ax = plotRay(obj,ax,opt)
+function ax = plotRay(obj,ax,opt,count,legtxt)
             %plot each ray on the selected forward track
             %each ray can be a different length so plot iteratively
             % Note: the order of setting axis off and positioning colorbar
             % is important for plot overlay with different color maps to work.
+
             cvar = {'celerity','cgroup','depth'};
             nrays = height(obj.Data.Dataset);
+            ncolor = @(nc) ax.ColorOrder(mod(nc-1, 7) + 1,:);
             
             if opt(3)>2    
                 %see https://uk.mathworks.com/matlabcentral/answers/101346-how-do-i-use-multiple-colormaps-in-a-single-figure-in-r2014a-and-earlier
@@ -552,19 +606,28 @@ function obj = runModel(mobj,src,grdobj,rayname)
                 for i=1:nrays                    
                     xr = obj.Data.Dataset.xr{i,opt(1),opt(2)};
                     yr = obj.Data.Dataset.yr{i,opt(1),opt(2)};
-                    plot(ax,xr,yr,'-k');
-                    if obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==-3
+                    h1 = plot(ax,xr,yr,'-','Color',ncolor(count));
+                    if i>1
+                        h1.Annotation.LegendInformation.IconDisplayStyle = 'off'; 
+                    end
+                    %plot termination flags
+                    if obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==-4
+                        %flag=-4; ray not advancing
+                        h3 = plot3(ax,xr(end),yr(end),zmx,'*r','MarkerSize',6);
+                    elseif obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==-3
                         %flag=-3; intersection of arc and element not found
-                        plot3(ax,xr(end),yr(end),zmx,'*r','MarkerSize',4)
+                        h3 = plot3(ax,xr(end),yr(end),zmx,'pentagramr','MarkerSize',6);
                     elseif obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==0
                         %flag=-2; radius too small???
-                        plot3(ax,xr(end),yr(end),zmx,'vr','MarkerSize',4)
+                        h3 = plot3(ax,xr(end),yr(end),zmx,'or','MarkerSize',6);
                     elseif obj.Data.Dataset.UserData.flag(i,opt(1),opt(2))==-1
                         %flag=-1; ray returns to shore and stops in shallow water
-                        plot3(ax,xr(end),yr(end),zmx,'xr','MarkerSize',4)
+                        h3 = plot3(ax,xr(end),yr(end),zmx,'x','MarkerEdgeColor','#A2142F','MarkerSize',4);
                     end
+                    h3.Annotation.LegendInformation.IconDisplayStyle = 'off';  
                 end
                 hold(ax,"off")
+                legend(legtxt)
             else
                 nperiods = length(obj.Data.Dataset.Dimensions.Period);
                 nwls = length(obj.Data.Dataset.Dimensions.WaterLevel);
@@ -574,7 +637,7 @@ function obj = runModel(mobj,src,grdobj,rayname)
                         for k=1:nwls
                             xr = obj.Data.Dataset.xr{i,j,k};
                             yr = obj.Data.Dataset.yr{i,j,k};
-                            plot(ax,xr,yr,'-k')
+                            plot(ax,xr,yr,'-','Color',ncolor(k))
                         end
                     end
                 end

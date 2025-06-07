@@ -21,7 +21,8 @@ function newray = arc_ray(cgrid,ray,tol)
 %   newray - table of outgoing ray position (xr,yr), direction, alpha, local
 %            node index, k, quadrant being entered, quad, side of element, edge
 %            - returned empty if new point is outside grid domain
-                %            - returned as -2 if radius is too small (<0.5) 
+%            - returned as -2 if radius is too small (<0.5) 
+%            - returned as -3 if intersection not found
 % NOTES
 %   Ray method based on Abernethy C L and Gilbert G, 1975, Refraction of 
 %   wave spectra, Report No: INT 117,pp. 1-166, Wallingford, UK.
@@ -42,8 +43,9 @@ function newray = arc_ray(cgrid,ray,tol)
 %----------------------------------------------------------------------
 %
     X = cgrid.X; Y = cgrid.Y;
-    delta = X(1,2)-X(1,1);                  %grid spacing
+    delta = X(1,2)-X(1,1);                              %grid spacing
     XY = [reshape(cgrid.X,[],1),reshape(cgrid.Y,[],1)]; %x,y vectors
+    tol.radius = 1e3; 
 
     %variables used in function
     % alpha - angle of ray direction

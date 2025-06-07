@@ -42,7 +42,7 @@ classdef WRM_WaveModel < muiDataSet
 %-------------------------------------------------------------------------- 
             %get the timeseries input data and site parameters
             %Note: getInputData calls setRunParam
-            [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj);
+            [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj,false); %single case
             if isempty(tsdst), return; end   %user cancelled data selection
 
             if strcmp(source,'Measured spectra')
@@ -187,6 +187,56 @@ classdef WRM_WaveModel < muiDataSet
 
             wrm_animation(mobj,sptobj,tsdst,SGo,SGi,Dims)
         end
+
+%%
+        function runBatchMode(mobj)
+            %run spectral transfer for multiple points and load a set of
+            %dstables as datasets in a single case
+            obj = WRM_WaveModel;                            
+            [~,dsprop] = setDSproperties(obj);
+%--------------------------------------------------------------------------
+% Model code 
+%-------------------------------------------------------------------------- 
+            %get the timeseries input data and site parameters
+            %Note: getInputData calls setRunParam
+            [tsdst,sptrecs,inputxt,~] = getInputData(obj,mobj,true); %multi-case
+            if isempty(tsdst), return; end   %user cancelled data selection
+            sptobj = getCase(mobj.Cases,sptrecs(1));
+            select = get_model_selection(sptobj); %select spectral form and data type
+            if isempty(select), return; end       %user cancelled
+            select.issave=false;                  %do not save spectra
+            ModelType = 'transfer timeseries';
+            
+            hw = waitbar(0,'Processing point 0');
+            npnts = length(sptrecs);
+            for i=1:npnts
+                waitbar(i/npnts,hw,sprintf('Processing point %d',i));
+                sptobj = getCase(mobj.Cases,sptrecs(i));
+                [~,~,~,results] = runWaves(sptobj,tsdst,select);                 
+                %each variable should be an array in the 'results' cell array
+                %if model returns single variable as array of doubles, use {results}
+                time = tsdst.RowNames;
+                adst = dstable(results,'RowNames',time,'DSproperties',dsprop);                      
+                %assign metadata about model            
+                adst.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
+                                                             ModelType);
+                inputxt = sprintf('%s, %s used for spectral transfer',inputxt,...
+                                              sptobj.Data.Inshore.Description);
+                adst.MetaData = inputxt;   
+                %add depths of inshore point for which there are backward rays
+                adst.UserData = sptobj.Data.Inshore.UserData.Depths;
+                pname = sprintf('Point_%d',i);
+                dst.(pname) = adst;
+            end
+            delete(hw)
+%--------------------------------------------------------------------------
+% Save results
+%--------------------------------------------------------------------------  
+            %save results
+            obj.ModelType = 'Inwave_model';               %added to match ctWaveModel
+            setDataSetRecord(obj,mobj.Cases,dst,'model');
+            getdialog('Run complete');          
+        end
     end
 %%
     methods
@@ -235,8 +285,7 @@ classdef WRM_WaveModel < muiDataSet
         end
 %%        
         function tabPlot(obj,src) %abstract class for muiDataSet
-            %generate plot for display on Q-Plot tab
-            
+            %generate plot for display on Q-Plot tab            
             
             %add code to define plot format or call default tabplot using:
             tabDefaultPlot(obj,src);
@@ -244,7 +293,7 @@ classdef WRM_WaveModel < muiDataSet
     end 
 %%    
     methods (Access = private)
-        function [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj)
+        function [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj,isbatch)
             %prompt user to select wave and water level data and return in
             %input dstable of data and metadata for inputs used
             tsdst = []; sptobj = []; inputxt = []; source = [];
@@ -322,15 +371,25 @@ classdef WRM_WaveModel < muiDataSet
             tsdst = activatedynamicprops(tsdst);
 
             %get the refraction transfer table
-            promptxt = 'Select a Transfer Table Case to use:';             
-            sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
             msgtxt = 'Spectral Transfer Table not found';
-            if isempty(sptobj), warndlg(msgtxt); return; end
-            inputxt = sprintf('%s, %s used for spectral transfer',inputxt,...
-                                      sptobj.Data.Inshore.Description);
-                
-            %assign the run parameters to the model instance
-            spt_caserec = caseRec(mobj.Cases,sptobj.CaseIndex);
+            if isbatch
+                [sptobj,ok] = selectRecord(mobj.Cases,...
+                                            'CaseClass',{'SpectralTransfer'},...
+                                            'PromptText', 'Select cases',...
+                                            'ListSize', [250,200],...
+                                            'SelectionMode', 'multiple' ); 
+                if ok<1, warndlg(msgtxt); return; end
+                spt_caserec = sptobj(1);
+            else
+                promptxt = 'Select a Transfer Table Case to use:';             
+                sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);                
+                if isempty(sptobj), warndlg(msgtxt); return; end
+                inputxt = sprintf('%s, %s used for spectral transfer',inputxt,...
+                                          sptobj.Data.Inshore.Description);
+                spt_caserec = caseRec(mobj.Cases,sptobj.CaseIndex);
+            end         
+
+            %assign the run parameters to the model instance            
             if wl_crec==0
                 setRunParam(obj,mobj,wv_caserec,spt_caserec);
             else

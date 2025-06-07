@@ -46,7 +46,8 @@ function newray = mesh_arc_ray(cmesh,ray,tol)
 
     %find the largest edge connected to kr    
     tol.length = maxEdge(cmesh,ray);
-
+    tol.radius = 1e3; 
+    
     %get the centre of the arc that is tangential to the ray at xr,yr
     [phi,r,xc,yc] = arc_properties(cmesh,ray,tol);
     xyArc = get_arc(phi,r,xc,yc,ray,tol);

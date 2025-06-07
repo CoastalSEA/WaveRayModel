@@ -4,5 +4,6 @@ app/Working Docs
 app/Models
 app/test_code
 app/Data
+app/mesh2d
 app/setapppath.m
 app/remapppath.m

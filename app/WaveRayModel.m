@@ -43,8 +43,9 @@ classdef WaveRayModel < muiModelUI
             obj.ModelInputs.WRM_Bathy = {'GD_GridProps'};
             obj.ModelInputs.SpectralTransfer = {''};
             obj.ModelInputs.WRM_WaveModel = {'WRM_RunParams'};
-            obj.ModelInputs.WRM_SpectraModel = {''};
+            obj.ModelInputs.WRM_SpectraModel = {'RayTracks'};
             obj.ModelInputs.WRM_Mesh = {'WRM_Mesh'};
+            obj.ModelInputs.WRM_SedimentTransport = {'WRM_WaveModel','WRM_SedimentTransport'};
             %tabs to include in DataUIs for plotting and statistical analysis
             %select which of the options are needed and delete the rest
             %Plot options: '2D','3D','4D','2DT','3DT','4DT'
@@ -148,25 +149,28 @@ classdef WaveRayModel < muiModelUI
             
             %% Run menu ---------------------------------------------------
             menu.Run(1).List = {'Check Start Points','Forward Rays',...
-                                'Check Start Depth','Backward Rays','Batch Run',...
-                                'Transfer Table','Run Wave Timeseries',...
+                                'Check Start Depth','Backward Rays',...
+                                'Batch Run Rays','Transfer Table',...
+                                'Run Wave Timeseries','Batch Run Waves',...
+                                'Batch Sediment Transport',...
                                 'Create Mesh','Test Grid','Derive Output'};
-            menucall = repmat({@obj.runMenuOptions},[1,10]);            
+            menucall = repmat({@obj.runMenuOptions},[1,12]);            
             menu.Run(1).Callback = menucall;
-            menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off','off'...
-                                              'on','off','on','off','on'}];
+            menu.Run(1).Separator = [repmat({'off'},[1,2]),{'on','off','off',...
+                                   'on','off','off','on','on','off','on'}];
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Plot Mesh',...
-                                              'Ray Plots','Spectral Plots'};
+                                     'Ray Plots','Spectral Plots',...
+                                     'Sediment Transport Plots'};
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,4]),...
-                                                                {'gcbo;'}];
-            menu.Analysis(1).Separator = {'off','off','on','off','off'};
+                                        {'gcbo;'},{@obj.analysisMenuOptions}];
+            menu.Analysis(1).Separator = {'off','off','on','off','off','on'};
             
             %submenu for Spectral Plots
             menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients',...
-                                                    'O/I Spectrum','O/I Animation'};
+                                     'O/I Spectrum','O/I Animation'};
             menu.Analysis(2).Callback = repmat({@obj.analysisMenuOptions},[1,4]);
-            menu.Analysis(2).Separator = repmat({'off'},[1,4]);
+            menu.Analysis(2).Separator = [repmat({'off'},[1,4])];
             
             %% Help menu --------------------------------------------------
             menu.Help.List = {'Documentation','Manual'};
@@ -210,7 +214,8 @@ classdef WaveRayModel < muiModelUI
                 'WRM_BT_Params','Inputs',[0.62,0.50],{160,90},'Backward tracking parameters:'; ...
                 'GD_GridProps','Inputs',[0.35,0.50],{160,90}, 'Grid parameters:';...
                 'WRM_Bathy','Inputs',[0.35,0.97],{160,70}, 'Bathymetry parameters:';...
-                'WRM_Mesh','Inputs',[0.50,0.97],{160,70}, 'Mesh parameters:'};
+                'WRM_Mesh','Inputs',[0.50,0.97],{160,70}, 'Mesh parameters:';...
+                'WRM_SedimentTransport','None',[1,1],{0,0},'None'}; %not displayed on a tab
         end    
  %%
         function setTabAction(obj,src,cobj)
@@ -324,12 +329,16 @@ classdef WaveRayModel < muiModelUI
                     RayTracks.startDepth(obj);
                 case 'Backward Rays'                    
                     RayTracks.runModel(obj,src,[],[]);
-                case 'Batch Run'
+                case 'Batch Run Rays'
                     RayTracks.batchRun(obj);
                 case 'Transfer Table'
                     SpectralTransfer.runModel(obj,[],[]);
                 case 'Run Wave Timeseries'
                     WRM_WaveModel.runModel(obj);
+                case 'Batch Run Waves'
+                    WRM_WaveModel.runBatchMode(obj);
+                case 'Batch Sediment Transport'
+                    WRM_SedimentTransport.runModel(obj);
                 case 'Create Mesh'
                     WRM_Mesh.runModel(obj);    
                 case 'Test Grid'
@@ -374,6 +383,8 @@ classdef WaveRayModel < muiModelUI
                     WRM_WaveModel.runSpectrum(obj);
                 case 'O/I Animation'
                     WRM_WaveModel.runAnimation(obj);
+                case 'Sediment Transport Plots'
+                    WRM_SedimentTransport.transportPlots(obj);
             end            
         end
 
