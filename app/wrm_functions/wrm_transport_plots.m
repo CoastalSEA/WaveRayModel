@@ -254,8 +254,8 @@ end
 %%
 function drift_peclet(obj,mobj)
     %plots to examine Peclet ratio using monthly/annual sampling(see Kahl, et al, 2024)
-    calmsthreshold = calmsThreshold(mobj);
-    if isnan(calmsthreshold), return; end  %user cancelled
+    [calms,pecthr] = calmsThreshold(mobj);
+    if isempty(calms), return; end  %user cancelled
 
     dst = obj.Data;
     pntnames = fieldnames(dst);
@@ -270,7 +270,7 @@ function drift_peclet(obj,mobj)
     % annualStdev = annualMean; annualPeclet = annualMean;
     for i=1:npnts
         Var = dst.(pntnames{i}).(var.name);        
-        Var(abs(Var)<calmsthreshold) = NaN; %remove near zero values
+        Var(abs(Var)<calms.value) = NaN; %remove near zero values
         [~,binvar,bintime] = binned_variable(Var,mtime,'month','year');
         nint = size(binvar,2);
         nper = size(binvar,1);
@@ -280,7 +280,9 @@ function drift_peclet(obj,mobj)
                 meanVar = mean(binvar{j,k},'omitnan');
                 stdVar = std(binvar{j,k},'omitnan');
                 peclet = meanVar./stdVar;
-                if peclet>-1 && peclet<1 %#ok<BDSCI>
+                if isnan(peclet) || isinf(peclet)
+                    peclet = 0;
+                elseif peclet>-pecthr && peclet<pecthr %#ok<BDSCI>
                     peclet = 0;
                 end
                 monthlyMean(i,nyr+k) = meanVar;
@@ -292,29 +294,33 @@ function drift_peclet(obj,mobj)
             peclet = annualMean(i,j)/annualStdev(i,j);
             if isnan(peclet) || isinf(peclet)
                 peclet = 0;
-            % elseif peclet>-1 && peclet<1
-            %     peclet = 0;
+            elseif peclet>-pecthr && peclet<pecthr
+                peclet = 0;
             end
             annualPeclet(i,j) = peclet;
             nyr = nyr+nint;
         end
     end
     %plot monthly mean peclet ratio as a surface plot (position,time)
-    desc = struct('case',dst.(pntnames{1}).Description,'var','Peclet ratio (<-1 or >1)');
+    desctxt = sprintf('Peclet ratio (<-%.1f or >%.1f)',pecthr,pecthr);
+    desc = struct('case',dst.(pntnames{1}).Description,'var',desctxt);
     startdate = datetime(year(bintime.periods(1)),1,1);  %force full year
     enddate = datetime(year(bintime.periods(end)),12,1); %to match variable
     bins = startdate:calmonths(1):enddate;
     axm = plotPeclet(monthlyPeclet,bins,desc);  
     axm.CLim = [-2,2];
-    subtitle(axm,'Monthly: Downdrift advection (Pe>1); Updrift advection (Pe<-1)')
+    subtxt = @(x,y) sprintf('%s (Calms: %sd): Downdrift advection (Pe>1); Updrift advection (Pe<-1)',...
+                                                                  x,y);
+    subtitle(axm,subtxt('Monthly',calms.text))
     %annual mean peclet ratio as a surface plot (position,time)
     axa = plotPeclet(annualPeclet,bintime.periods,desc);
-    subtitle(axa,'Annual: Downdrift advection (Pe>1); Updrift advection (Pe<-1)') 
+    axa.CLim = [-2,2];
+    subtitle(axa,subtxt('Annual',calms.text))
 end
 
 %%
 function cluster_peclet(obj,mobj)
-     %plots to Peclet ratio using cluster sampling (see Kahl, et al, 2024)
+    %plots to Peclet ratio using cluster sampling (see Kahl, et al, 2024)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
@@ -323,8 +329,8 @@ function cluster_peclet(obj,mobj)
     mtime = dst.(pntnames{1}).RowNames;
 
     %set a minimum threshold to remove zero values
-    calmsthreshold = calmsThreshold(mobj);
-    if isempty(calmsthreshold), return; end  %user cancelled
+    [calms,pecthr] = calmsThreshold(mobj);
+    if isempty(calms), return; end  %user cancelled
 
     ans0 = questdlg('Use absolute values of drift or +/- values?','Clusters',...
                                             'abs(Qs)','+/-(Qs)','abs(Qs)');
@@ -333,9 +339,9 @@ function cluster_peclet(obj,mobj)
     %additional variables used in mergeSelection for posnegClusters
     options = setClusterOptions(dst.(pntnames{1}).(var.name));
     if strcmp(ans0,'abs(Qs)')        
-        [cluster,options] = absClusters(options,dst,calmsthreshold);
+        [cluster,options] = absClusters(options,dst,calms.value,pecthr);
     else
-        [cluster,options] = posnegClusters(options,dst,calmsthreshold);        
+        [cluster,options] = posnegClusters(options,dst,calms.value,pecthr);        
     end
 
     clustpoint = []; clustpec = []; clustints = [];
@@ -347,22 +353,25 @@ function cluster_peclet(obj,mobj)
     end
   
     %plot cluster mean peclet ratio as a surface plot (position,time)
-    desc = struct('case',dst.(pntnames{1}).Description,'var','Peclet ratio (<-0.8 or >0.8)');
+    desctxt = sprintf('Peclet ratio (<-%.1f or >%.1f)',pecthr,pecthr);
+    desc = struct('case',dst.(pntnames{1}).Description,'var',desctxt);
     bintime = mtime(1):caldays(1):mtime(end);
     x = 1:npnts;
     % Define a grid for interpolation
-    [xq, yq] = meshgrid(x, datenum(bintime));    
+    [xq, yq] = meshgrid(x, datenum(bintime));    %#ok<DATNM>
     % Interpolate scattered data onto the grid
-    zq = griddata(clustpoint,datenum(clustints),clustpec, xq, yq, 'linear'); % 'linear', 'nearest', or 'cubic'
+    zq = griddata(clustpoint,datenum(clustints),clustpec, xq, yq, 'linear'); %#ok<DATNM> % 'linear', 'nearest', or 'cubic'
     axc = plotPeclet(zq',bintime,desc);    
     axc.CLim = [-2,2];
     % save('clusterplot',"xq","yq","zq","bintime","desc");
     txt1 = 'Clusters: Downdrift advection (Pe>1); Updrift advection (Pe<-1)';
     if strcmp(ans0,'abs(Qs)') 
-        txt2 = sprintf('Absolute - Threshold: %0.4f; Interval: %dd; Minimum duration: %dd',...
-                    options.threshold,options.clint,options.mincluster);
+        txt2 = sprintf('Absolute - Calms: %sd; Threshold: %0.4f; Interval: %dd; Min duration: %dd',...
+                    calms.text,options.threshold,...
+                    options.clint,options.mincluster);
     else
-        txt2 = sprintf('Pos/Neg - Threshold: %0.4f/%0.4f; Interval: %dd/%dd; Minimum duration: %dd/%dd',...
+        txt2 = sprintf('Pos/Neg - Calms: %sd; Threshold: %0.4f/%0.4f;\n          Interval: %dd/%dd; Min duration: %dd/%dd',...
+                    calms.text,...
                     options.pos.threshold,options.neg.threshold,...
                     options.pos.clint, options.neg.clint,...
                     options.pos.mincluster, options.neg.mincluster);
@@ -388,14 +397,17 @@ function wavedrift_table(obj,mobj)
 end
 
 %%
-function calmsthreshold = calmsThreshold(mobj)
+function [calms,pecthr] = calmsThreshold(mobj)
     %set the calms threshold to apply to the data
     calmsthreshold = 100;  %"calms" are drift rates less than threshold
                            % 100m^3/yr ~= 3e-6 m^3/s; 
-    answer = inputdlg('Calms threshold (Qs (m^3/yr):','Drift stats',...
-                                        1,{num2str(calmsthreshold)});
-    if isempty(answer), calmsthreshold = []; return; end
-    calmsthreshold = str2double(answer{1})/mobj.Constants.y2s;
+    promptxt = {'Calms threshold (Qs (m^3/yr):','Peclet plotting threshold'};
+    defaults = {num2str(calmsthreshold),'0.8'};
+    answer = inputdlg(promptxt,'Drift',1,defaults);
+    if isempty(answer), calms = []; pecthr = []; return; end
+    calms.value = str2double(answer{1})/mobj.Constants.y2s;
+    calms.text = answer{1};
+    pecthr = str2double(answer{2});
 end
 
 %%
@@ -436,7 +448,7 @@ function sample = setDownsampleSettings()
 end
 
 %%
-function [cluster,userops] = absClusters(options,dst,calmsthreshold)
+function [cluster,userops] = absClusters(options,dst,calmsthreshold,pecthr)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
@@ -514,7 +526,7 @@ function [cluster,userops] = absClusters(options,dst,calmsthreshold)
             %set diffusion values to 0
             if isnan(peclet) || isinf(peclet)
                 peclet = 0;
-            elseif peclet>-0.8 && peclet<0.8 %#ok<BDSCI>
+            elseif peclet>-pecthr && peclet<pecthr %#ok<BDSCI>
                 peclet = 0;
             end
             % %limit the maximum advection values
@@ -533,7 +545,7 @@ function [cluster,userops] = absClusters(options,dst,calmsthreshold)
 end
 
 %%
-function [cluster,userops]  = posnegClusters(options,dst,calmsthreshold)
+function [cluster,userops]  = posnegClusters(options,dst,calmsthreshold,pecthr)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
@@ -617,7 +629,7 @@ function [cluster,userops]  = posnegClusters(options,dst,calmsthreshold)
             %set diffusion values to 0
             if isnan(peclet) || isinf(peclet)
                 peclet = 0;
-            elseif peclet>-0.8 && peclet<0.8 %#ok<BDSCI>
+            elseif peclet>-pecthr && peclet<pecthr %#ok<BDSCI>
                 peclet = 0;
             end
             % %limit the maximum advection values
@@ -667,40 +679,6 @@ function options = setClusterOptions(data,opts)
     options = struct('threshold',threshold,'method',method,'tint',tint,...
                      'clint',clint,'mincluster',mincluster,'isplot',true);
 end
-
-% %%
-% function options = setPosNegClusterOptions(data,opts)
-%     %define the options used in a peaks and cluster data selection
-%     if nargin<2 || isempty(opts)
-%         default = {num2str(mean(data,'omitnan')+std(data,'omitnan')),...
-%                    '1','0','15','5','10'};
-%     else
-%         default{1} = num2str(opts.threshold);
-%         default{2} = num2str(opts.method);
-%         default{3} = num2str(opts.tint);
-%         default{4} = num2str(opts.clint);
-%         default{5} = num2str(opts.mincluster); 
-%         default{6} = num2str(opts.splitdur);
-%     end
-%     prompt = {'Threshold for peaks:','Selection method (1-4)',...
-%         'Time between peaks (hours)','Time between clusters (days)',...
-%         'Minimum duration of a cluster (days)','Duration of overlaps to split (days)'};
-%     title = 'Cluster Statistics';
-%     numlines = 1;
-% 
-%     answer = inputdlg(prompt,title,numlines,default);
-%     if isempty(answer), options = []; return; end
-%     threshold = str2double(answer{1});   %variable threshold 
-%     method = str2double(answer{2});      %peak selection method (see peaks.m)
-%     tint = str2double(answer{3});        %time interval between independent peaks (h)
-%     clint = str2double(answer{4});       %time interval for clusters (d) 
-%     mincluster = str2double(answer{5});  %minimum length of a cluster (d)
-%     splitdur = str2double(answer{6});    %maximum duration to split (d)
-% 
-%     options = struct('threshold',threshold,'method',method,'tint',tint,...
-%                      'clint',clint,'mincluster',mincluster,...
-%                      'splitdur',splitdur,'isplot',true);
-% end
 
 %%
 function medges = mergeAbsClusters(var,mtime,idpos,opts)
@@ -890,6 +868,7 @@ function ax = plotPeclet(var,bintime,desc)
     view(2)
     axis tight
     ax.Layer = 'top';
+    colormap(cmap_selection);
     hc = colorbar;
     hc.Label.String = desc.var;
     datetick('y', 'yyyy'); %#ok<DATIC>
