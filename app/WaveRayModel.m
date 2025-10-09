@@ -161,7 +161,7 @@ classdef WaveRayModel < muiModelUI
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Plot Mesh',...
                                      'Ray Plots','Spectral Plots',...
-                                     'Sediment Transport Plots'};
+                                     'Multi-point Plots'};
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,4]),...
                                         {'gcbo;'},{@obj.analysisMenuOptions}];
             menu.Analysis(1).Separator = {'off','off','on','off','off','on'};
@@ -383,7 +383,7 @@ classdef WaveRayModel < muiModelUI
                     WRM_WaveModel.runSpectrum(obj);
                 case 'O/I Animation'
                     WRM_WaveModel.runAnimation(obj);
-                case 'Sediment Transport Plots'
+                case 'Multi-point Plots'
                     WRM_SedimentTransport.transportPlots(obj);
             end            
         end

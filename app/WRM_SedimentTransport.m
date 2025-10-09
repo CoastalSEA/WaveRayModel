@@ -96,8 +96,8 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
 
 %%
         function transportPlots(mobj)
-            %derived plots from the sediment transport data at multiple alongshore
-            %points
+            %derived plots from the sediment transport and wave data at 
+            %multiple alongshore points
             promptxt = 'Sediment Tranport Plots - select Case to use:';
             listxt = {'Annual Mean Drift','Monthly Mean Drift',...
                       'Summary Point Drift','Summary Shore Drift',...
@@ -105,7 +105,7 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
                       'Wave-Drift Tables'};
                 ok = 1;
                 while ok>0
-                    [obj,~] = selectCaseObj(mobj.Cases,[],{'WRM_SedimentTransport'},promptxt);
+                    [obj,~] = selectCaseObj(mobj.Cases,[],{'WRM_SedimentTransport','WRM_WaveModel'},promptxt);
                     if isempty(obj), ok = 0; continue; end
                     selection = listdlg("ListString",listxt,"PromptString",...
                                         'Select option:','SelectionMode','single',...

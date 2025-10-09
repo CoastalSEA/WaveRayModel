@@ -6,27 +6,35 @@ function wrm_transport_plots(obj,mobj,option)
 % PURPOSE
 %   Use sediment transport results for a set of points along the coast to 
 %   examine drift rates, the divergence of drift and the Peclet number
-%   (indicates balance of advection and diffusion).
+%   (indicates balance of advection and diffusion). The mean and summary
+%   plot options can also be used to plot multi-point wave data.
 % USAGE
-%   wrm_transport_plotsl(objm mobj)
+%   wrm_transport_plotsl(obj,mobj,option)
 % INPUT
-%   obj - WRM_SedimentTransport class instance 
-%   mobj - CoastalTools class instance (currently not used)
+%   obj - WRM_SedimentTransport or WRM_WaveModel class instance
+%   mobj - WRM modelUI class instance (only used for constants)
 %   option - selected plot options. Currently the options include:
-%           1.	Mean drift: at each point the mean and standard deviation 
-%               of the selected variable is computed for all years and the 
-%               results of the mean and +/- st.dev. are plotted as a function 
-%               of point number (non-dimensional equivalent to distance 
-%               along the shore). 
-%           2.	Summary point drift: for each point plot the monthly and 
+%            'Annual Mean Drift' - at each point the mean and standard deviation 
+%               of the selected variable is computed for all years, summer  
+%               or winter and the results of the mean and +/- st.dev. 
+%               are plotted as a function of point number (non-dimensional 
+%               equivalent to distance along the shore).
+%            'Monthly Mean Drift' - for a selected point plot the monthly 
+%               means in each year of the dataset
+%            'Summary Point Drift' - for each point plot the monthly and 
 %               annual drift values and the positive and negative contributions 
 %               (uses littoraldriftstats from the Derive Output function library).
-%           3.	Summary shore drift: creates surface plots of a selected 
+%            'Summary Shore Drift' - creates surface plots of a selected 
 %               variable downsampled to months or years by applying a suitable
 %               function (mean, stdec, sum, min, max, etc) and plotted as a 
 %               function of point number (non-dimensional equivalent to distance
 %               along the shore) and time.
-%           4.	Divergence and Peclet: 
+%            'Monthly Peclet Ratio' - plots to examine Peclet ratio along-shore
+%               and over time using monthly/annual sampling (see Kahl, et al, 2024)
+%            'Cluster Peclet Ratio'- plots to examine Peclet ratio along-shore
+%               and over time using cluster sampling (see Kahl, et al, 2024)
+%            'Wave-Drift Tables' - not yet implemented
+                      
 % OUTPUT 
 %   plot options for drift at multiple points as detailed above
 % NOTES
@@ -40,19 +48,20 @@ function wrm_transport_plots(obj,mobj,option)
 % CoastalSEA (c)May 2025
 %--------------------------------------------------------------------------
 %  
+    msgtxt = 'WRM_SedimentTransport class required for this option';
     switch option
         case 'Annual Mean Drift'
             an_mean_drift(obj,mobj);
         case 'Monthly Mean Drift'
             mn_mean_drift(obj,mobj);
         case 'Summary Point Drift'
-            summary_point_drift(obj);
+            summary_point_drift(obj,msgtxt);
         case 'Summary Shore Drift'
             summary_shore_drift(obj);
         case 'Monthly Peclet Ratio'
-            drift_peclet(obj,mobj);
+            drift_peclet(obj,mobj,msgtxt);
         case 'Cluster Peclet Ratio'
-            cluster_peclet(obj,mobj);
+            cluster_peclet(obj,mobj,msgtxt);
         case 'Wave-Drift Tables'
             wavedrift_table(obj,mobj);
     end
@@ -61,18 +70,30 @@ end
 %%
 function an_mean_drift(obj,mobj)
     %plot the annual mean drift and standard deviation for all years
-    calmsthreshold = calmsThreshold(mobj);
-    if isnan(calmsthreshold), return; end  %user cancelled
+    [calms,~] = calmsThreshold(mobj);
+    if isempty(calms), return; end  %user cancelled
 
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable();
+    [var,isdrift] = getVariable([],dst,pntnames);
     if isempty(var), return; end
+    mtime = dst.(pntnames{1}).RowNames;
+    answer = questdlg('Select period','Drift','All years','Winters','Summers','All years');
+
     meanVar = zeros(1,npnts); upper = meanVar; lower = upper; peclet = upper;
     for i=1:npnts
         Var = dst.(pntnames{i}).(var.name);
-        Var(abs(Var)<calmsthreshold) = NaN; %remove near zero values
+        Var(abs(Var)<calms.value) = NaN; %remove near zero values
+        if ~strcmp(answer,'All years')
+            [~,binvar,~] = binned_variable(Var,mtime,'month','year');
+            if strcmp(answer,'Winters')
+                varcell = binvar(:,[1:3,10:12]);
+            else
+                varcell = binvar(:,4:9);
+            end
+            Var = vertcat(varcell{:});
+        end
         meanVar(i) = mean(Var,'omitnan');
         stdVar = std(Var,'omitnan');
         upper(i) = meanVar(i)+stdVar;
@@ -91,7 +112,7 @@ function an_mean_drift(obj,mobj)
         'FaceAlpha',0.5,'EdgeColor',grey,'DisplayName',sprintf('Stdev %s',var.name));
     hold on
     plot(ax,loc,meanVar,'-k','DisplayName',sprintf('Mean %s',var.name));
-    if any(~isnan(downcoast)) || any(~isnan(upcoast))
+    if isdrift && (any(~isnan(downcoast)) || any(~isnan(upcoast)))
         plot(ax,loc,downcoast,'-og','DisplayName','Pe<-1','LineWidth',0.8,'MarkerSize',4);
         plot(ax,loc,upcoast,'-ob','DisplayName','Pe>1','LineWidth',0.8,'MarkerSize',4);
     end
@@ -99,25 +120,25 @@ function an_mean_drift(obj,mobj)
     xlabel('Position along shore')
     ylabel(var.desc)
     title(sprintf('Case: %s',dst.(pntnames{1}).Description));
-    subtitle('Mean and Standard deviation for all years')
+    subtitle(sprintf('Mean and Standard deviation for %s',answer))
     legend
 end
 
 %%
 function mn_mean_drift(obj,mobj)
     %plot the monthly mean drift for each year at a selected point
-    calmsthreshold = calmsThreshold(mobj);
-    if isnan(calmsthreshold), return; end  %user cancelled
+    [calms,~] = calmsThreshold(mobj);
+    if isempty(calms), return; end  %user cancelled
 
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable();
+    [var,isdrift] = getVariable([],dst,pntnames);
     mtime = dst.(pntnames{1}).RowNames;
     
     for i=1:npnts
         Var = dst.(pntnames{i}).(var.name);        
-        Var(abs(Var)<calmsthreshold) = NaN; %remove near zero values
+        Var(abs(Var)<calms.value) = NaN; %remove near zero values
         [~,binvar,bintime] = binned_variable(Var,mtime,'month','year');
         nint = size(binvar,2);
         nper = size(binvar,1);
@@ -155,19 +176,23 @@ function mn_mean_drift(obj,mobj)
         
         hold on
         plot(ax,mntime,pointvar(1,:),'DisplayName','Year','ButtonDownFcn',@godisplay);
-        plot(ax,mntime,pointdown(1,:),'-og','DisplayName','Pe<-1',...
+        if isdrift
+            plot(ax,mntime,pointdown(1,:),'-og','DisplayName','Pe<-1',...
                 'LineWidth',0.8,'MarkerSize',4,'ButtonDownFcn',@godisplay);
-        plot(ax,mntime,pointup(1,:),'-ob','DisplayName','Pe>1',...
+            plot(ax,mntime,pointup(1,:),'-ob','DisplayName','Pe>1',...
                 'LineWidth',0.8,'MarkerSize',4,'ButtonDownFcn',@godisplay);
+        end
         for i=2:nyear
             p1 = plot(ax,mntime,pointvar(i,:),'DisplayName',antime(i),'ButtonDownFcn',@godisplay);
-            p1.Annotation.LegendInformation.IconDisplayStyle = 'off';  
-            p1 = plot(ax,mntime,pointdown(i,:),'-og','LineWidth',0.8,...
+            p1.Annotation.LegendInformation.IconDisplayStyle = 'off'; 
+            if isdrift
+                p1 = plot(ax,mntime,pointdown(i,:),'-og','LineWidth',0.8,...
                 'MarkerSize',4,'DisplayName',antime(i),'ButtonDownFcn',@godisplay);
-            p1.Annotation.LegendInformation.IconDisplayStyle = 'off';  
-            p1 = plot(ax,mntime,pointup(i,:),'-ob','LineWidth',0.8,...
+                p1.Annotation.LegendInformation.IconDisplayStyle = 'off';  
+                p1 = plot(ax,mntime,pointup(i,:),'-ob','LineWidth',0.8,...
                 'MarkerSize',4,'DisplayName',antime(i),'ButtonDownFcn',@godisplay);
-            p1.Annotation.LegendInformation.IconDisplayStyle = 'off';  
+                p1.Annotation.LegendInformation.IconDisplayStyle = 'off';
+            end 
         end
         hold off
         xlabel('Month')
@@ -179,8 +204,10 @@ function mn_mean_drift(obj,mobj)
     end
 end
 %%
-function summary_point_drift(obj)
+function summary_point_drift(obj,msgtxt)
    %summary plot of monthly and annual drift at a point (littoraldriftstats)
+   if ~isa(obj,'WRM_SedimentTransport'), getdialog(msgtxt); return; end
+
    dst = obj.Data;
    pntnames = fieldnames(dst);
    [sel,ok] = listdlg('Name','Plot profile', ...
@@ -205,7 +232,7 @@ function summary_shore_drift(obj)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable();
+    [var,~] = getVariable([],dst,pntnames);
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
@@ -252,15 +279,17 @@ function summary_shore_drift(obj)
 end
 
 %%
-function drift_peclet(obj,mobj)
+function drift_peclet(obj,mobj,msgtxt)
     %plots to examine Peclet ratio using monthly/annual sampling(see Kahl, et al, 2024)
+    if ~isa(obj,'WRM_SedimentTransport'), getdialog(msgtxt); return; end
+
     [calms,pecthr] = calmsThreshold(mobj);
     if isempty(calms), return; end  %user cancelled
 
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable(1);
+    [var,~] = getVariable(1,dst,pntnames);
     if isempty(var), return; end
 
     mtime = dst.(pntnames{1}).RowNames;
@@ -289,8 +318,8 @@ function drift_peclet(obj,mobj)
                 monthlyStdev(i,nyr+k) = stdVar;
                 monthlyPeclet(i,nyr+k) = peclet;
             end
-            annualMean(i,j) = mean(monthlyMean(i,(nyr+1:nyr+12)));
-            annualStdev(i,j) = mean(monthlyStdev(i,(nyr+1:nyr+12)))*sqrt(12);
+            annualMean(i,j) = mean(monthlyMean(i,(nyr+1:nyr+12)),'omitnan');
+            annualStdev(i,j) = sqrt(sum(monthlyStdev(i,(nyr+1:nyr+12)).^2,'omitnan')/12^2);
             peclet = annualMean(i,j)/annualStdev(i,j);
             if isnan(peclet) || isinf(peclet)
                 peclet = 0;
@@ -314,17 +343,19 @@ function drift_peclet(obj,mobj)
     subtitle(axm,subtxt('Monthly',calms.text))
     %annual mean peclet ratio as a surface plot (position,time)
     axa = plotPeclet(annualPeclet,bintime.periods,desc);
-    axa.CLim = [-2,2];
+    %axa.CLim = [-2,2];
     subtitle(axa,subtxt('Annual',calms.text))
 end
 
 %%
-function cluster_peclet(obj,mobj)
+function cluster_peclet(obj,mobj,msgtxt)    
     %plots to Peclet ratio using cluster sampling (see Kahl, et al, 2024)
+    if ~isa(obj,'WRM_SedimentTransport'), getdialog(msgtxt); return; end
+
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable(1);  %selects Qs without prompting user
+    [var,~] = getVariable(1,dst,pntnames); %selects Qs without prompting user
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
@@ -339,9 +370,9 @@ function cluster_peclet(obj,mobj)
     %additional variables used in mergeSelection for posnegClusters
     options = setClusterOptions(dst.(pntnames{1}).(var.name));
     if strcmp(ans0,'abs(Qs)')        
-        [cluster,options] = absClusters(options,dst,calms.value,pecthr);
+        [cluster,options] = absClusters(options,dst,calms,pecthr);
     else
-        [cluster,options] = posnegClusters(options,dst,calms.value,pecthr);        
+        [cluster,options] = posnegClusters(options,dst,calms,pecthr);        
     end
 
     clustpoint = []; clustpec = []; clustints = [];
@@ -381,8 +412,8 @@ end
 %%
 function wavedrift_table(obj,mobj)
     %
-    calmsthreshold = calmsThreshold(mobj);
-    if isnan(calmsthreshold), return; end  %user cancelled
+    [calms,~] = calmsThreshold(mobj);
+    if isempty(calms), return; end  %user cancelled
 
     dst = obj.Data;
     pntnames = fieldnames(dst);
@@ -390,18 +421,18 @@ function wavedrift_table(obj,mobj)
     var = getVariable(1);
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
-
-
-
+    warndlg('Not yet implemented')
 
 end
 
-%%
+%% ------------------------------------------------------------------------
+% Utility functions for plotting 
+%--------------------------------------------------------------------------
 function [calms,pecthr] = calmsThreshold(mobj)
     %set the calms threshold to apply to the data
     calmsthreshold = 100;  %"calms" are drift rates less than threshold
                            % 100m^3/yr ~= 3e-6 m^3/s; 
-    promptxt = {'Calms threshold (Qs (m^3/yr):','Peclet plotting threshold'};
+    promptxt = {'Calms threshold (Hsi (m), Qs (m^3/yr, etc):','Peclet plotting threshold'};
     defaults = {num2str(calmsthreshold),'0.8'};
     answer = inputdlg(promptxt,'Drift',1,defaults);
     if isempty(answer), calms = []; pecthr = []; return; end
@@ -411,13 +442,12 @@ function [calms,pecthr] = calmsThreshold(mobj)
 end
 
 %%
-function var = getVariable(sel)
+function [var,isdrift] = getVariable(sel,dst,pntnames)
     %select a variable to use in the plot
-    varname = {'Qs','dQdx','Qx'};
-    vardesc = {'Alongshore drift rate potential (m^3/s)',...
-               'Alongshore drift gradient (m^3/s/m)'...
-               'Cross-shore transport rate (m^3/s)'};
-    if nargin<1
+    varname = dst.(pntnames{1}).VariableNames;
+    vardesc = dst.(pntnames{1}).VariableDescriptions; 
+
+    if isempty(sel)
         [sel,ok] = listdlg('Name','Plot profile', ...
                                      'PromptString','Select variable', ...
                                      'ListSize',[200,80], ...
@@ -427,6 +457,9 @@ function var = getVariable(sel)
     end
     var.name = varname{sel};
     var.desc = vardesc{sel};
+
+    isdrift = true;
+    if any(contains(varname,'Hsi')), isdrift = false; end
 end
 
 %%
@@ -448,7 +481,7 @@ function sample = setDownsampleSettings()
 end
 
 %%
-function [cluster,userops] = absClusters(options,dst,calmsthreshold,pecthr)
+function [cluster,userops] = absClusters(options,dst,calms,pecthr)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
@@ -496,7 +529,7 @@ function [cluster,userops] = absClusters(options,dst,calmsthreshold,pecthr)
     userops.isplot = false; %supress plots in for loop
     for i=1:npnts        
         Var = dst.(pntnames{i}).(var.name);        
-        Var(abs(Var)<calmsthreshold) = NaN; %remove near zero values
+        Var(abs(Var)<calms.value) = NaN; %remove near zero values
         vardst = getDSTable(dst.(pntnames{i}),'VariableNames',var.name);
         vardst.(var.name) = abs(vardst.(var.name)); %use absolute values for intervals
 
@@ -545,7 +578,7 @@ function [cluster,userops] = absClusters(options,dst,calmsthreshold,pecthr)
 end
 
 %%
-function [cluster,userops]  = posnegClusters(options,dst,calmsthreshold,pecthr)
+function [cluster,userops]  = posnegClusters(options,dst,calms,pecthr)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
@@ -599,7 +632,7 @@ function [cluster,userops]  = posnegClusters(options,dst,calmsthreshold,pecthr)
     options.isplot = false;
     for i=1:npnts        
         Var = dst.(pntnames{i}).(var.name);        
-        Var(abs(Var)<calmsthreshold) = NaN; %remove near zero values
+        Var(abs(Var)<calms.value) = NaN; %remove near zero values
         posdst = getDSTable(dst.(pntnames{i}),'VariableNames',var.name);
 
         % find clusters based on results from peak selection
