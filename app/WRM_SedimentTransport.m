@@ -61,7 +61,7 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
 
 %%
         function obj = runModel(mobj)
-            %function to run a simple 2D diffusion model
+            %function to run sediment transport model for multiple points
             promptxt = 'Select nearshore wave timeseries to use';
             wavobj = selectCaseObj(mobj.Cases,[],{'WRM_WaveModel'},promptxt); 
             if isempty(wavobj), return; end
@@ -136,17 +136,17 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
             vsc = mobj.Constants.KinematicViscosity;
 
             %initialise metatdata
-            wv = dst.(pntnames{1});
-            zi = mean((wv.swl-wv.depi),'omitnan');
-            theta = obj.ShorelineAngle;
+            wv = dst.(pntnames{1});            
+            theta = obj.ShorelineAngle;   
             mtime = wv.RowNames;
             nrec = length(mtime);
             dsp = WRM_SedimentTransport.setDSproperties();
 
             hw = waitbar(0,'Processing point 0');
-            Qs = zeros(nrec,npnts); Qx = Qs; dQdx = Qs;
+            Qs = zeros(nrec,npnts); Qx = Qs; dQdx = Qs; alpi = Qs;
+            mzi = zeros(1,npnts); mbs = mzi;
             for i=1:npnts                
-                wv = dst.(pntnames{i});
+                wv = dst.(pntnames{i});                
                 bs = profileslope(wv.depi/2,wv.swl,z1km,ubs); %first argument is depth
                 Qall = littoraldrift(wv.Hsi,wv.Tpi,wv.Diri,wv.depi,...
                                             theta(i),bs,d50,0.0006,g,rhs,rhw,vsc);   
@@ -156,6 +156,10 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
                 %Note the current formulation dose NOT use Tp, Dir and theta
                 Qx(:,i) = xshore_bailard(wv.Hsi,wv.Tpi,wv.Diri,wv.depi,...
                                             theta(i),bs,d50,g,rhw,rhs,vsc);
+                alpi(:,i) = getTransportDirection(obj,wv.Diri,theta(i));
+                %add point specific metadata
+                mzi(i) = mean((wv.swl-wv.depi),'omitnan');
+                mbs(i) = mean(bs,'omitnan');
             end
             
             for j=1:nrec
@@ -167,12 +171,13 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
             %save results to dstables - one for each point
             for i=1:npnts   
                 waitbar(i/npnts,hw,sprintf('Processing point %d',i));
-                adst = dstable(Qs(:,i),dQdx(:,i),Qx(:,i),'RowNames',mtime,'DSproperties',dsp);
+                adst = dstable(Qs(:,i),dQdx(:,i),Qx(:,i),alpi(:,i),...
+                                    'RowNames',mtime,'DSproperties',dsp);
                 srctxt = sprintf('Class %s, at %s',metaclass(obj).Name,pntnames{i});
                 adst.Source = srctxt;   
                 bs = mean(bs,'omitnan');
                 mtxt1 = sprintf('Drift using %s; Theta=%g; d50=%g; Kc=%g; Beach slope=1:%.1f; Zi=%g',...
-                                    driftmodel.name,theta(i),d50,Kc,bs,zi);    
+                            driftmodel.name,theta(i),d50,Kc,mbs(i),mzi(i));    
                 mtxt2 = sprintf('Using %s case for wave input',wv.Description);
                 inptxt = sprintf('%s\n%s',mtxt1,mtxt2);
                 adst.MetaData = inptxt;
@@ -209,6 +214,21 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
             obj.PointDistances = cumlen{1}(1:end-1);  %remove traling NaN
         end
 
+
+%%
+        function phi = getTransportDirection(~,Diri,theta)
+            %use get alp to define the transport direction based on
+            %sin(2.alpi)
+            % alpi - angle between wave crest and contour (rads)
+            % quad - quadrant of the wave direction relative to the contour
+            [alpi,quad] = getalp(Diri,theta);
+            bsgn = zeros(size(quad));
+            bsgn(quad==1 | quad==4) = -1;       %waves right to left when looking at shore from sea
+            bsgn(quad==2 | quad==3) = +1;       %waves left to right when looking at shore from sea
+            idoff = quad==3 | quad==4;          %offshore waves
+            alpi(idoff) = NaN;
+            phi = bsgn.*sin(2*alpi);
+        end
     end
 
 
@@ -239,14 +259,15 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
             
             %struct entries are cell arrays and can be column or row vectors
             dsprop.Variables = struct(...
-                'Name',{'Qs','dQdx','Qx'},...
+                'Name',{'Qs','dQdx','Qx','sin2alp'},...
                 'Description',{'Alongshore drift rate potential',...
-                               'Alongshore drift gradient'...
-                               'Cross-shore transport rate'},...
-                'Unit',{'m^3/s','m^3/s/m','m^3/s'},...
+                               'Alongshore drift gradient',...
+                               'Cross-shore transport rate',...
+                               'Transport direction [sin(2.alpha)]'},...
+                'Unit',{'m^3/s','m^3/s/m','m^3/s','rad'},...
                 'Label',{'Transport rate (m^3/s)','Flux gradient (m^3/s/m)',...
-                                               'Transport Rate (m^3/s)'},...
-                'QCflag',repmat({'model'},1,3));
+                               'Transport Rate (m^3/s)','Transport direction'},...
+                'QCflag',repmat({'model'},1,4));
             dsprop.Row = struct(...
                 'Name',{'Time'},...
                 'Description',{'Time'},...

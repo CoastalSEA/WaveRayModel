@@ -116,6 +116,10 @@ classdef WRM_WaveModel < muiDataSet
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
+            if isempty(sptobj)
+                getdialog('Spectral Transfer table not found'); return; 
+            end
+
             isout = checkWLrange(sptobj,offdata.swl);
             if isout
                 warndlg('Water levels are outside the range of the Transfer Table')
@@ -152,7 +156,7 @@ classdef WRM_WaveModel < muiDataSet
             %create an animation of the 2-D spectrum surfaces using a
             %timeseries input
             obj = WRM_WaveModel; 
-            [tsdst,~,source] = getInputData(obj,mobj);
+            [tsdst,~,source] = getInputData(obj,mobj,false);
             if isempty(tsdst), return; end   %user cancelled data selection  
             tsdst.DataTable = rmmissing(tsdst.DataTable);%remove nans
 
@@ -166,6 +170,10 @@ classdef WRM_WaveModel < muiDataSet
             %get the refraction transfer table
             promptxt = 'Select a Transfer Table Case to use:'; 
             sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
+             if isempty(sptobj)
+                getdialog('Spectral Transfer table not found'); return; 
+             end
+
             isout = checkWLrange(sptobj,tsdst.swl);
             if isout
                 warndlg('Water levels are outside the range of the Transfer Table')
@@ -314,7 +322,7 @@ classdef WRM_WaveModel < muiDataSet
             varnames = wvdst.VariableNames;
             if strcmp(source,'Measured waves') && ~any(strcmp(varnames,'Hs'))
                 wvdst = extract_wave_data(wvdst);
-                if isempty(wvdst), return; end
+                if isempty(wvdst), getdialog('Wave data not found'); return; end
             end
 
             promptxt = 'Select input water level data set (Cancel to use SWL=0):';           
@@ -378,12 +386,13 @@ classdef WRM_WaveModel < muiDataSet
                                             'PromptText', 'Select cases',...
                                             'ListSize', [250,200],...
                                             'SelectionMode', 'multiple' ); 
-                if ok<1, warndlg(msgtxt); return; end
+                if ok<1, getdialog(msgtxt); return; end
                 spt_caserec = sptobj(1);
             else
                 promptxt = 'Select a Transfer Table Case to use:';             
                 sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);                
-                if isempty(sptobj), warndlg(msgtxt); return; end
+                if isempty(sptobj), getdialog(msgtxt); return; end
+
                 inputxt = sprintf('%s, %s used for spectral transfer',inputxt,...
                                           sptobj.Data.Inshore.Description);
                 spt_caserec = caseRec(mobj.Cases,sptobj.CaseIndex);

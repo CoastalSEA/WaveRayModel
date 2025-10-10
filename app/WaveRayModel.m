@@ -359,25 +359,25 @@ classdef WaveRayModel < muiModelUI
                     obj.mUI.StatsUI = muiStatsUI.getStatsUI(obj);
                 case 'Plot Mesh'
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'WRM_Mesh'},promptxt);
-                    if isempty(cobj), return; end
+                    if isempty(cobj), getdialog('No mesh available'); return; end
                     hf = figure('Name','Mesh','Tag','PlotFig');
                     ax = axes(hf);
                     tabPlot(cobj,ax);
                 case 'Ray Plots'                    
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'RayTracks'},promptxt);
-                    if isempty(cobj), return; end
+                    if isempty(cobj), getdialog('No rays available');return; end
                     hf = figure('Name','RayTracks','Tag','PlotFig');
                     ax = axes(hf);
                     tabPlot(cobj,ax,obj);
                 case 'Transfer Table'
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
-                    if isempty(cobj), return; end
+                    if isempty(cobj), getdialog('No Transfer tables available');return; end
                     hf = figure('Name','SpecTrans','Tag','PlotFig');
                     ax = axes(hf);
                     tabPlot(cobj,ax,obj);
                 case 'Transfer Coefficients'
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
-                    if isempty(cobj), return; end
+                    if isempty(cobj), getdialog('No Transfer tables available'); return; end
                     coefficientsPlot(cobj);
                 case 'O/I Spectrum'
                     WRM_WaveModel.runSpectrum(obj);
