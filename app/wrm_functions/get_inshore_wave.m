@@ -18,7 +18,7 @@ function output = get_inshore_wave(SGo,SGi,Dims,intable,sp)
 %   sp - defines type of model to use and model parameters
 % OUTPUT
 %   output - table of wave statistical parameters and ratios including:
-%            Hsi,T2i,Diri,Tpi,Diripk,kw,kt2,ktp,kd,swl,depi                                                            
+%            Hsi,T2i,Diri,Tpi,Diripk,Spki,kw,kt2,ktp,kd,swl,depi                                                            
 % SEE ALSO
 %   get_inshore_spectrum.m and SpectralTransfer.m in WaveRayModel
 %   
@@ -54,6 +54,7 @@ function output = get_inshore_wave(SGo,SGi,Dims,intable,sp)
     kw = sqrt(pi.m0/p0.m0);
     Diri = pi.Dir0;
     Diripk = pi.Dirpk;
+    Spki = pi.Spk;                    %energy at spectrum peak
     Tpi = pi.Tp;
     T2i = pi.T2;
     ktp = Tpi/Tpo;                    %peak period coefficient
@@ -65,5 +66,5 @@ function output = get_inshore_wave(SGo,SGi,Dims,intable,sp)
     % Hmo = 4*sqrt(m0);                %check of offshore Hs
     % disp([Hsi,Hmi,inp.Hso,Hmo])
 
-    output = table(Hsi,T2i,Diri,Tpi,Diripk,kw,kt2,ktp,kd,swl,depi);                                                       
+    output = table(Hsi,T2i,Diri,Tpi,Diripk,Spki,kw,kt2,ktp,kd,swl,depi);                                                       
 end

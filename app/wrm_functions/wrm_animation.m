@@ -76,7 +76,8 @@ function wrm_animation(mobj,sptobj,tsdst,SGo,SGi,Dims)
     %assign muiPlots instance to handle
     mobj.mUI.Plots = pobj;
 end
-    %%
+
+%%
 function [s1,s2] = setupAnimation(sptobj,pobj)
     %initialise 3Dplot and setup animation variables
     hfig = pobj.Plot.CurrentFig;
@@ -130,6 +131,7 @@ function [s1,s2] = setupAnimation(sptobj,pobj)
     sg.Margin = 1;
     sg.Tag = 'PlotFigTitle';
 end
+
 %%
 function getAnimation(pobj,s1,s2,hfig)
     %generate an animation for user selection.
@@ -157,6 +159,7 @@ function getAnimation(pobj,s1,s2,hfig)
     pobj.ModelMovie{idm+1,1} = hfig.Number;
     pobj.ModelMovie{idm+1,2} = Mframes;   %save movie to class property
 end 
+
 %%
 function hm = wrmControlPanel(pobj,hfig,nrec,t0)
     %intialise button to re-run animation and slider to scroll through
@@ -185,6 +188,7 @@ function hm = wrmControlPanel(pobj,hfig,nrec,t0)
             'Style','text','String',t0,'Units','normalized',... 
             'Position',[0.8,0.015,0.15,0.03],'Tag','FrameTime');
 end
+
 %%
 function P = reshapePolarGrid(Period,Dir,S)
     %format spectral array to be in format required by polarplot3d

@@ -7,3 +7,5 @@ app/Data
 app/mesh2d
 app/setapppath.m
 app/remapppath.m
+app/*.asv
+app/wrm_functions/*.asv

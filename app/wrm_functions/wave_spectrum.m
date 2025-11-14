@@ -1,4 +1,4 @@
-function S = wave_spectrum(stype,f,varargin)
+function S = wave_spectrum(stype,f,inputs)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -9,27 +9,33 @@ function S = wave_spectrum(stype,f,varargin)
 %   Pierson-Moskowitz fully developed, JONSWAP fetch limited, and 
 %   TMA shallow water).
 % USAGE
-%   S = wave_spectrum(stype,f,varargin)
+%   S = wave_spectrum(stype,f,inputs)
 % INPUTS
 %   stype - type of spectrum. options are 'Bretschneider open ocean', 
 %           'Pierson-Moskowitz fully developed', 'JONSWAP fetch limited', 
 %           or 'TMA shallow water'
 %   f - frequencies at which the spectrum is to be defined <scalar or vector>
-%   varargin - depends on use. When deriving the spectrum using wind speed
-%              and fetch the order is 'wind',Uw,zw,Fch as defined below. 
-%              When using wave records the order is 'wave',Hmo,Tp,gamma
+%  inputs - a struct that depends on use. When deriving the spectrum using 
+%           wind speed and fetch the struct includes 'wind',Uw,zw,Fch,df
+%           When using wave records the order is 'wave',Hmo,Tp,gamma,
 %   For wind input (JONSWAP and TMA only)
+%       source - 'Wind'
 %       Uw - wind speed (m/s) <scalar or vector>
 %       zw - elevation of wind speed measurement (m)
 %       Fch- dominant fetch length (m) <scalar or vector>
+%       df - average water depth over fetch (m) (default is deep water)
 %   For wave input
+%       source - 'Wave'
 %       Hmo - significant wave height [4sqrt(mo)] (m) <scalar or vector>
-%       Tp peak wave period (s)  <can be vector - same length as Hs>
+%       Tp - peak wave period (s)  <can be vector - same length as Hs>
+%       T2 - mean wave period or zero upcrossing period: used to calculate
+%            gamma, or gamma can be specified
 %       gamma - spectrum shape parameter (defaults to 3.3 if not specified)
-%   When using 'TMA shallow water'
-%   df - average water depth over fetch (m) (default is deep water)
-%   ds - depths at site (m) <scalar or vector>
-%           NB: wind or wave vector data must be the same length
+%
+%   When using 'TMA shallow water', wind or wave struct includes 
+%   ds - for tma wave: depths at site (m) <scalar or vector> 
+%        default is deep water if ds is not included, isempty or zero
+%        NB: wind or wave vector data must be the same length
 % OUTPUT
 %   S - spectral energy density at specified frequencies [nrec,nf] (m^2s)
 % NOTES
@@ -39,7 +45,7 @@ function S = wave_spectrum(stype,f,varargin)
 %   Hunt,ASCE,WW4,1974,p457-459
 %   NB: 1) gamma only used for JONSWAP and TMA spectra
 %       2) Pierson-Moskowitz can use just Hmo or just Tp. If specifying Tp
-%          enter Hmo as [] and vice versa.
+%          enter do not include Hmo, or assign [] and vice versa.
 % SEE ALSO
 %   uses celerity.m. cf tma_spectrum.m which outputs [Hs,Tp,Tz]
 %
@@ -49,27 +55,34 @@ function S = wave_spectrum(stype,f,varargin)
 %
     switch stype
         case 'Bretschneider open ocean'
-            S = bretschneider(f,varargin{:});
+            S = bretschneider(f,inputs);
         case 'Pierson-Moskowitz fully developed'
-            S = pierson_moskowitz(f,varargin{:});
+            S = pierson_moskowitz(f,inputs);
         case 'JONSWAP fetch limited'
-            S = jonswap(f,varargin{:});
+            S = jonswap(f,inputs);
         case 'TMA shallow water'
-             S = tma(f,varargin{:});
+             S = tma(f,inputs);
         otherwise
             warndlg('Unknown spectrum type')
             S = [];
     end
+
+    %checks
+    % m0 = trapz(f,S);     %first moment
+    % Hs = 4*sqrt(m0);     %significant wave height
+    % [Sp,ifpk] = max(S);  %peak energy density
+    % Tp = 1/f(ifpk);      %period at peak
 end
+
 %%
-function S = bretschneider(f,varargin)
+function S = bretschneider(f,inp)
     %construct the Bretschneider spectrum
-    if ~strcmp(varargin{1},'Wave')
+    if ~strcmp(inp.source,'Wave')
         warndlg('Bretschneider option only available with wave type input')
-        return;
+        S = []; return;
     end
-    Hmo = varargin{2};
-    Tp = varargin{3};
+    Hmo = inp.Hs;
+    Tp = inp.Tp;
     %using Carter eq(11)
     Func = @(f) 0.31*Hmo.^2.*Tp.*(Tp.*f).^-5.*exp(-1.25./(Tp.*f).^4);
     S = zeros(length(Tp),length(f));
@@ -77,15 +90,16 @@ function S = bretschneider(f,varargin)
         S(:,i) = Func(f(i));
     end
 end
+
 %%
-function S = pierson_moskowitz(f,varargin)
+function S = pierson_moskowitz(f,inp)
     %construct the Pierson-Moskowitz spectrum
-    if ~strcmp(varargin{1},'Wave')
+    if ~strcmp(inp.source,'Wave')
         warndlg('Pierson-Moskowitz option only available with wave type input')
-        return;
+        S = []; return;
     end
-    Hmo = varargin{2};
-    Tp = varargin{3};
+    Hmo = inp.Hs;
+    Tp = inp.Tp;
 
     if isempty(Hmo)
         Func = @(f) 5e-4*(f).^-5.*exp(-1.25./(Tp.*f).^4);     %Carter eq(15)
@@ -99,12 +113,13 @@ function S = pierson_moskowitz(f,varargin)
         S(:,i) = Func(f(i));
     end
 end
+
 %%
-function S = jonswap(f,varargin)
+function S = jonswap(f,inputs)
     %construct the JONSWAP spectrum using Carter eq(16) with alpha based on
     %Hughes for wind and Carter for wave type input
     g = 9.81;
-    [fp,alpha,gamma] = get_input(varargin{:});
+    [fp,alpha,gamma] = get_input(inputs);
     if isempty(fp), return; end
     
     sigma = @(f) 0.07.*(f<=fp) + 0.09.*(f>fp);           %Hughes eq(5 & 25), or
@@ -117,19 +132,20 @@ function S = jonswap(f,varargin)
         S(:,i) = Jonswap(f(i));
     end
 end
+
 %%
-function S = tma(f,varargin)
+function S = tma(f,inp)
     %construct the TMA spectrum using Kitaigorodskii limit (see Bouws et al, 
     %or Hughes for details)
     g = 9.81;
-    [fp,alpha,gamma] = get_input(varargin{:});
+    [fp,alpha,gamma] = get_input(inp);
     if isempty(fp), return; end 
     sigma = @(f) 0.07.*(f<=fp) + 0.09.*(f>fp);           %Hughes eq(5 & 25), or
     q = @(f) exp((-(f-fp).^2)./(2.*sigma(f).^2.*fp.^2)); %Carter eq(16)
     cn = g^2*(2*pi)^-4;
     Jonswap = @(f) cn*alpha.*(f.^-5).*(exp(-1.25*(f./fp).^-4)).*(gamma.^q(f));
-    if length(varargin)>5
-        ds = varargin{5};
+    if isfield(inp,'ds') && ~isempty(inp.ds) && inp.ds>0
+        ds = inp.ds;
     else
         ds = (g./fp./2./pi)./fp/2;                %use deep water 
     end 
@@ -140,22 +156,23 @@ function S = tma(f,varargin)
         S(:,i) = Func(f(i));
     end
 end
+
 %%
-function [fp,alpha,gamma] = get_input(varargin)
-    %unpack varargin for the wind and wave cases
+function [fp,alpha,gamma] = get_input(inp)
+    %unpack inp for the wind and wave cases
     g = 9.81;
-    switch varargin{1}
+    switch inp.source
         case 'Wind'
-            Uw = varargin{2};
-            zw = varargin{3};
-            Fch = varargin{4};
+            Uw = inp.Uw;
+            zw = inp.zW;
+            Fch = inp.Fetch;
             % Adjust wind speed to 10m using power law profile
             U = Uw*(10/zw)^(1/7);
 
             Tp = 0.54*g^-0.77*U.^0.54.*Fch.^0.23;
             fp = 1./Tp;
-            if length(varargin)>4
-                df = varargin{5};
+            if isfield(inp,'df') && ~isempty(inp.df) && inp.df>0
+                df = inp.df;
                 Lp = celerity(Tp,df).*Tp;         %use Hunt eq.for celerity
             else
                 Lp = (g*Tp./2./pi).*Tp;           %use deep water celerity
@@ -164,11 +181,16 @@ function [fp,alpha,gamma] = get_input(varargin)
             alpha = 0.0078*kp.^0.49;              %Hughes eq(22)
             gamma = 2.47*kp.^0.39;                %Hughes eq(23)
         case 'Wave'
-            Hmo = varargin{2};
-            Tp = varargin{3};
-            gamma = varargin{4};
+            Hmo = inp.Hs;
+            if isfield(inp,'T2') 
+                gamma = 70*(inp.T2/inp.Tp)^12.23;
+            elseif isfield(inp,'gamma')
+                gamma = inp.gamma;
+            else
+                gamma = 3.3;
+            end
 
-            fp = 1./Tp;
+            fp = 1./inp.Tp;
             Io = spectral_moment(0,gamma);                 %Carter eq(18)
             alpha = (2*pi).^4*Hmo.^2.*fp.^4./(16*g.^2.*Io); %Carter eq(20)
         otherwise

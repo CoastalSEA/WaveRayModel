@@ -1,4 +1,4 @@
-function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
+function [Gspread,dir] = directional_spreading(dir0,nint,nspread,iscos)
 % 
 %-------function help------------------------------------------------------
 % NAME
@@ -8,7 +8,7 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 % USAGE
 %   [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 % INPUTS
-%   dir - mean wave direction (degTN)
+%   dir0 - mean wave direction (degTN)
 %   nint - number of directions to sample from spreading function (degTN) 
 %          or vector of directions (degTN) 
 %   nspread - direction spreading index (-)
@@ -16,7 +16,7 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 %           false uses Donelan ie secant function;
 % OUTPUT
 %   Gspread - direction distribution for given mean direction
-%   theta = the angles used to define the function (degTN)
+%   dir = the angles used to define the function (degTN)
 % NOTES
 %   Donelan, Hamilton and Hui, R.Soc, 1985, A315, 509-562
 %   US Army Corps, Shore Protection Manual (SPM), 1984
@@ -32,26 +32,30 @@ function [Gspread,theta] = directional_spreading(dir,nint,nspread,iscos)
 
     if isscalar(nint)
         if rem(nint,2)>0, nint=nint+1; end
-        angles = linspace(0,pi/2,nint/2); 
-        angles = [fliplr(-angles),angles(2:end)]; %ensures range centred on 0
+        theta = linspace(0,pi/2,nint/2); 
+        theta = [fliplr(-theta),theta(2:end)];   %ensures range centred on 0
     else
-        angles = deg2rad(nint-dir);               %user defined intervals        
+        theta = deg2rad(nint-dir0);              %user defined intervals        
     end
     
     if iscos        
-        gfun = @(ang) cos(gamma*ang).^nspread;    %SPM cosine function
+        gfun = @(ang) cos(gamma*ang).^nspread;   %SPM cosine function
     else
-        gfun = @(ang) sech(beta*ang).^nspread;    %Donelan secant function
+        gfun = @(ang) sech(beta*ang).^nspread;   %Donelan secant function
     end
 
-    G = gfun(angles);
-    Gspread = G./trapz(angles,G);                 %normalise by function integral
-
-    theta = mod(rad2deg(angles)+dir,360);
-
+    G = gfun(theta');
+    % Gspread = G./trapz(angles,G);              %normalise by function integral
     if ~isscalar(nint)
         bound = [-pi/2,pi/2];
-        idx = isangletol(angles,bound);           %only use angles within +/-pi/2 of dir
-        Gspread(~idx) = 0;
+        idx = isangletol(theta,bound);           %only use angles within +/-pi/2 of dir
+        G(~idx) = 0;
     end
+
+    w = trapz_weights_periodic(theta);
+    Gspread = G./sum(G.*w);                      %normalise by function integral
+    dir = mod(rad2deg(theta)+dir0,360);
+    %checks 
+    % sum(Gspread.*w)                            %integral should =1
+    % figure; plot(dir,Gspread)
 end

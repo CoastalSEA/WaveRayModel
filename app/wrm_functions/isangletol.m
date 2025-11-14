@@ -12,15 +12,20 @@ function isdir = isangletol(theta,bound)
 %   theta - array of angles to be checked in radians
 %   bound - scalar or [1x2] element vector. scalar defines a +/- tolerance 
 %           relative to theta and vector specifies the angles to be used 
-%           for the bounds in radians
+%           for the bounds in radians. 
 % OUTPUTS
 %   isdir - logical, true if angle lies between the defined bounds
+% NOTES
+%   If bound is defined as 2 angles relative to a mean direction, theta0, 
+%   the function can be used to check whether theta is within the limits 
+%   relative to the mean direction.
 % SEE ALSO
 %   get_quadrant, next_element and arc_ray.
 %
 % Author: Ian Townend
 % CoastalSEA (c) Jan 2023
-%----------------------------------------------------------------------
+%
+%--------------------------------------------------------------------------
 %
     if length(bound)>2
         warndlg('Bound must be scalar or a [1x2] array')

@@ -18,10 +18,10 @@ classdef SpectralTransfer < muiDataSet
     properties
         %inherits Data, RunParam, MetaData and CaseIndex from muiDataSet
         %Additional properties:   
-        interp
+        interp                    %struct for interpolation settings
     end
     
-    methods (Access={?muiDataSet,?muiStats,?WRM_WaveModel})
+    methods (Access={?muiDataSet,?muiStats,?WRM_WaveModel,?ctWaveSpectra})
         function obj = SpectralTransfer()             
             %class constructor
             obj.interp.dir = 0.5; %interval used to interpolate directions (deg)
@@ -34,7 +34,7 @@ classdef SpectralTransfer < muiDataSet
 % Model to construct spectral transfer table
 %--------------------------------------------------------------------------   
         function obj = runModel(mobj,rayobj,sptname)
-            %function to run a simple 2D diffusion model
+            %create offshore and inshore spectral transfer tables
             obj = SpectralTransfer;                           
             muicat = mobj.Cases;    
 %--------------------------------------------------------------------------
@@ -92,18 +92,45 @@ classdef SpectralTransfer < muiDataSet
                 setDataSetRecord(obj,muicat,dst,'spectral_model',{sptname},true);
             end          
         end    
+
+
+%%
+        function [obj,meta] = getSTcase(mobj,isbatch)
+            %select a spectral transfer case to use
+            if nargin<2, isbatch = false; end
+        
+            msgtxt = 'Spectral Transfer Table not found';
+            meta.source = 'Spectral transfer table';
+            if isbatch     %select ST tables for multiple points
+                [obj,ok] = selectRecord(mobj.Cases,...
+                                            'CaseClass',{'SpectralTransfer'},...
+                                            'PromptText', 'Select cases',...
+                                            'ListSize', [250,200],...
+                                            'SelectionMode', 'multiple' ); 
+                if ok<1, getdialog(msgtxt); return; end
+                meta.caserecs = obj(1);
+            else            %select a single case to use
+                promptxt = 'Select a Transfer Table Case to use:';             
+                obj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);                
+                if isempty(obj), getdialog(msgtxt); return; end
+        
+                meta.inptxt = sprintf('%s used for spectral transfer',...
+                                          obj.Data.Inshore.Description);
+                meta.caserecs = caseRec(mobj.Cases,obj.CaseIndex);
+            end  
+        end
     end
 %%
     methods
 %--------------------------------------------------------------------------
 % Model to transfer a wave timeseries or spectral data set
 %--------------------------------------------------------------------------         
-        function [Sot,Sit,Dims,output] = runWaves(obj,tsdst,select)
+        function [Sot,Sit,Dims,output] = runWaves(obj,tsdst,wvspobj,issave)
             %run the spectral transfer model for a timeseries of offshore
             %wave conditions and return a table of wave conditions            
             Sot = []; Sit = []; Dims = [];
             islog = false;  filename = [];
-            if select.issave
+            if issave
                 answer = questdlg('Write log of missing dates to file?','Rays','Yes','No','No');
                 if strcmp(answer,'Yes'), islog = true; end
                 filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));
@@ -115,13 +142,13 @@ classdef SpectralTransfer < muiDataSet
             output = table();
             inputable = tsdst.DataTable;       %needed for parallel option
             hpw = PoolWaitbar(nint, 'Processing timeseries');
-            blank = zeros(1,ndir,nper);           %fixed intervals assigned in get_inshore_spectrum
+            blank = zeros(1,ndir,nper);        %fixed intervals assigned in get_inshore_spectrum
             parfor i=1:nint                    %parfor loop  
                 %for each offshore wave get the inshore results
                 input = inputable(i,:);
                 [SGo,SGi,dims] = get_inshore_spectrum(obj,input,select);
                 output(i,:) = get_inshore_wave(SGo,SGi,dims,input,select);
-                if select.issave
+                if issave
                     if isempty(SGo)
                         Sot(i,:,:) = blank; Sit(i,:,:) = blank;
                         if islog
@@ -139,7 +166,7 @@ classdef SpectralTransfer < muiDataSet
                 increment(hpw);
             end
 
-            if select.issave
+            if issave
                 [Sot,Sit,Dims] = packSpectra(obj,Sot,Sit,Fri,Dir,Depi);
             end
             
@@ -152,10 +179,13 @@ classdef SpectralTransfer < muiDataSet
         function coefficientsPlot(obj)
             %generate data to plot the coefficents as a function of
             %direction, period and water level
+            % sobj = ctWaveSpectra;
+            % sobj = setSpectrumModel(sobj);      %define the model to be used (Jonswap etc)
+            % if isempty(sobj.spModel),return; end
             select = get_model_selection(obj);  %select spectral form and data type
             if isempty(select), return; end     %user cancelled
             %force selection of source to be waves
-            if strcmp(select.source,'Wind'), select.source='Wave'; end
+            if strcmp(sobj.spModel.source,'Wind'), sobj.spModel.source='Wave'; end
      
             T = obj.Data.Offshore.Dimensions.Period;
             zwl = obj.Data.Offshore.Dimensions.WaterLevel;   
@@ -229,7 +259,7 @@ classdef SpectralTransfer < muiDataSet
         end
 %%
         function ok = checkWLrange(obj,swl)
-            %check that water leven input conditions are within the range
+            %check that water level input conditions are within the range
             %of the Transfer Table
             zwl = minmax(obj.Data.Offshore.Dimensions.WaterLevel);
             ok = any(swl<zwl(1) | swl>zwl(2));
@@ -321,49 +351,50 @@ classdef SpectralTransfer < muiDataSet
             end
         end        
 %%
-        function spectra = get_model_selection(~,source)
-            %get spectrum form, data source, and parameters for wave
-            %spectrum and directions spreading functions
-            %  Defined using varargin as in above function   
-            %  source iswind is used to prioritise selection of wind            
-            sp = {'JONSWAP fetch limited','TMA shallow water',...
-                   'Pierson-Moskowitz fully developed','Bretschneider open ocean'};
-            src = {'Wave','Wind'};
-            if nargin>1 && strcmp(source,'Wind')
-                src = {'Wind','Wave'};
-            end
-            
-            spr = {'SPM cosine function','Donelan secant function'};
-            nsp = string(0:1:10);
-            selection = inputgui('FigureTitle','Spectrum',...
-                                 'InputFields',{'Wave Spectra','Data type',...
-                                    'Spread function','Spread exponent',...
-                                    'Jonswap gamma (if req.)'},...
-                                 'Style',{'popupmenu','popupmenu',...
-                                         'popupmenu','popupmenu','edit'},...
-                                 'ActionButtons', {'Select','Cancel'},...
-                                 'DefaultInputs',{sp,src,spr,nsp,'3.3'},...%use nspread=0 if included in wave data
-                                 'PromptText','Select values to use');
-            if isempty(selection)
-                spectra = [];
-            else
-                spectra.form = sp{selection{1}};
-                spectra.source = src{selection{2}};
-                spectra.spread = spr{selection{3}};
-                spectra.nspread = str2double(nsp{selection{4}});
-                spectra.gamma = str2double(selection{5});
-                spectra.ismodel = true;
-                spectra.issat = false;
-                satxt = 'excluding depth saturation';
-                if strcmp(spectra.form,'TMA shallow water')
-                    spectra.issat = true;
-                    satxt = 'including depth saturation';
-                end
-                spectra.txt = sprintf('%s using %s (%s)\nSpreading function is %s with an exponent of %s. Jonswap gamma = %s',...
-                                 sp{selection{1}},src{selection{2}},satxt,...
-                                 spr{selection{3}},nsp{selection{4}},selection{5});
-            end 
-        end
+        % function spectra = get_model_selection(~,source)
+        %     %get spectrum form, data source, and parameters for wave
+        %     %spectrum and directions spreading functions
+        %     %  Defined using varargin as in above function   
+        %     %  source iswind is used to prioritise selection of wind            
+        %     sp = {'JONSWAP fetch limited','TMA shallow water',...
+        %            'Pierson-Moskowitz fully developed','Bretschneider open ocean'};
+        %     src = {'Wave','Wind'};
+        %     if nargin>1 && strcmp(source,'Wind')
+        %         src = {'Wind','Wave'};
+        %     end
+        % 
+        %     spr = {'SPM cosine function','Donelan secant function'};
+        %     nsp = string(0:1:10);
+        %     ptxt = sprintf('            Select values to use\nSpread exponent should be 0 if defined in data');
+        %     selection = inputgui('FigureTitle','Spectrum',...
+        %                          'InputFields',{'Wave Spectra','Data type',...
+        %                             'Spread function','Spread exponent',...
+        %                             'Jonswap gamma (if req.)'},...
+        %                          'Style',{'popupmenu','popupmenu',...
+        %                                  'popupmenu','popupmenu','edit'},...
+        %                          'ActionButtons', {'Select','Cancel'},...
+        %                          'DefaultInputs',{sp,src,spr,nsp,'3.3'},...%use nspread=0 if included in wave data
+        %                          'PromptText',ptxt);
+        %     if isempty(selection)
+        %         spectra = [];
+        %     else
+        %         spectra.form = sp{selection{1}};
+        %         spectra.source = src{selection{2}};
+        %         spectra.spread = spr{selection{3}};
+        %         spectra.nspread = str2double(nsp{selection{4}});
+        %         spectra.gamma = str2double(selection{5});
+        %         spectra.ismodel = true;
+        %         spectra.issat = false;
+        %         satxt = 'excluding depth saturation';
+        %         if strcmp(spectra.form,'TMA shallow water')
+        %             spectra.issat = true;
+        %             satxt = 'including depth saturation';
+        %         end
+        %         spectra.txt = sprintf('%s using %s (%s)\nSpreading function is %s with an exponent of %s. Jonswap gamma = %s',...
+        %                          sp{selection{1}},src{selection{2}},satxt,...
+        %                          spr{selection{3}},nsp{selection{4}},selection{5});
+        %     end 
+        % end
     end
 %%    
     methods (Access = private)
@@ -521,8 +552,8 @@ classdef SpectralTransfer < muiDataSet
 
 %%
         function scalar_tt_plot(obj,ax,T,zwl,phi,var,options)
-            %offshore transfer table data plot when only a single case such that 
-            %T, zwl or phi are scalar
+            %offshore transfer table data plot when only a single case such
+            %that T, zwl or phi are scalar
             dst = obj.Data.Offshore;
             if isscalar(zwl) && isscalar(T) && isscalar(phi)
                 if isgraphics(ax.Parent,'figure')
@@ -569,8 +600,8 @@ classdef SpectralTransfer < muiDataSet
         end
 %%
         function surface_tt_plot(obj,ax,T,zwl,phi,var,options)
-            %offhsore transfer table data plot when only a single case such that 
-            %T, zwl or phi are scalar
+            %offshore transfer table data plot for selected variable
+            %against period and direction
             dst = obj.Data.Offshore;
             surf(ax,T,phi,var);
             view(2);
@@ -585,6 +616,7 @@ classdef SpectralTransfer < muiDataSet
             ax.Color = [0.96,0.96,0.96];  %needs to be set after plot
 
             if strcmp(options.var,'theta')
+                %when variable is theta ???????
                 mindir = min(var,[],'All');
                 mindir = mindir-mod(mindir,30)+30;
                 maxdir = max(var,[],'All');
@@ -593,7 +625,7 @@ classdef SpectralTransfer < muiDataSet
                 hold on
                 [C,h] = contour3(ax,T,phi,var,nc,'-k');
                 clabel(C,h,'LabelSpacing',300,'FontSize',8)
-                hold off
+                hold offcheck_
             end
         end
 %%
@@ -649,64 +681,64 @@ classdef SpectralTransfer < muiDataSet
             sgtitle(sgtxt,'FontSize',11,'Margin',1);
         end
 %%
-        function check_plot(~,T,phi,var,varname,ax)
-            %check plot for data selection
-            if nargin<6
-                hf = figure('Name','SpecTrans','Tag','PlotFig');
-                ax = axes(hf);
-            end
-            surf(ax,T,phi,var,'Tag','PlotFigSurface');
-            view(2);
-            shading interp
-            axis tight
-            %add the colorbar and labels
-            cb = colorbar;
-            cb.Label.String = varname{1};
-            xlabel(varname{2}); 
-            ylabel(varname{3}); 
-            if length(varname)>3
-                cb.Tag = varname{4};
-            else
-                cb.Tag = varname{1};
-            end
-        end
+        % function check_plot(~,T,phi,var,varname,ax)
+        %     %check plot for data selection
+        %     if nargin<6
+        %         hf = figure('Name','SpecTrans','Tag','PlotFig');
+        %         ax = axes(hf);
+        %     end
+        %     surf(ax,T,phi,var,'Tag','PlotFigSurface');
+        %     view(2);
+        %     shading interp
+        %     axis tight
+        %     %add the colorbar and labels
+        %     cb = colorbar;
+        %     cb.Label.String = varname{1};
+        %     xlabel(varname{2}); 
+        %     ylabel(varname{3}); 
+        %     if length(varname)>3
+        %         cb.Tag = varname{4};
+        %     else
+        %         cb.Tag = varname{1};
+        %     end
+        % end
 %%
-        function polar_plot(~,Period,Phi,var,varname,~)
-            %check plot for data selection
-            if nargin<6
-                hf = figure('Name','SpecTrans','Tag','PlotFig');
-                axes(hf);
-            end
-            wid = 'MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId';
-            radrange = [0,25];
-            %interpolate var(phi,T) onto plot domain defined by tints,rints
-            tints = linspace(0,2*pi,360);  
-            rints = linspace(1,25,25);
-            [Tq,Rq] = meshgrid(tints,rints); 
-            warning('off',wid)
-            vq = griddata(deg2rad(Phi),Period,var',Tq,Rq);
-            vq(isnan(vq)) = 0;  %fill blank sector so that it plots the period labels
-            warning('on',wid)
-            color = mcolor('dark blue');
-            [X,Y] = polarplot3d(vq,'plottype','surfn','TickSpacing',45,...
-                'RadLabels',4,'RadLabelLocation',{20 'top'},...
-                'GridColor',color,'TickColor',color,...
-                'RadLabelColor',mcolor('dark grey'),...
-                'RadialRange',radrange,'polardirection','cw');
-            view(2)
-            shading interp 
-            axis(gca,'off')
-            %add the colorbar and labels
-            cb = colorbar;
-            cb.Label.String = varname{1};
-            text(max(X,[],'all')/2,max(Y,[],'all')*0.95,0,varname{2});
-
-            if length(varname)>3
-                cb(1).Tag = varname{4};
-            else
-                cb(1).Tag = varname{1};
-            end
-        end
+        % function polar_plot(~,Period,Phi,var,varname,~)
+        %     %check plot for data selection
+        %     if nargin<6
+        %         hf = figure('Name','SpecTrans','Tag','PlotFig');
+        %         axes(hf);
+        %     end
+        %     wid = 'MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId';
+        %     radrange = [0,25];
+        %     %interpolate var(phi,T) onto plot domain defined by tints,rints
+        %     tints = linspace(0,2*pi,360);  
+        %     rints = linspace(1,25,25);
+        %     [Tq,Rq] = meshgrid(tints,rints); 
+        %     warning('off',wid)
+        %     vq = griddata(deg2rad(Phi),Period,var',Tq,Rq);
+        %     vq(isnan(vq)) = 0;  %fill blank sector so that it plots the period labels
+        %     warning('on',wid)
+        %     color = mcolor('dark blue');
+        %     [X,Y] = polarplot3d(vq,'plottype','surfn','TickSpacing',45,...
+        %         'RadLabels',4,'RadLabelLocation',{20 'top'},...
+        %         'GridColor',color,'TickColor',color,...
+        %         'RadLabelColor',mcolor('dark grey'),...
+        %         'RadialRange',radrange,'polardirection','cw');
+        %     view(2)
+        %     shading interp 
+        %     axis(gca,'off')
+        %     %add the colorbar and labels
+        %     cb = colorbar;
+        %     cb.Label.String = varname{1};
+        %     text(max(X,[],'all')/2,max(Y,[],'all')*0.95,0,varname{2});
+        % 
+        %     if length(varname)>3
+        %         cb(1).Tag = varname{4};
+        %     else
+        %         cb(1).Tag = varname{1};
+        %     end
+        % end
 %%
 function dsp = modelDSproperties(~,isin) 
             %define a dsproperties struct and add the model metadata

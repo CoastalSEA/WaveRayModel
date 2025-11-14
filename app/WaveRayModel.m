@@ -15,8 +15,8 @@ classdef WaveRayModel < muiModelUI
 % 
     properties  (Access = protected)
         %implement properties defined as Abstract in muiModelUI
-        vNumber = '1.1'
-        vDate   = 'May 2023'
+        vNumber = '1.2'
+        vDate   = 'Nov 2025'
         modelName = 'WaveRayModel'                       
         %Properties defined in muiModelUI that need to be defined in setGui
         % ModelInputs  %classes required by model: used in isValidModel check 
@@ -168,9 +168,9 @@ classdef WaveRayModel < muiModelUI
             
             %submenu for Spectral Plots
             menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients',...
-                                     'O/I Spectrum','O/I Animation'};
-            menu.Analysis(2).Callback = repmat({@obj.analysisMenuOptions},[1,4]);
-            menu.Analysis(2).Separator = [repmat({'off'},[1,4])];
+                                     'Spectrum Plots','O/I Spectrum','O/I Animation'};
+            menu.Analysis(2).Callback = repmat({@obj.analysisMenuOptions},[1,5]);
+            menu.Analysis(2).Separator = {'off','off','on','off','off'};
             
             %% Help menu --------------------------------------------------
             menu.Help.List = {'Documentation','Manual'};
@@ -379,6 +379,8 @@ classdef WaveRayModel < muiModelUI
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
                     if isempty(cobj), getdialog('No Transfer tables available'); return; end
                     coefficientsPlot(cobj);
+                case 'Spectrum Plots'
+                    ctWaveSpectra.getPlotOption(obj);
                 case 'O/I Spectrum'
                     WRM_WaveModel.runSpectrum(obj);
                 case 'O/I Animation'

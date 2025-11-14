@@ -73,6 +73,7 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
     [shoal,offdir] = getShoal(offdst,indst,InDir,beta,freq,swl,idx);
 
     %setup input definition using model or measured definitions
+    [SGo,Dims] = get_offshore_spectrum(intable,sp,Dims);
     if sp.ismodel
         sp_inputs = setInputParams(intable,sp);
         if isempty(sp_inputs), return; end
@@ -125,7 +126,7 @@ function [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
         SGi = phi.*SGi;
     end
   
-    Dims.freq = freq; Dims.dir = beta;  %return dimensions used
+    %Dims.freq = freq; Dims.dir = beta;  %return dimensions used
 end
 %%
 function [shoal,offdir] = getShoal(offdst,indst,InDir,beta,freq,swl,idx)
