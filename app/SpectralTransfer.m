@@ -179,11 +179,13 @@ classdef SpectralTransfer < muiDataSet
         function coefficientsPlot(obj)
             %generate data to plot the coefficents as a function of
             %direction, period and water level
-            % sobj = ctWaveSpectra;
-            % sobj = setSpectrumModel(sobj);      %define the model to be used (Jonswap etc)
-            % if isempty(sobj.spModel),return; end
-            select = get_model_selection(obj);  %select spectral form and data type
-            if isempty(select), return; end     %user cancelled
+            sobj = ctWaveSpectra;
+            sobj = setSpectrumModel(sobj);      %define the model to be used (Jonswap etc)
+            if isempty(sobj.spModel),return; end
+            select = sobj.spModel;
+
+            % select = get_model_selection(obj);  %select spectral form and data type
+            % if isempty(select), return; end     %user cancelled
             %force selection of source to be waves
             if strcmp(sobj.spModel.source,'Wind'), sobj.spModel.source='Wave'; end
      
@@ -198,6 +200,9 @@ classdef SpectralTransfer < muiDataSet
             parfor i=1:ndir                     %parfor loop  
                 for j=1:nper
                     for k=1:nwls
+
+                         obj = getModelSpectrum(sobj);
+                         obj.Params = wave_spectrum_params(obj); 
                         input = getloopinput(obj,Diri,T,zwl,i,j,k);
                         [SGo,SGi,Dims] = get_inshore_spectrum(obj,input,select);                                                   
                         outable = get_inshore_wave(SGo,SGi,Dims,input,select);
@@ -622,10 +627,10 @@ classdef SpectralTransfer < muiDataSet
                 maxdir = max(var,[],'All');
                 maxdir = maxdir-mod(maxdir,30);
                 nc = mindir:30:maxdir;
-                hold on
+                hold(ax,'on')
                 [C,h] = contour3(ax,T,phi,var,nc,'-k');
                 clabel(C,h,'LabelSpacing',300,'FontSize',8)
-                hold offcheck_
+                hold(ax,'off')
             end
         end
 %%
