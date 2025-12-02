@@ -132,7 +132,7 @@ end
 function [shoal,offdir] = getShoal(offdst,indst,InDir,beta,freq,swl,idx)
     %compute the shoaling coeffient and offshore direction arrays
     T = offdst.Dimensions.Period;            %wave periods used in ray model
-    fray = 1./T;                                %wave frequencies used in ray model
+    fray = 1./T;                             %wave frequencies used in ray model
     zwl = offdst.Dimensions.WaterLevel;      %water levels used in ray model 
     offdst = offdst.DataTable;
     

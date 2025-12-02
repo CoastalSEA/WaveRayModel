@@ -200,10 +200,11 @@ classdef SpectralTransfer < muiDataSet
             parfor i=1:ndir                     %parfor loop  
                 for j=1:nper
                     for k=1:nwls
-
-                         obj = getModelSpectrum(sobj);
-                         obj.Params = wave_spectrum_params(obj); 
-                        input = getloopinput(obj,Diri,T,zwl,i,j,k);
+                        spobj = copy(sobj);
+                        spobj.inpData = getloopinput(obj,Diri,T,zwl,i,j,k);
+                        spobj = getModelSpectrum(spobj);
+                        spobj.Params = wave_spectrum_params(spobj); 
+                        
                         [SGo,SGi,Dims] = get_inshore_spectrum(obj,input,select);                                                   
                         outable = get_inshore_wave(SGo,SGi,Dims,input,select);
                         kw(i,j,k) = outable.kw;
