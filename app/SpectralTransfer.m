@@ -24,8 +24,6 @@ classdef SpectralTransfer < muiDataSet
     methods (Access={?muiDataSet,?muiStats,?WRM_WaveModel,?ctWaveSpectra})
         function obj = SpectralTransfer()             
             %class constructor
-            obj.interp.dir = 0.5; %interval used to interpolate directions (deg)
-            obj.interp.per = 0.5; %interval used to interpolate periods (s)
         end
     end      
 %%
@@ -93,7 +91,6 @@ classdef SpectralTransfer < muiDataSet
             end          
         end    
 
-
 %%
         function [obj,meta] = getSTcase(mobj,isbatch)
             %select a spectral transfer case to use
@@ -125,51 +122,67 @@ classdef SpectralTransfer < muiDataSet
 %--------------------------------------------------------------------------
 % Model to transfer a wave timeseries or spectral data set
 %--------------------------------------------------------------------------         
-        function [Sot,Sit,Dims,output] = runWaves(obj,tsdst,wvspobj,issave)
+function [offobj,inobj] = runWaves(obj,tsdst,meta)
             %run the spectral transfer model for a timeseries of offshore
             %wave conditions and return a table of wave conditions            
-            Sot = []; Sit = []; Dims = [];
-            islog = false;  filename = [];
-            if issave
-                answer = questdlg('Write log of missing dates to file?','Rays','Yes','No','No');
-                if strcmp(answer,'Yes'), islog = true; end
-                filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));
-            end
+            % islog = false;
+            % answer = questdlg('Write log of missing dates to file?',...
+            %                        'SpectralTransfer','Yes','No','No');
+            % if strcmp(answer,'Yes'), islog = true; end
+            % filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));
 
-            ndir = 360/obj.interp.dir;         %number of direction intervals
-            nper = length(1:obj.interp.per:30);%number of period intervals
-            nint = height(tsdst);
-            output = table();
-            inputable = tsdst.DataTable;       %needed for parallel option
+            spobj = ctWaveSpectra;
+            if strcmp(meta.source,'Measured spectra')
+                spobj.inpData.form = 'Measured';             %dummy value        
+                spobj.inpData.source = 'Spectrum';           %dummy value
+                swl = tsdst(1).swl;                          %extract swl as vector
+                tsdst = removevars(tsdst(1),'swl');          %remove swl from dstable
+            else                                             %needed for getDSTable to work
+                spobj = setSpectrumModel(spobj);  %define the model to be used (Jonswap etc)
+                spobj.inpData.source = spobj.spModel.source; %Wind/Wave - used in wave_spectrum
+                spobj.inpData.form = spobj.spModel.form;     %TMA, etc used in get_inshore_spectrum
+                swl = zeros(height(tsdst(1).DataTable),1);   %dummy needed to use parfor
+                % %force selection of source to be waves
+                % if strcmp(spobj.spModel.source,'Wind'), spobj.spModel.source='Wave'; end
+            end
+                
+            tsdst(1).DataTable = rmmissing(tsdst(1).DataTable);%remove nans
+            nint = height(tsdst(1).DataTable);
             hpw = PoolWaitbar(nint, 'Processing timeseries');
-            blank = zeros(1,ndir,nper);        %fixed intervals assigned in get_inshore_spectrum
-            parfor i=1:nint                    %parfor loop  
+            offobj(nint) = copy(spobj);
+            inobj(nint) = copy(spobj);
+            parfor i=1:nint                                %parfor loop  
                 %for each offshore wave get the inshore results
-                input = inputable(i,:);
-                [SGo,SGi,dims] = get_inshore_spectrum(obj,input,select);
-                output(i,:) = get_inshore_wave(SGo,SGi,dims,input,select);
-                if issave
-                    if isempty(SGo)
-                        Sot(i,:,:) = blank; Sit(i,:,:) = blank;
-                        if islog
-                            lines = sprintf('%s',tsdst.RowNames(i)); %#ok<PFBNS> 
-                            writelines(lines,filename,WriteMode="append")%v2022a or later
-                        end
-                        continue; 
-                    end  
-                    Sot(i,:,:) = SGo;
-                    Sit(i,:,:) = SGi;
-                    Fri(i,:) = dims.freq;
-                    Dir(i,:) = dims.dir;
-                    Depi(i) = dims.depi;    
+                offspectrum = copy(spobj);
+                w_dst = getDSTable(tsdst(1),i,[]);         %variables must all be same dimensions
+                if strcmp(spobj.inpData.source,'Spectrum')
+                   w_dst = addvars(w_dst,swl(i),'NewVariableNames','swl');
                 end
+                offspectrum.inpData.tsdst = w_dst;         %assign data to input
+                if length(tsdst)>1
+                    %tsdst(1) defines wind-wave. get same record for swell
+                    idx = find(tsdst(2).RowNames==w_dst.RowNames);
+                    s_dst = getDSTable(tsdst(2),idx,[]);   %selected record
+                    offspectrum.inpData.tsdst(2) = s_dst; 
+                end
+
+                offspectrum = getSpectrum(offspectrum);
+                offspectrum.Spectrum.date = w_dst.RowNames;        
+                offspectrum.Params = wave_spectrum_params(offspectrum);
+                offobj(i) = offspectrum;
+                %inshore spectrum and wave parameters
+                inspectrum = get_inshore_spectrum(obj,offspectrum);
+                inspectrum.Params = wave_spectrum_params(inspectrum);
+                inobj(i) = inspectrum;
+                coeftable = get_transfer_coefficients(offobj(i),inobj(i));
+                inobj(i).Params = [inobj(i).Params,coeftable];
+                % if islog
+                %     lines = sprintf('%s',tsdst.RowNames(i)); %#ok<PFBNS> 
+                %     writelines(lines,filename,WriteMode="append")%v2022a or later
+                % end
                 increment(hpw);
             end
 
-            if issave
-                [Sot,Sit,Dims] = packSpectra(obj,Sot,Sit,Fri,Dir,Depi);
-            end
-            
             delete(hpw)  
         end
 %% 
@@ -179,15 +192,11 @@ classdef SpectralTransfer < muiDataSet
         function coefficientsPlot(obj)
             %generate data to plot the coefficents as a function of
             %direction, period and water level
-            sobj = ctWaveSpectra;
-            sobj = setSpectrumModel(sobj);      %define the model to be used (Jonswap etc)
-            if isempty(sobj.spModel),return; end
-            select = sobj.spModel;
-
-            % select = get_model_selection(obj);  %select spectral form and data type
-            % if isempty(select), return; end     %user cancelled
+            spobj = ctWaveSpectra;
+            spobj = setSpectrumModel(spobj);      %define the model to be used (Jonswap etc)
+            if isempty(spobj.spModel),return; end
             %force selection of source to be waves
-            if strcmp(sobj.spModel.source,'Wind'), sobj.spModel.source='Wave'; end
+            if strcmp(spobj.spModel.source,'Wind'), spobj.spModel.source='Wave'; end
      
             T = obj.Data.Offshore.Dimensions.Period;
             zwl = obj.Data.Offshore.Dimensions.WaterLevel;   
@@ -196,17 +205,24 @@ classdef SpectralTransfer < muiDataSet
             nper = length(T);              
             nwls = length(zwl);
 
-            kw = zeros(ndir,nper,nwls); kt2 = kw; ktp = kw; kd = kw;
+            kw = zeros(ndir,nper,nwls); kt2 = kw; ktp = kw; kd = kw; gm = kw;
             parfor i=1:ndir                     %parfor loop  
                 for j=1:nper
                     for k=1:nwls
-                        spobj = copy(sobj);
-                        spobj.inpData = getloopinput(obj,Diri,T,zwl,i,j,k);
-                        spobj = getModelSpectrum(spobj);
-                        spobj.Params = wave_spectrum_params(spobj); 
-                        
-                        [SGo,SGi,Dims] = get_inshore_spectrum(obj,input,select);                                                   
-                        outable = get_inshore_wave(SGo,SGi,Dims,input,select);
+                        %inputs
+                        offobj = copy(spobj);                        
+                        offobj.inpData = getloopinput(obj,offobj,Diri,T,zwl,i,j,k);
+                        %offshore spectrum and wave parameters
+                        offobj = getModelSpectrum(offobj);
+                        if spobj.spModel.gamma==0
+                            gm(i,j,k) = offobj.inpData.gamma;
+                        end
+                        offobj.Params = wave_spectrum_params(offobj); 
+                        %inshore spectrum and wave parameters
+                        inobj = get_inshore_spectrum(obj,offobj);                     
+                        inobj.Params = wave_spectrum_params(inobj);
+                        %resultant transfer coefficients
+                        outable = get_transfer_coefficients(offobj,inobj);
                         kw(i,j,k) = outable.kw;
                         kt2(i,j,k) = outable.kt2;
                         ktp(i,j,k) = outable.ktp;
@@ -215,17 +231,85 @@ classdef SpectralTransfer < muiDataSet
                 end
             end
             output = struct('kw',kw,'kt2',kt2,'ktp',ktp,'kd',kd);
-        
-            get_coefficientsPlot(obj,Diri,T,zwl,output,select);
+            if spobj.spModel.gamma==0
+                spobj.spModel.gamma = mean(gm,'all');
+            end
+            get_coefficientsPlot(obj,Diri,T,zwl,output,spobj);
         end
+
 %%
-        function input = getloopinput(~,Diri,T,zwl,i,j,k)
+        function input = getloopinput(~,spobj,Diri,T,zwl,i,j,k)
             %define input from arrays for use in parfor loop
+            input.source = spobj.spModel.source;
             input.Hs = 1.0;       %transfer coefficients for unit wave height
             input.Dir = Diri(i);  %limit examination of mean offshore
             input.Tp = T(j);      %directions to inshore range
             input.swl = zwl(k);
-        end       
+            input.form = 'SpectralTransfer';
+        end    
+
+%%
+        function depi = inshoreDepths(obj,spobj,depi,G,swl)   
+            %determine the depths to use if the TMA spectrum or depth saturation is
+            %being used
+            offdst = obj.Data.Offshore;         %offshore properties
+            %check limits for valid rays based on depth and shoreline angle  
+            %parfor not finding dynamic property, so use table
+            idx = offdst.DataTable.depth<=0 | isnan(offdst.DataTable.depth);            
+            T = offdst.Dimensions.Period;          %wave periods used in ray model
+            fray = 1./T;                           %wave frequencies used in ray model
+        
+            hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray      
+        
+            if min(T)>3
+                addfray = [1,0.5,0.33];
+                fray = [addfray';fray];  %pad wave ray frequencies for periods 1-3s
+                hmn = [repmat(hmn(:,1,:),1,3),hmn];
+            end
+        
+            %replicate grid vectors to produce grids for interpn using
+            %variable number of dimensions (offshore 2 or 3, inshore 1 or 2)
+            [PFW,XoFoWo] = transferDims(obj,spobj,fray,swl);
+            hGmn = interpn(PFW{:},hmn,XoFoWo{:},'linear',0);  
+            %for saturation limit use site or dominant rays min depth
+            [~,freq] = spectrumDimensions(spobj);
+            radint = deg2rad(spobj.Interp.dir);
+            hGmn = trapz(radint,abs(trapz(freq,G.*hGmn,2)));%minimum depth
+            depi = min([depi,min(hGmn,[],'All','omitnan')]);
+        end
+
+%%
+        function [PFW,XoFoWo,fw,fowo] = transferDims(obj,spobj,fray,swl)
+            %replicate grid vectors to produce grids for interpn using
+            %variable number of dimensions (offshore 2 or 3, inshore 1 or 2)
+            [dir,freq] = spectrumDimensions(spobj); 
+            offdst = obj.Data.Offshore;            %offshore properties
+            % T = offdst.Dimensions.Period;          %wave periods used in ray model
+            % fray = 1./T;                           %wave frequencies used in ray model
+            zwl = offdst.Dimensions.WaterLevel;    %water levels used in ray model
+            InDir = offdst.RowNames;  %inshore directions are held in the offshore table 
+
+            if isscalar(zwl)
+                [P,F] = ndgrid(InDir,fray);
+                PFW = {P,F};  
+                fw = {fray};
+                %frequency, direction and water level arrays to interpolate to 
+                %var(xso,fro)
+                [Xso,Fro] = ndgrid(dir,freq);  
+                XoFoWo = {Xso,Fro};  
+                fowo = {freq};
+            else
+                [P,F,W]  = ndgrid(InDir,fray,zwl);
+                PFW = {P,F,W}; 
+                fw = {fray,zwl};
+                %frequency, direction and water level arrays to interpolate to 
+                %var(xso,fro) for selected water level swl
+                [Xso,Fro,Wln] = ndgrid(dir,freq,swl);  
+                XoFoWo = {Xso,Fro,Wln}; 
+                fowo = {freq,swl};
+            end
+        end
+    
 %%
         function tabPlot(obj,src,mobj) %abstract class for muiDataSet
             %generate plot for display on Q-Plot tab
@@ -335,9 +419,9 @@ classdef SpectralTransfer < muiDataSet
 
             if isXY
                 s1 = subplot(2,1,1,ax);
-                check_plot(obj,T,dir,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
+                surf_plot(obj,T,dir,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
                 s2 = subplot(2,1,2);
-                check_plot(obj,T,dir,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
+                surf_plot(obj,T,dir,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
                 hold on
                     xn = minmax(T); yn = [shorenorm,shorenorm]; 
                     plot(s2,xn,yn,'Color',grey,'LineStyle','--','LineWidth',1);
@@ -356,51 +440,6 @@ classdef SpectralTransfer < muiDataSet
                 s2.YLim = s1.YLim;
             end
         end        
-%%
-        % function spectra = get_model_selection(~,source)
-        %     %get spectrum form, data source, and parameters for wave
-        %     %spectrum and directions spreading functions
-        %     %  Defined using varargin as in above function   
-        %     %  source iswind is used to prioritise selection of wind            
-        %     sp = {'JONSWAP fetch limited','TMA shallow water',...
-        %            'Pierson-Moskowitz fully developed','Bretschneider open ocean'};
-        %     src = {'Wave','Wind'};
-        %     if nargin>1 && strcmp(source,'Wind')
-        %         src = {'Wind','Wave'};
-        %     end
-        % 
-        %     spr = {'SPM cosine function','Donelan secant function'};
-        %     nsp = string(0:1:10);
-        %     ptxt = sprintf('            Select values to use\nSpread exponent should be 0 if defined in data');
-        %     selection = inputgui('FigureTitle','Spectrum',...
-        %                          'InputFields',{'Wave Spectra','Data type',...
-        %                             'Spread function','Spread exponent',...
-        %                             'Jonswap gamma (if req.)'},...
-        %                          'Style',{'popupmenu','popupmenu',...
-        %                                  'popupmenu','popupmenu','edit'},...
-        %                          'ActionButtons', {'Select','Cancel'},...
-        %                          'DefaultInputs',{sp,src,spr,nsp,'3.3'},...%use nspread=0 if included in wave data
-        %                          'PromptText',ptxt);
-        %     if isempty(selection)
-        %         spectra = [];
-        %     else
-        %         spectra.form = sp{selection{1}};
-        %         spectra.source = src{selection{2}};
-        %         spectra.spread = spr{selection{3}};
-        %         spectra.nspread = str2double(nsp{selection{4}});
-        %         spectra.gamma = str2double(selection{5});
-        %         spectra.ismodel = true;
-        %         spectra.issat = false;
-        %         satxt = 'excluding depth saturation';
-        %         if strcmp(spectra.form,'TMA shallow water')
-        %             spectra.issat = true;
-        %             satxt = 'including depth saturation';
-        %         end
-        %         spectra.txt = sprintf('%s using %s (%s)\nSpreading function is %s with an exponent of %s. Jonswap gamma = %s',...
-        %                          sp{selection{1}},src{selection{2}},satxt,...
-        %                          spr{selection{3}},nsp{selection{4}},selection{5});
-        %     end 
-        % end
     end
 %%    
     methods (Access = private)
@@ -453,25 +492,25 @@ classdef SpectralTransfer < muiDataSet
             spectran = {offdir,h,c,cg,hav,hmn};
         end
 %%
-        function [Sot,Sit,Dims] = packSpectra(~,Sot,Sit,Fri,Dir,Depi)
-            %pack spectral timeseries to minimise size of arrays        
-            idx = find(Fri(:,1)~=0,1,'first'); %find first non-null result
-            Dims.freq = squeeze(Fri(idx,:));      %dimensions used for run
-            Dims.dir = squeeze(Dir(idx,:));
-            Dims.depi = Depi(idx);
-        
-            %minimise array size - remove directions and frequencies that
-            %are not contributing to spectra (S<0.05 m^2/Hz)
-            tol = max(Sot,[],'all')/1000;
-            [~,idro,idco] = compact3Darray(Sot,1,tol); %pivot dim is time
-            [~,idri,idci] = compact3Darray(Sit,1,tol);
-            idr = minmax([idro;idri]);
-            idc = minmax([idco;idci]);
-            Sot = Sot(:,idr(1):idr(2),idc(1):idc(2));
-            Sit = Sit(:,idr(1):idr(2),idc(1):idc(2));
-            Dims.dir = Dims.dir(idr(1):idr(2));
-            Dims.freq = Dims.freq(idc(1):idc(2));    
-        end
+        % function [Sot,Sit,Dims] = packSpectra(~,Sot,Sit,Fri,Dir,Depi)
+        %     %pack spectral timeseries to minimise size of arrays        
+        %     idx = find(Fri(:,1)~=0,1,'first'); %find first non-null result
+        %     Dims.freq = squeeze(Fri(idx,:));      %dimensions used for run
+        %     Dims.dir = squeeze(Dir(idx,:));
+        %     Dims.depi = Depi(idx);
+        % 
+        %     %minimise array size - remove directions and frequencies that
+        %     %are not contributing to spectra (S<0.05 m^2/Hz)
+        %     tol = max(Sot,[],'all')/1000;
+        %     [~,idro,idco] = compact3Darray(Sot,1,tol); %pivot dim is time
+        %     [~,idri,idci] = compact3Darray(Sit,1,tol);
+        %     idr = minmax([idro;idri]);
+        %     idc = minmax([idco;idci]);
+        %     Sot = Sot(:,idr(1):idr(2),idc(1):idc(2));
+        %     Sit = Sit(:,idr(1):idr(2),idc(1):idc(2));
+        %     Dims.dir = Dims.dir(idr(1):idr(2));
+        %     Dims.freq = Dims.freq(idc(1):idc(2));    
+        % end
 %%       
         function options = get_selection(obj)
             %get index of period, water level and variable to use in plots or model
@@ -635,7 +674,7 @@ classdef SpectralTransfer < muiDataSet
             end
         end
 %%
-        function get_coefficientsPlot(obj,Dir,T,zwl,output,sel)
+        function get_coefficientsPlot(obj,Dir,T,zwl,output,spobj)
             %interactive selection to plot the coefficients for range of
             %directions, periods and water levels
             ki = 1;
@@ -648,66 +687,62 @@ classdef SpectralTransfer < muiDataSet
                                          'DefaultInputs',{string(zwl)},...
                                          'PromptText','Select values to use');
                     if isempty(ki), return; else, ki = ki{1}; end
-                    coefficients_plot(obj,Dir,T,zwl,output,sel,ki);
+                    coefficients_plot(obj,Dir,T,zwl,output,spobj,ki);
                 end
             else
-                coefficients_plot(obj,Dir,T,zwl,output,sel,ki);
+                coefficients_plot(obj,Dir,T,zwl,output,spobj,ki);
             end
         end
 %%
-        function coefficients_plot(obj,Dir,T,zwl,output,sel,ki)
+        function coefficients_plot(obj,Dir,T,zwl,output,spobj,ki)
             %plot the coefficients for range of directions, periods and
             %water levels
+            sp = spobj.spModel;
             figure('Name','SpecTrans','Tag','PlotFig');
             labelx = 'Wave Period (s)';
             labely = 'Direction (degTN)';
             s1 = subplot(2,2,1);
             var = output.kw(:,:,ki);
-            check_plot(obj,T,Dir,var,{'Transfer coefficient, kw',labelx,labely},s1);
+            surf_plot(obj,T,Dir,var,{'Transfer coefficient, kw',labelx,labely},s1);
             s2 = subplot(2,2,2);
             var = output.kt2(:,:,ki);
-            check_plot(obj,T,Dir,var,{'Transfer coefficient, kt2',labelx,labely},s2);
+            surf_plot(obj,T,Dir,var,{'Transfer coefficient, kt2',labelx,labely},s2);
             s3 = subplot(2,2,3);
             var = output.ktp(:,:,ki);
-            check_plot(obj,T,Dir,var,{'Transfer coefficient, ktp',labelx,labely},s3);
+            surf_plot(obj,T,Dir,var,{'Transfer coefficient, ktp',labelx,labely},s3);
             s4 = subplot(2,2,4);
             var = output.kd(:,:,ki);
-            check_plot(obj,T,Dir,var,{'Direction shift (deg)',labelx,labely},s4);
+            surf_plot(obj,T,Dir,var,{'Direction shift (deg)',labelx,labely},s4);
             %plot title
             desc = obj.Data.Inshore.Description;
             sg1 = sprintf('Transfer Coefficients(Tp,Dir) for %s at swl=%g mOD',desc,zwl(ki));
             exptxt = 'Coefficients: kw-wave height; ktp-peak period; kt2-mean period';
-            if any(contains({'JONSWAP fetch limited','TMA shallow water'},sel.form))
-                sgtxt = sprintf('%s\n%s, gamma=%.2g, and %s, n=%d\n%s',sg1,...
-                                sel.form,sel.gamma,sel.spread,sel.nspread,exptxt);
-            else
-                sgtxt = sprintf('%s\n%s, and %s, n=%d\n%s',sg1,...
-                                sel.form,sel.spread,sel.nspread,exptxt);
-            end
+            modeltxt = getModelInputText(spobj);
+            sgtxt = sprintf('%s\n%s\n%s',sg1,modeltxt,exptxt);
             sgtitle(sgtxt,'FontSize',11,'Margin',1);
         end
 %%
-        % function check_plot(~,T,phi,var,varname,ax)
-        %     %check plot for data selection
-        %     if nargin<6
-        %         hf = figure('Name','SpecTrans','Tag','PlotFig');
-        %         ax = axes(hf);
-        %     end
-        %     surf(ax,T,phi,var,'Tag','PlotFigSurface');
-        %     view(2);
-        %     shading interp
-        %     axis tight
-        %     %add the colorbar and labels
-        %     cb = colorbar;
-        %     cb.Label.String = varname{1};
-        %     xlabel(varname{2}); 
-        %     ylabel(varname{3}); 
-        %     if length(varname)>3
-        %         cb.Tag = varname{4};
-        %     else
-        %         cb.Tag = varname{1};
-        %     end
-        % end
+        function surf_plot(~,T,phi,var,varname,ax)
+            %check plot for data selection
+            if nargin<6
+                hf = figure('Name','SpecTrans','Tag','PlotFig');
+                ax = axes(hf);
+            end
+            surf(ax,T,phi,var,'Tag','PlotFigSurface');
+            view(2);
+            shading interp
+            axis tight
+            %add the colorbar and labels
+            cb = colorbar;
+            cb.Label.String = varname{1};
+            xlabel(varname{2}); 
+            ylabel(varname{3}); 
+            if length(varname)>3
+                cb.Tag = varname{4};
+            else
+                cb.Tag = varname{1};
+            end
+        end
 %%
         % function polar_plot(~,Period,Phi,var,varname,~)
         %     %check plot for data selection

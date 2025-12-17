@@ -1,16 +1,16 @@
-function stats = setSpectrum(obj,obsfreq)
+function stats = setSpectrum(obj,obsfreq,method)
 %
 %-------function help------------------------------------------------------
 % NAME
-%   get_inshore_spectrum.m
+%   
 % PURPOSE
-%   construct the offshore and inshore spectra for given wave conditions or
-%   wave buoy spectral data
+%   
 % USAGE
-%   [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,sp)
+%   stats = setSpectrum(obj,obsfreq);
 % INPUTS
 %   obj - instance of a ctWaveSpectra class
 %   obsfreq - the frequency bins to be used for the ouput
+%   method - smoothing method to use (optional, default is 'none')
 % OUTPUT
 %   stats - a table with variables: 'S','Dir','Spr','Skew','Kurt' and a row
 %           for each frequency bin
@@ -27,6 +27,7 @@ function stats = setSpectrum(obj,obsfreq)
 %
     %reduce a detailed spectrum to the format defined by the Datawell buoy
     %spt file format
+    if nargin<3, method = 'none'; end
     
     if ~isa(obj,'ctWaveSpectra')
         warndlg('Incorrect input to setSpectrum'); 
@@ -42,7 +43,7 @@ function stats = setSpectrum(obj,obsfreq)
         SG(i,:) = interp1(freq, SGin(i,:), obsfreq, 'pchip', 0);                
     end 
 
-    stats = smoothedMomentEstimates(dir,SG,0,'none');
+    stats = smoothedMomentEstimates(dir,SG,0,method);
 end
 
 %%

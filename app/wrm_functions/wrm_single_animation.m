@@ -1,4 +1,4 @@
-function wrm_single_animation(mobj,sobj,plttxt,ptype)
+function wrm_single_animation(mobj,sobj,ptype)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -6,11 +6,10 @@ function wrm_single_animation(mobj,sobj,plttxt,ptype)
 % PURPOSE
 %   animation of model spectra timeseries
 % USAGE
-%   wrm_single_animation(mobj,tsdst,plttxt)
+%   wrm_single_animation(mobj,tsdst,ptype)
 % INPUTS
 %   mobj - instance of Model class (eg WaveRayModel, CoastalTools)
 %   sobj - array of ctWaveSpectra class
-%   plttxt - cell array of labels for variable, axes and title of plot
 %   ptype - XY or Polar plot options
 % OUTPUT
 %   animation figure
@@ -37,7 +36,7 @@ function wrm_single_animation(mobj,sobj,plttxt,ptype)
     pobj.Plot.CurrentFig = hfig;
     pobj.Plot.FigNum = hfig.Number;
     pobj.ModelMovie = [];
-    pobj.Title = plttxt{4};
+    pobj.Title = sobj(1).Plotxt.ttxt;
 
     spectra = [sobj(:).Spectrum];        %unpack timeseries of spectra
     params = vertcat(sobj(:).Params);    %unpack integral properties
@@ -49,22 +48,22 @@ function wrm_single_animation(mobj,sobj,plttxt,ptype)
     nrec = length(pobj.Data.T);
     [n,m] = size(spectra(1).SG);
     Z = zeros(nrec,n,m);
-    parfor i = 1:nrec
+    for i = 1:nrec
         Z(i, :, :) = reshape(spectra(i).SG, 1, n, m);
     end  
     pobj.Data.Z = Z;  clear Z
     pobj.Data.Waves = [params.Hs,params.Tp,params.Dir];
 
-    ax = setupAnimation(sobj,pobj,plttxt,ptype);
+    ax = setupAnimation(sobj,pobj,ptype);
     if ~isvalid(pobj.Plot.CurrentFig), return; end
 
-    getAnimation(pobj,ax,hfig);
+    getAnimation(pobj,ax,hfig,ptype);
     ax.UserData = pobj.Data;  %store data set in UserData to
                               %allow user to switch between plots
     %add replay and slider
     hm = setControlPanel(pobj,hfig,length(pobj.Data.T),string(pobj.Data.T(1)));
-    %assign bespoke run_Movie handle
-    %hm(1).Callback = @(src,evt)run_Movie(pobj,src,evt);
+    %overload callback function run_Movie in muiPlots for slider control
+    %default callbacks in muiPlots work for run and save movie buttons
     hm(3).Callback = @(src,evt)run_Movie(pobj,src,evt);
 
     %assign muiPlots instance to handle
@@ -72,11 +71,11 @@ function wrm_single_animation(mobj,sobj,plttxt,ptype)
 end
 
 %%
-function ax = setupAnimation(sobj,pobj,plttxt,ptype)
+function ax = setupAnimation(sobj,pobj,ptype)
     %initialise 3Dplot and setup animation variables
     hfig = pobj.Plot.CurrentFig;
     ax = axes(hfig);      
-    ax = getPlot(sobj(1),plttxt,ptype,ax);
+    ax = getPlot(sobj(1),ptype,ax);
     t = pobj.Data.T;  
     w = pobj.Data.Waves;
     ax.Subtitle.String = sprintf('Time = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g',...
@@ -87,7 +86,7 @@ function ax = setupAnimation(sobj,pobj,plttxt,ptype)
     %assign axes properties                
     ax.ZLimMode = 'manual'; %fix limits of z-axis
     zlim = minmax([pobj.Data.Z(:)]); 
-    ax.ZLim = [abs(zlim(1)),zlim(2)];
+    ax.ZLim = [abs(zlim(1)),zlim(2)];  %does not work for polar plot *******
     ax.NextPlot = 'replaceChildren';
     ax.Tag = 'PlotFigAxes'; 
     ax.CLim = ax.ZLim;
@@ -95,28 +94,27 @@ function ax = setupAnimation(sobj,pobj,plttxt,ptype)
     %assign data sources
     hp1 = findobj(ax.Children,'Type','surface');   
     hp1.CDataSource = 'var1'; 
-    hd = findobj(ax,'Tag','DirPk');
-    hd.YDataSource = 'var2';
-    ht = findobj(ax,'Tag','TpPk');
-    ht.XDataSource = 'var3';
-
-    %adjust position of plots and add title
     if strcmp(ptype,'XY')                    %XY plot
-        ax.Position([2,4]) = [0.20,0.68];      %make space for slider bar
+        hd = findobj(ax,'Tag','DirPk');
+        hd.YDataSource = 'var2';
+        ht = findobj(ax,'Tag','TpPk');
+        ht.XDataSource = 'var3';
+        %adjust position of plots and add title    
+        ax.Position([2,4]) = [0.20,0.68];    %make space for slider bar
     else                                     %polar plot
         % hfig.Position(3) = 0.6;
         So = pobj.Data.Z; 
         nrec = size(So,1);
         ff = pobj.Data.X; dd = pobj.Data.Y;
-        parfor i=1:nrec
-            Po(i,:,:) = reshapePolarGrid(ff,dd,So{i});
+        for i=1:nrec
+            Po(i,:,:) = reshapePolarGrid(ff,dd,squeeze(So(i,:,:)));
         end
-        pobj.Data.Z = {Po}; 
+        pobj.Data.Z = Po; 
     end
 end
 
 %%
-function getAnimation(pobj,ax,hfig)
+function getAnimation(pobj,ax,hfig,ptype)
     %generate an animation for user selection.
     t = pobj.Data.T;  
     w = pobj.Data.Waves;
@@ -129,10 +127,12 @@ function getAnimation(pobj,ax,hfig)
     for i=2:nrec
         var1 = squeeze(pobj.Data.Z(i,:,:)); %#ok<NASGU>        
         refreshdata(hp1,'caller')   
-        var2 = [1,1]*w(i,3);  %#ok<NASGU>
-        refreshdata(hd,'caller')  
-        var3 = [1,1]*w(i,2);  %#ok<NASGU>
-        refreshdata(ht,'caller')  
+        if strcmp(ptype,'XY') 
+            var2 = [1,1]*w(i,3);  %#ok<NASGU>
+            refreshdata(hd,'caller')  
+            var3 = [1,1]*w(i,2);  %#ok<NASGU>
+            refreshdata(ht,'caller')  
+        end
         ax.Subtitle.String = sprintf('Time = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g',...
                        string(t(i)),w(i,1),w(i,2),w(i,3));
         drawnow;                 

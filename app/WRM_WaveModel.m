@@ -41,26 +41,13 @@ classdef WRM_WaveModel < waveModels
 % Model code 
 %-------------------------------------------------------------------------- 
             %get the timeseries input data and site parameters
-                    % [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj,false); %single case
-                    % if isempty(tsdst), return; end   %user cancelled data selection
             [tsdst,meta] = getInputData(obj,mobj);            
             if isempty(tsdst), return; end   %user cancelled data selection
 
-            wvspobj = ctWaveSpectra;
             if strcmp(meta.source,'Measured spectra')
-                        %select = WRM_WaveModel.getSprectraConditions(); 
-                wvspobj = setSprectraConditions(wvspobj,tsdst);
-                % select.freq = tsdst.Dimensions.freq;
-                if isempty(wvspobj.spInputs), return; end       %user cancelled
                 ModelType = 'transfer spectra';
             else
-                        %select = get_model_selection(sptobj); %select spectral form and data type
-                                %%
-        %%
-                wvspobj = setSpectrumModel(wvspobj); %define the model to be used (Jonswap etc)
-                if isempty(wvspobj.spModel), return; end   %user cancelled
                 ModelType = 'transfer timeseries';
-                
             end
 
             %select a spectral transfer case to use
@@ -68,46 +55,51 @@ classdef WRM_WaveModel < waveModels
             caserecs = [meta.caserecs,sptmeta.caserecs];
             setRunParam(obj,mobj,caserecs{:})     %assign run parameters
             %add spectral transfer selection to meta data
-            inputxt = sprintf('%s, %s\n%s',meta.inptxt,sptmeta.inptxt,wvspobj.spModel.inptxt);
+            inputxt = sprintf('%s, %s',meta.inptxt,sptmeta.inptxt);
+
+            [offobj,inobj] = runWaves(sptobj,tsdst,meta);
+%--------------------------------------------------------------------------
+% Assign model output to a dstable using the defined dsproperties meta-data
+%--------------------------------------------------------------------------    
+            [sp,results] = unpackSpectrum(inobj,offobj);
+            results = addvars(results,sp.swl,sp.depths,'NewVariableNames',{'swl','depi'});
+            dir = offobj(1).Spectrum.dir;
+            freq = offobj(1).Spectrum.freq;
 
             answer = questdlg('Save the spectra?','Wave model','Yes','No','No');
             if strcmp(answer,'Yes'), issave=true; else, issave=false; end
-            [Sot,Sit,Dims,results] = runWaves(sptobj,tsdst,wvspobj,issave);
-%--------------------------------------------------------------------------
-% Assign model output to a dstable using the defined dsproperties meta-data
-%--------------------------------------------------------------------------                   
-            %each variable should be an array in the 'results' cell array
-            %if model returns single variable as array of doubles, use {results}
-            time = tsdst.RowNames;
-            dst.Properties = dstable(results,'RowNames',time,'DSproperties',dsprop);                      
+            %check whether wave spectra should also be saved
+            Sot = sp.Sot; %#ok<NASGU>
+            sze = 2*getfield(whos('Sot'),'bytes')*9.53674e-7;
+            if issave
+                questxt = sprintf('Save the full wave spectra (arrays are %.1f Mb) or spt format',sze);
+                answer = questdlg(questxt,'Wave model','Full','SPT format','SPT format');
+                source = sprintf('Class %s, using %s',metaclass(obj).Name,ModelType);                        
+                if strcmp(answer,'SPT format')
+                    dst.OffshoreSpectra = saveSpectrum(offobj);
+                    dst.OffshoreSpectra.Source = source;
+                    dst.OffshoreSpectra.MetaData = inputxt; 
+                    dst.InshoreSpectra = saveSpectrum(inobj);
+                    dst.InshoreSpectra.Description = sprintf('Inshore using %s',dst.OffshoreSpectra.Description);
+                    dst.InshoreSpectra.Source = source;
+                    dst.InshoreSpectra.MetaData = inputxt;  
+                else
+                    dst.oiSpectra = dstable(sp.Sot,sp.Sit,'RowNames',sp.time,'DSproperties',dspec); 
+                    dst.oiSpectra.Dimensions.dir = dir;    %NB order is X,Y and must
+                    dst.oiSpectra.Dimensions.freq = freq;  %match variable dimensions  
+                    %assign metadata about model
+                    dst.oiSpectra.Source = source;
+                    dst.oiSpectra.MetaData = inputxt;                    
+                end                    
+            end
+
+            dst.Properties = dstable(results,'RowNames',sp.time,'DSproperties',dsprop);                      
             %assign metadata about model            
             dst.Properties.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
                                                          ModelType);
             dst.Properties.MetaData = inputxt;   
             %add depths of inshore point for which there are backward rays
-            dst.Properties.UserData = sptobj.Data.Inshore.UserData.Depths;
-            %check whether wave spectra should also be saved
-            sze = 2*getfield(whos('Sot'),'bytes')*9.53674e-7;
-            if select.issave
-                questxt = sprintf('Save the full wave spectra (arrays are %.1f Mb)?',sze);
-                answer = questdlg(questxt,'Wave model','In Full','Minimised','Minimised');
-                if strcmp(answer,'Minimised')
-                    %reduce to 1 degree spacing and 1 second periods
-                    idx = rem(Dims.dir,1)>0;
-                    idy = rem(1./Dims.freq,1)>0;
-                    Dims.dir(idx) = [];
-                    Dims.freq(idy) = [];
-                    Sot(:,idx,:) = [];  Sot(:,:,idy) = [];
-                    Sit(:,idx,:) = [];  Sit(:,:,idy) = [];
-                end
-                dst.Spectra = dstable(Sot,Sit,'RowNames',time,'DSproperties',dspec); 
-                dst.Spectra.Dimensions.dir = Dims.dir;    %NB order is X,Y and must
-                dst.Spectra.Dimensions.freq = Dims.freq;  %match variable dimensions           
-                %assign metadata about model
-                dst.Spectra.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
-                    ModelType);
-                dst.Spectra.MetaData = inputxt;
-            end
+            dst.Properties.UserData = sp.depths;
 %--------------------------------------------------------------------------
 % Save results
 %--------------------------------------------------------------------------  
@@ -220,34 +212,44 @@ classdef WRM_WaveModel < waveModels
 %-------------------------------------------------------------------------- 
             %get the timeseries input data and site parameters
             %Note: getInputData calls setRunParam
-            [tsdst,sptrecs,inputxt,~] = getInputData(obj,mobj,true); %multi-case
+            % [tsdst,sptrecs,inputxt,~] = getInputData(obj,mobj,true); %multi-case
+            % if isempty(tsdst), return; end   %user cancelled data selection
+            muicat = mobj.Cases;
+            [tsdst,meta] = getInputData(obj,mobj);            
             if isempty(tsdst), return; end   %user cancelled data selection
-            sptobj = getCase(mobj.Cases,sptrecs(1));
-            select = get_model_selection(sptobj);     %select spectral form and data type
-            if isempty(select), return; end           %user cancelled
-            select.issave=false;                      %do not save spectra
+
+            %select a spectral transfer case to use
+            [sptrecs,sptmeta] = SpectralTransfer.getSTcase(mobj,true);
+            caserecs = [meta.caserecs,sptmeta.caserecs];
+            setRunParam(obj,mobj,caserecs{:})     %assign run parameters
+
             ModelType = 'transfer timeseries';
-            
+            % inputxt = meta.inptxt;
             hw = waitbar(0,'Processing point 0');
             npnts = length(sptrecs);
-            for i=1:npnts
+            for i=1:npnts      %NOT parfor because used in runWaves               
                 waitbar(i/npnts,hw,sprintf('Processing point %d',i));
-                sptobj = getCase(mobj.Cases,sptrecs(i));
-                [~,~,~,results] = runWaves(sptobj,tsdst,select);                 
+                sptobj = getCase(muicat,sptrecs(i));
+                [offobj,inobj] = runWaves(sptobj,tsdst,meta);
                 %each variable should be an array in the 'results' cell array
                 %if model returns single variable as array of doubles, use {results}
                 time = tsdst.RowNames;
-                adst = dstable(results,'RowNames',time,'DSproperties',dsprop);                      
+                [sp,results] = unpackSpectrum(inobj,offobj);
+                results = addvars(results,sp.swl,sp.depths,'NewVariableNames',{'swl','depi'});
+                adst = dstable(results,'RowNames',time,'DSproperties',dsprop);
                 %assign metadata about model            
                 adst.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
                                                              ModelType);
-                inputxt = sprintf('%s, %s used for spectral transfer',inputxt,...
+                adst.MetaData = sprintf('%s, %s used for spectral transfer',meta.inptxt,...
                                               sptobj.Data.Inshore.Description);
-                adst.MetaData = inputxt;   
                 %add depths of inshore point for which there are backward rays
                 adst.UserData = sptobj.Data.Inshore.UserData.Depths;
-                pname = sprintf('Point_%d',i);
-                dst.(pname) = adst;
+                pname{i} = sprintf('Point%d',i);
+                pdst(i) = adst;
+            end
+            
+            for j = 1:npnts
+                dst.(pname{j}) = pdst(j);
             end
             delete(hw)
 %--------------------------------------------------------------------------
@@ -261,56 +263,6 @@ classdef WRM_WaveModel < waveModels
     end
 %%
     methods
-        % function [tsdst,caserec] = getWaveModelDataset(obj,mobj,type,addnames,caserec)
-        %     %prompt user to select a model wave dataset and add Tp if inshore
-        %     %duplicates method in ctWaveModel
-        % 
-        %     muicat = mobj.Cases;
-        %     if nargin<4
-        %         addnames = {'Tp'};  %default is to add Tp
-        %     end
-        %     %
-        %     if nargin<5   %no caserec to prompt for selection
-        %         [wvobj,wvdst,ok] = selectClassInstance(obj,'ModelType',type);
-        %         if ok<1, tsdst = []; return; end
-        %         caserec = caseRec(muicat,wvobj.CaseIndex);
-        %     else
-        %         wvobj = getCase(muicat,caserec);
-        %         wvdst = wvobj.Data.Dataset;
-        %     end
-        % 
-        %     %if inshore wave dataset add variables requested, otherwise just
-        %     %copy dstable
-        %     tsdst = copy(wvdst);
-        %     if strcmp(type,'Inwave_model')
-        %         inpwavecid = wvobj.RunParam.ctWaveData.caseid; %source dataset (offshore)
-        %         inpwaverec = caseRec(muicat,inpwavecid);       %case record
-        %         inpdst = getDataset(muicat,inpwaverec,1);      %dst used to create inshore waves
-        %         dstnames = inpdst.VariableNames;               %source variables
-        %         varnames = tsdst.VariableNames;                %inshore wave variables
-        %         for i=1:length(addnames)                    
-        %             if any(strcmp(varnames,addnames{i}))
-        %                 %variable already included
-        %                 continue;
-        %             elseif any(contains(varnames,addnames{i})) && ...
-        %                               ~any(strcmp(varnames,addnames{i}))  
-        %                 %dataset contains addname but not an exact match
-        %                 %eg 'Tpi' instead of 'Tp'- needs using with care!!
-        %                 idx = contains(varnames,addnames{i});
-        %                 tsdst.VariableNames{idx} = addnames{i};
-        %             elseif any(strcmp(dstnames,addnames{i})) && ...
-        %                                     ~isempty(inpdst.(addnames{i}))
-        %                 %variable to be added exists in source dataset
-        %                 tsdst = addvars(tsdst,inpdst.(addnames{i}),...
-        %                                    'NewVariableNames',addnames{i});
-        %             else
-        %                 warndlg('Variable %s not found so not added to wave dataset',...
-        %                                                    addnames{i});
-        %             end
-        %         end
-        %     end
-        % end
-%%        
         function tabPlot(obj,src) %abstract class for muiDataSet
             %generate plot for display on Q-Plot tab            
             
@@ -318,148 +270,9 @@ classdef WRM_WaveModel < waveModels
             tabDefaultPlot(obj,src);
         end
     end 
-%%    
-    methods (Access = private)
-        % function [tsdst,sptobj,inputxt,source] = getInputData(obj,mobj,isbatch)
-        %     %prompt user to select wave and water level data and return in
-        %     %input dstable of data and metadata for inputs used
-        %     tsdst = []; sptobj = []; inputxt = []; source = [];
-        %     muicat = mobj.Cases;
-        %     promptxt = 'Select input wave data set:';           
-        %     [wv_caserec,ok] = selectRecord(muicat,'PromptText',promptxt,...
-        %                    'CaseClass',{'ctWaveData','muiUserModel'},'ListSize',[300,100]);                                    
-        %     if ok<1, return; end
-        %     wvdst = getDataset(muicat,wv_caserec,1);  %1 selects first dataset in struct
-        %     wvtime = wvdst.RowNames;                  %ie Dataset or Spectra in most cases
-        %     inputxt = sprintf('%s used for offshore waves',wvdst.Description);
-        % 
-        %     source = 'Measured waves';
-        %     if isfield(wvdst.Dimensions,'freq')
-        %         source = 'Measured spectra';
-        %     end
-        % 
-        %     varnames = wvdst.VariableNames;
-        %     if strcmp(source,'Measured waves') && ~any(strcmp(varnames,'Hs'))
-        %         wvdst = extract_wave_data(wvdst);
-        %         if isempty(wvdst), getdialog('Wave data not found'); return; end
-        %     end
-        % 
-        %     promptxt = 'Select input water level data set (Cancel to use SWL=0):';           
-        %     [wl_crec,ok] = selectRecord(muicat,'PromptText',promptxt,...
-        %                         'CaseClass',{'ctWaterLevelData','ctTidalAnalysis',...
-        %                                       'muiUserModel'},...
-        %                         'ListSize',[300,100]); 
-        % 
-        %     swl = zeros(size(wvtime));               
-        %     if ok<1 || isempty(wl_crec)
-        %         getdialog('Using SWL=0');
-        %         inputxt = sprintf('%s, 0mOD used for water level',inputxt);
-        %         wl_crec = 0;     %assign a null value if no water level data available
-        %     else
-        %         wldst = getDataset(muicat,wl_crec,1); 
-        %         %check that there is water level data for period of interest
-        %         [idst,idnd] = ts2_endpoints_in_ts1(wvdst,wldst);
-        %         if isempty(idst)
-        %             getdialog('Data do not overlap. Using SWL=0');
-        %             inputxt = sprintf('%s, 0mOD used for water level',inputxt);
-        %             wl_crec = 0; %assign a null value if no water level data available
-        %         else 
-        %             %select a variable from the water level dataset
-        %             varnames = wldst.VariableNames;
-        %             idx = 1;
-        %             if length(varnames)>1
-        %                 [idx,ok] = listdlg('Name','WL options', ...
-        %                     'PromptString','Select a variable:', ...
-        %                     'SelectionMode','single','ListSize',[200,100],...
-        %                     'ListString',varnames);
-        %                 if ok<1, idx = 1; end
-        %             end
-        %             wldata = wldst.(varnames{idx});
-        %             wltime = wldst.RowNames;
-        %             swltime = wvtime(idst:idnd);                                        
-        %             %now interpolate water levels onto wave height times
-        %             swl(idst:idnd,1) = interp1(wltime,wldata,swltime,'linear','extrap');
-        %             swl(isnan(swl)) = 0;
-        %             inputxt = sprintf('%s, %s used for water levels',...
-        %                                         inputxt,wldst.Description);
-        %         end
-        %     end
-        % 
-        %     [wvdst,timerange] = getSubSet(obj,wvdst);      %allow user to extract a subset 
-        %     swl = swl(timerange);
-        % 
-        %     tsdst = addvars(wvdst,swl,'NewVariableNames','swl');
-        % 
-        % 
-        %     if strcmp(source,'Measured spectra')                
-        %         tsprops = getDataset(muicat,wv_caserec,2);  %2 selects Properties dataset from spectra input
-        %         tsprops = removerows(tsprops,find(~timerange));
-        %         tsdst = horzcat(tsdst,tsprops);                
-        %     end
-        %     tsdst = activatedynamicprops(tsdst);
-        % 
-        %     %get the refraction transfer table
-        %     msgtxt = 'Spectral Transfer Table not found';
-        %     if isbatch
-        %         [sptobj,ok] = selectRecord(mobj.Cases,...
-        %                                     'CaseClass',{'SpectralTransfer'},...
-        %                                     'PromptText', 'Select cases',...
-        %                                     'ListSize', [250,200],...
-        %                                     'SelectionMode', 'multiple' ); 
-        %         if ok<1, getdialog(msgtxt); return; end
-        %         spt_caserec = sptobj(1);
-        %     else
-        %         promptxt = 'Select a Transfer Table Case to use:';             
-        %         sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);                
-        %         if isempty(sptobj), getdialog(msgtxt); return; end
-        % 
-        %         inputxt = sprintf('%s, %s used for spectral transfer',inputxt,...
-        %                                   sptobj.Data.Inshore.Description);
-        %         spt_caserec = caseRec(mobj.Cases,sptobj.CaseIndex);
-        %     end         
-        % 
-        %     %assign the run parameters to the model instance            
-        %     if wl_crec==0
-        %         setRunParam(obj,mobj,wv_caserec,spt_caserec);
-        %     else
-        %         setRunParam(obj,mobj,wv_caserec,wl_crec,spt_caserec); %input caserecs passed as varargin     
-        %     end
-        % end
-% %%
-%         function [subdst,timerange] = getSubSet(~,tsdst)
-%             %subsample the record based on user defined start and end date
-%             % defined using varargin for the following fields
-%             %    FigureTitle     - title for the UI figure
-%             %    PromptText      - text to guide user on selection to make
-%             %    InputFields     - text prompt for input fields to be displayed
-%             %    Style           - uicontrols for each input field (same no. as input fields)
-%             %    ControlButtons  - text for buttons to edit or update selection 
-%             %    DefaultInputs   - default text or selection lists
-%             %    UserData        - data assigned to UserData of uicontrol
-%             %    DataObject      - data object to use for selection
-%             %    SelectedVar     - index vector to define case,dataset,variable selection  
-%             %    ActionButtons   - text for buttons to take action based on selection
-%             %    Position        - poosition and size of figure (normalized units)
-%             timerange = var2range(tsdst.RowRange);
-%             selection = inputgui('FigureTitle','Levels',...
-%                                  'InputFields',{'Time'},...
-%                                  'Style',{'edit'},...
-%                                  'ControlButtons',{'Ed'},...
-%                                  'ActionButtons', {'Select','Cancel'},...
-%                                  'DefaultInputs',{timerange},...
-%                                  'PromptText','Select time range to use');
-% 
-%             if isempty(selection)
-%                 subdst = tsdst;
-%                 timerange = true(size(tsdst.RowNames));
-%             else
-%                 seltime = range2var(selection{1});
-%                 times = tsdst.RowNames;
-%                 timerange = isbetween(times,seltime{:});
-%                 subdst = getDSTable(tsdst,'RowNames',times(timerange));
-%             end            
-%         end
+
 %%
+    methods (Access=private)
         function results = callRefraction(~,tsdst,site_params)
             %parse inputs for call to refraction function
             z0 = site_params.OffshoreBedLevel;
@@ -511,21 +324,36 @@ classdef WRM_WaveModel < waveModels
                 'Format',{'',''});    
 
             dsprop.Variables = struct(...   
-                'Name',{'Hsi','T2i','Diri','Tpi','Diripk','Spki','kw','kt2','ktp',...
-                                                       'kd','swl','depi'},...
-                'Description',{'Inshore wave height','Inshore mean period',...
-                               'Inshore wave direction','Inshore peak period',...
-                               'Inshore peak direction','Inshore peak spectral density'...
+                'Name',{'Hs','m0','Dir','Sp','Tp','Dp',...
+                        'Sfdpk','Tfdpk','Dfdpk','T2',...
+                        'kw','kt2','ktp','kd','swl','depi'},...
+                'Description',{'Inshore wave height',...
+                               'Inshore zero moment',...
+                               'Inshore wave direction',...
+                               'Inshore peak spectral density'...
+                               'Inshore peak period',...
+                               'Inshore peak direction',...
+                               'Inshore f-d spectral density peak',...
+                               'Inshore f-d peak period',...
+                               'Inshore f-d peak direction',...
+                               'Inshore mean period',...
                                'Wave transfer coefficient',...
-                               'Mean period coefficient','Peak period coefficient',...
-                               'Mean direction shift','Still water level','Inshore depth'},...                               
-                'Unit',{'m','s','degTN','s','degTN','m^2/Hz','-','-','-','deg','mOD','m'},...
-                'Label',{'Wave height (m)','Wave period (s)','Wave direction (degTN)',...
-                         'Spectral density (m^2/Hz)','Wave period (s)','Wave direction (degTN)',...
+                               'Mean period coefficient',...
+                               'Peak period coefficient',...
+                               'Mean direction shift',...
+                               'Still water level',...
+                               'Inshore depth'},...                               
+                'Unit',{'m','m^2','degTN','m^2/Hz','s','degTN','m^2/Hz',...
+                            's','degTN','s','-','-','-','deg','mOD','m'},...
+                'Label',{'Wave height (m)','Zero moment (m^2)',...
+                         'Wave direction (degTN)','Spectral density (m^2/Hz)',...                
+                         'Wave period (s)','Wave direction (degTN)',... 
+                         'Spectral density (m^2/Hz)','Wave period (s)',... 
+                         'Wave direction (degTN)','Wave period (s)',...
                          'Transfer coefficient, kw','Transfer coefficient, kt2',...
                          'Transfer coefficient, ktp','Direction shift (deg)',...
                          'Water level (mOD)','Water depth (m)'},...
-                'QCflag',repmat({'model'},1,12)); 
+                'QCflag',repmat({'model'},1,16)); 
             dsprop.Row = struct(...
                 'Name',{'Time'},...
                 'Description',{'Time'},...
@@ -542,72 +370,6 @@ classdef WRM_WaveModel < waveModels
     end  
 %%
     methods (Static, Access=private)
-        % function inputs = getForcingConditions()
-        %     %get the user input of wave or wind conditions
-        %     inputs = []; 
-        % 
-        %     answer = questdlg('Wind, Wave or Spectrum input?','Input',...
-        %                                  'Wind','Wave','Spectrum','Wave');            
-        %     if strcmp(answer,'Wave')
-        %         promptxt = {'Wave height (m)','Peak period (s)',...
-        %                          'Wave direction (degTN)','Still water level'};
-        %         defaults = {'1.1','8.2','185','0.0'};
-        %         inpt = inputdlg(promptxt,'Input conditions',1,defaults);
-        %         if isempty(inpt), return; end  %user cancelled
-        %         inputs.Hs = str2double(inpt{1});
-        %         inputs.Tp = str2double(inpt{2});
-        %         inputs.Dir = str2double(inpt{3});
-        %         inputs.swl = str2double(inpt{4});
-        %     elseif strcmp(answer,'Wind')
-        %         promptxt = {'Wind Speed (m/s)','Wind Direction (degTN)',...
-        %                     'Height above msl (m)','Fetch Length (m)',...
-        %                     'Still water level'};                                 
-        %         defaults = {'20.0','185','10.0','20000','0.0'};
-        %         inpt = inputdlg(promptxt,'Input conditions',1,defaults);
-        %         if isempty(inpt), return; end  %user cancelled
-        %         inputs.AvSpeed = str2double(inpt{1});
-        %         inputs.Dir = str2double(inpt{2});
-        %         inputs.zW = str2double(inpt{3});
-        %         inputs.Fetch = str2double(inpt{4});
-        %         inputs.swl = str2double(inpt{5});
-        %     else
-        %         promptxt = {'Still water level','Include depth saturation (1=Yes,0=No)'};
-        %         defaults = {'0.0','1'};
-        %         inpt = inputdlg(promptxt,'Input conditions',1,defaults);
-        %         if isempty(inpt), return; end  %user cancelled
-        %         inputs.swl = str2double(inpt{1});
-        %         inputs.issat = logical(str2double(inpt{2}));    
-        %         [filename,path,~] = getfiles('MultiSelect','off','PromptText','Select file:');
-        %         if filename==0, inputs = []; return; end  %user cancelled
-        %         varlist = {'',[path,filename]};
-        %         specdst = wave_cco_spectra('getData',varlist{:});
-        %         tsdst = horzcat(specdst.Spectra,specdst.Properties);
-        %         tsdst = activatedynamicprops(tsdst,specdst.Properties.VariableNames);
-        %         tsdst = addvars(tsdst,inputs.swl,'NewVariableNames','swl');
-        %         inputs.tsdst = tsdst;
-        %     end
-        %     inputs.source = answer;
-        % end
-%%
-        % function inputs = getSprectraConditions()
-        %     %get conditions for getForcingConditions when the input is a
-        %     %measured spectrum and is called for same purpose in runWaves
-        %     inputs = []; 
-        %     promptxt = {'Include depth saturation (1=Yes,0=No)'};
-        %     defaults = {'1'};
-        %     inpt = inputdlg(promptxt,'Input conditions',1,defaults);
-        %     if isempty(inpt), return; end  %user cancelled
-        %     inputs.issat = logical(str2double(inpt{1}));    
-        %     inputs.form = 'Measured';           %initialise select properties
-        %     inputs.source = 'Spectrum';         
-        %     inputs.ismodel = false;
-        %     if inputs.issat
-        %         inputs.txt = 'Measured spectrum and including depth saturation';
-        %     else
-        %         inputs.txt = 'Measured spectrum and excluding depth saturation';
-        %     end
-        % end
-%%
         function off = addWaveConditions(SGo,Dims,off)
             %when using wind input define the offshore wave conditions
             g = 9.81;

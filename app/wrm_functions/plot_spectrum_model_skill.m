@@ -11,11 +11,11 @@ function ax = plot_spectrum_model_skill(obsobj,modobj,mobj)
 
     %add the timeseries results to the Taylor plot
     ndteststd = [stats(:).teststd]./[stats(:).refstd]; %normalised std
-    rLim = ceil(max(ndteststd));                        %radial limit for the plot
+    rLim = ceil(max(ndteststd));                       %radial limit for the plot
     ax = taylor_plot_figure(rLim);    
     metatxt = {'Measured','Model'};
     ax = taylor_plot_ts(ax,stats,skill,metatxt);
-    subtitletxt = sprintf('%s',getModelInputText(modobj(1),0));
+    subtitletxt = sprintf('%s',getModelInputText(modobj(1)));
     ax.Title.String = obsobj(1).inpData.tsdst.Description;
     ax.Subtitle.String = subtitletxt;  
 end

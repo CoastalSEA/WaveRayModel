@@ -1,4 +1,4 @@
-function S = wave_spectrum(stype,f,inputs)
+function [S,gamma] = wave_spectrum(stype,f,inputs)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -16,14 +16,15 @@ function S = wave_spectrum(stype,f,inputs)
 %           or 'TMA shallow water'
 %   f - frequencies at which the spectrum is to be defined <scalar or vector>
 %  inputs - a struct that depends on use. When deriving the spectrum using 
-%           wind speed and fetch the struct includes 'wind',Uw,zw,Fch,df
-%           When using wave records the order is 'wave',Hmo,Tp,gamma,
+%           wind speed and fetch the struct includes 'wind',Uw,zw,Fetch,df
+%           When using wave records the fields are 'wave',Hmo,Tp,gamma,
 %   For wind input (JONSWAP and TMA only)
 %       source - 'Wind'
 %       Uw - wind speed (m/s) <scalar or vector>
 %       zw - elevation of wind speed measurement (m)
-%       Fch- dominant fetch length (m) <scalar or vector>
+%       Fetch- dominant fetch length (m) <scalar or vector>
 %       df - average water depth over fetch (m) (default is deep water)
+%            <scalar or vector> but must be same length as Uw and Fetch
 %   For wave input
 %       source - 'Wave'
 %       Hmo - significant wave height [4sqrt(mo)] (m) <scalar or vector>
@@ -38,6 +39,7 @@ function S = wave_spectrum(stype,f,inputs)
 %        NB: wind or wave vector data must be the same length
 % OUTPUT
 %   S - spectral energy density at specified frequencies [nrec,nf] (m^2s)
+%   gamma - spectrum shape parameter in case set in TMA or Jonswap
 % NOTES
 %   The spectrum definitions in Carter, 1982, MIAS publication No.4 are
 %   used with additional information from Hughes, CERC-84-7 (p10-12); 
@@ -53,15 +55,16 @@ function S = wave_spectrum(stype,f,inputs)
 % CoastalSEA (c)Feb 2023
 %--------------------------------------------------------------------------
 %
+    gamma = [];
     switch stype
         case 'Bretschneider open ocean'
             S = bretschneider(f,inputs);
         case 'Pierson-Moskowitz fully developed'
             S = pierson_moskowitz(f,inputs);
         case 'JONSWAP fetch limited'
-            S = jonswap(f,inputs);
+            [S,gamma] = jonswap(f,inputs);
         case 'TMA shallow water'
-             S = tma(f,inputs);
+            [S,gamma] = tma(f,inputs);
         otherwise
             warndlg('Unknown spectrum type')
             S = [];
@@ -115,11 +118,11 @@ function S = pierson_moskowitz(f,inp)
 end
 
 %%
-function S = jonswap(f,inputs)
+function [S,gamma] = jonswap(f,inputs)
     %construct the JONSWAP spectrum using Carter eq(16) with alpha based on
     %Hughes for wind and Carter for wave type input
     g = 9.81;
-    [fp,alpha,gamma] = get_input(inputs);
+    [fp,alpha,gamma] = get_input(inputs,0);
     if isempty(fp), return; end
     
     sigma = @(f) 0.07.*(f<=fp) + 0.09.*(f>fp);           %Hughes eq(5 & 25), or
@@ -134,16 +137,18 @@ function S = jonswap(f,inputs)
 end
 
 %%
-function S = tma(f,inp)
+function [S,gamma] = tma(f,inp)
     %construct the TMA spectrum using Kitaigorodskii limit (see Bouws et al, 
     %or Hughes for details)
     g = 9.81;
-    [fp,alpha,gamma] = get_input(inp);
+    [fp,alpha,gamma] = get_input(inp,1);
     if isempty(fp), return; end 
+
     sigma = @(f) 0.07.*(f<=fp) + 0.09.*(f>fp);           %Hughes eq(5 & 25), or
     q = @(f) exp((-(f-fp).^2)./(2.*sigma(f).^2.*fp.^2)); %Carter eq(16)
     cn = g^2*(2*pi)^-4;
     Jonswap = @(f) cn*alpha.*(f.^-5).*(exp(-1.25*(f./fp).^-4)).*(gamma.^q(f));
+
     if isfield(inp,'ds') && ~isempty(inp.ds) && inp.ds>0
         ds = inp.ds;
     else
@@ -154,50 +159,100 @@ function S = tma(f,inp)
     S = zeros(length(fp),length(f));
     for i=1:length(f)
         S(:,i) = Func(f(i));
+        % Sf(:,i) = Jonswap(f(i));
     end
+    % figure('Tag','PlotFig'); plot(f,S,f,Sf);
+    % fprintf('TMA m0=%f, Jonswap m0=%f\n',trapz(f,S),trapz(f,Sf))
 end
 
 %%
-function [fp,alpha,gamma] = get_input(inp)
+function [fp,alpha,gamma] = get_input(inp,istma)
     %unpack inp for the wind and wave cases
     g = 9.81;
     switch inp.source
         case 'Wind'
-            Uw = inp.Uw;
-            zw = inp.zW;
-            Fch = inp.Fetch;
             % Adjust wind speed to 10m using power law profile
-            U = Uw*(10/zw)^(1/7);
+            inp.U = inp.Uw*(10/inp.zW)^(1/7);
+            gFU2 = g*inp.Fetch/inp.U.^2;
 
-            Tp = 0.54*g^-0.77*U.^0.54.*Fch.^0.23;
-            fp = 1./Tp;
-            if isfield(inp,'df') && ~isempty(inp.df) && inp.df>0
-                df = inp.df;
-                Lp = celerity(Tp,df).*Tp;         %use Hunt eq.for celerity
+            [Tp,Lp] = peak_period(inp);    fp = 1./Tp;
+            %fp = 3.5*(g/U)*(gFU2)^-0.33; Tp = 1/fp; %Hughes eq(8)
+
+            %define alpha and gamma for TMA or Jonswap
+            if istma
+                kp = 2*pi*U.^2./g./Lp;             %Hughes eq(24)
+                alpha = 0.0078*kp.^0.49;           %Hughes eq(22)
+                gamma = 2.47*kp.^0.39;             %Hughes eq(23)
             else
-                Lp = (g*Tp./2./pi).*Tp;           %use deep water celerity
-            end            
-            kp = 2*pi*U.^2./g./Lp;                %Hughes eq(24)
-            alpha = 0.0078*kp.^0.49;              %Hughes eq(22)
-            gamma = 2.47*kp.^0.39;                %Hughes eq(23)
-        case 'Wave'
-            Hmo = inp.Hs;
-            if isfield(inp,'T2') 
-                gamma = 70*(inp.T2/inp.Tp)^12.23;
-            elseif isfield(inp,'gamma')
-                gamma = inp.gamma;
-            else
-                gamma = 3.3;
+                alpha = 0.076*(gFU2).^-0.22;       %Hughes eq(6)
+                gamma = 7.0*(gFU2).^-0.143;        %Hughes eq(8)
             end
 
-            fp = 1./inp.Tp;
-            Io = spectral_moment(0,gamma);                 %Carter eq(18)
-            alpha = (2*pi).^4*Hmo.^2.*fp.^4./(16*g.^2.*Io); %Carter eq(20)
+        case 'Wave'
+            Hmo = inp.Hs;
+            [Tp,Lp] = peak_period(inp);    fp = 1./Tp;
+
+            if istma
+                alpha = (pi*Hmo/Lp).^2;            %Hughes eq(29)
+                if inp.gamma==0
+                    gamma = 6614*(Hmo/4/Lp).^1.59; %Hughes eq(28)
+                else
+                    gamma = inp.gamma;
+                end
+            else
+                if inp.gamma==0 &&  isfield(inp,'T2')
+                    gamma = 70*(inp.T2/inp.Tp)^12.23;
+                elseif ~isnan(inp.gamma) && inp.gamma>0
+                    gamma = inp.gamma;
+                else
+                    gamma = 3.3;
+                end
+
+                Io = spectral_moment(0,gamma);                  %Carter eq(18)
+                alpha = (2*pi).^4*Hmo.^2.*fp.^4./(16*g.^2.*Io); %Carter eq(20)
+            end
+
+            if gamma<1
+                gamma = 0.9999;
+            elseif gamma>7.9
+                gamma = 7.9999;
+            end
+
         otherwise
             warndlg('Invalid source - should be wind or wave')
             fp = []; alpha = []; gamma = [];
     end
 end
+
+%%
+function [Tp,Lp] = peak_period(inp)
+    %find peak period based on wind or wave input
+    g = 9.81;
+    if strcmp(inp.source,'Wind')
+        Tp = 0.54*g^-0.77*inp.U.^0.54.*inp.Fetch.^0.23; %Donelan, 1985
+    else
+        Tp = inp.Tp;
+    end
+
+    %get the wave length at peak frequency
+    Lp = (g*Tp./2./pi).*Tp;                   %use deep water celerity
+    if isfield(inp,'df') && ~isempty(inp.df)
+        if isscalar(inp.df) && inp.df>0       %scalar depth over fetch
+            Lp = celerity(Tp,inp.df).*Tp;     %use Hunt eq.for celerity
+        elseif length(inp.df)==length(Tp)     %vector depths over fetch
+            for i=1:length(inp.df)
+                if inp.df(i)>0
+                    Lp(i) = celerity(Tp(i),inp.df(i)).*Tp(i);  %use Hunt eq.for celerity
+                end
+            end
+        elseif length(inp.df)~=length(Tp)
+            errordlg('Input vectors to wave_spectrum must be the same length')
+        else
+            %defaults to deepwater for all other combinations
+        end
+    end 
+end
+
 %%
 function In = spectral_moment(nm,gamma)
     %find the nm spectral moment of the Jonswap spectrum for given gamma
@@ -206,6 +261,7 @@ function In = spectral_moment(nm,gamma)
     Func = @(f) (f.^nm).*(f.^-5).*exp(-1.25.*f.^-4).*gamma.^q(f);
     In = integral(Func,0,Inf,'RelTol',1e-3,'AbsTol',1e-3);
 end
+
 %%
 function phi = kit_limit(f,ds)
     % Calculate the Kitaigorodskii limit to the spectrum at frquency f
@@ -213,6 +269,9 @@ function phi = kit_limit(f,ds)
     % ds - water depth at site (m)
     % phi - frquency dependent Kitaigorodskii adjustment to be applied to the 
     % JONSWAP spectrum to take accound of depth limiting effects
+    % using Thompson and Vincent, 1983 approximation as given in
+    % Hughes, 1984, Eq.(13) and (15)   
+    % <duplicated in ctWaveSpectra>
     g = 9.81;
     omega = 2*pi*f.*sqrt(ds/g);
     % if omega<=1 (vectorised) or omega>2

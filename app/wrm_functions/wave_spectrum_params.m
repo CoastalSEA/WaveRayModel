@@ -20,17 +20,17 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
 %   isdirmodes - diagnostic data output if true (optional)
 % OUTPUT
 %   params - table containing:
-%               Hs - significant wave height
-%               m0 - zero moment
-%               Dir - mean wave direction
-%               Sp - peak spectral density of omni-directional spectrum, S(f)
-%               Tp - period at peak energy of omni-directional spectrum
-%               Dp - direction at peak energy of omni-directional spectrum
-%               Sfdpk - peask spectral density of frequency-direction spectrum, S(theta,f)
-%               Tfdpk - period at peak energy of frequency-direction spectrum 
-%               Dfdpk - direction at peak energy of frequency-direction spectrum
-%               T2 - mean period
-%   diagnost - table containing
+%            Hs - significant wave height
+%            m0 - zero moment
+%            Dir - mean wave direction
+%            Sp - peak spectral density of omni-directional spectrum, S(f)
+%            Tp - period at peak energy of omni-directional spectrum
+%            Dp - direction at peak energy of omni-directional spectrum
+%            Sfdpk - peask spectral density of frequency-direction spectrum, S(theta,f)
+%            Tfdpk - period at peak energy of frequency-direction spectrum 
+%            Dfdpk - direction at peak energy of frequency-direction spectrum
+%            T2 - mean period
+%   diagnost - table containing frequency, direction and mode diagnotics
 
 % SEE ALSO
 %   SpectralTransfer.m in WaveRayModel and ctWaveSpectra in CoastalClasses
@@ -192,3 +192,6 @@ function w = hann_window(N)
     w = 0.5 - 0.5 * cos(2*pi*n/(N-1));
     w = w / sum(w);
 end
+
+%%
+
