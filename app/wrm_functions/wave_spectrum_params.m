@@ -45,7 +45,7 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
         if nargin<2
             isdirmodes = false; diagnost = []; 
         else
-            isdirmodes = freq;
+            isdirmodes = freq; %used for flag if class obj and 2 input variables
         end        
         obj = SG;
         freq = obj.Spectrum.freq;

@@ -259,8 +259,9 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             T = offdst.Dimensions.Period;          %wave periods used in ray model
             fray = 1./T;                           %wave frequencies used in ray model
         
-            hmn = offdst.mindepth; hmn(idx) = 0;   %minimum depth along ray      
-        
+            hmn = offdst.DataTable.mindepth;       %minimum depth along ray      
+            hmn(idx) = 0; 
+
             if min(T)>3
                 addfray = [1,0.5,0.33];
                 fray = [addfray';fray];  %pad wave ray frequencies for periods 1-3s
@@ -648,6 +649,11 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             %offshore transfer table data plot for selected variable
             %against period and direction
             dst = obj.Data.Offshore;
+            % if sum(isnan(var),'all')/numel(var)<0.3
+            %     %direction has NaN value when no offshore result
+            %     %to infill the holes can use inpaint but maybe misleading
+            %     var = inpaint_nans(var,4); %infill NaNs if < 40%
+            % end
             surf(ax,T,phi,var);
             view(2);
             shading interp

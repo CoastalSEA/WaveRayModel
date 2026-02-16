@@ -1,10 +1,11 @@
-function stats = setSpectrum(obj,obsfreq,method)
+function stats = setspectrum(obj,obsfreq,method)
 %
 %-------function help------------------------------------------------------
 % NAME
-%   
+%   setspectrum.m
 % PURPOSE
-%   
+%   reduce a detailed model spectrum to the format defined by the Datawell 
+%   buoy spt file format
 % USAGE
 %   stats = setSpectrum(obj,obsfreq);
 % INPUTS
@@ -25,8 +26,6 @@ function stats = setSpectrum(obj,obsfreq,method)
 % CoastalSEA (c) Nov 2025
 %--------------------------------------------------------------------------
 %
-    %reduce a detailed spectrum to the format defined by the Datawell buoy
-    %spt file format
     if nargin<3, method = 'none'; end
     
     if ~isa(obj,'ctWaveSpectra')
@@ -38,9 +37,16 @@ function stats = setSpectrum(obj,obsfreq,method)
     freq = obj.Spectrum.freq;        
     
     % interpolate spectrum to 64 frequency intervals for spt format
+    k = 0;
     SG = zeros(size(SGin,1),length(obsfreq));
     for i = 1:size(SGin,1)
-        SG(i,:) = interp1(freq, SGin(i,:), obsfreq, 'pchip', 0);                
+        sumdata = sum(SGin(i,:),'all');
+        if sumdata>0
+            SG(i,:) = interp1(freq, SGin(i,:), obsfreq, 'pchip', 0);      
+        else
+            %leave SG(i,:) as zeros.
+            k = k+1;
+        end
     end 
 
     stats = smoothedMomentEstimates(dir,SG,0,method);

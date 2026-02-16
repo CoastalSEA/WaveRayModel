@@ -4,8 +4,7 @@ function [S,gamma] = wave_spectrum(stype,f,inputs)
 % NAME
 %   wave_spectrum.m
 % PURPOSE
-%   Calculate the spectral energy at a number of frequencies using a
-%   selection of spectrum definitions (Bretschneider open ocean, 
+%   Calculate a f-D wave spectrum using selected model (Bretschneider open ocean, 
 %   Pierson-Moskowitz fully developed, JONSWAP fetch limited, and 
 %   TMA shallow water).
 % USAGE

@@ -112,7 +112,7 @@ classdef WRM_WaveModel < waveModels
 % Other utilities
 %--------------------------------------------------------------------------
 %%
-        function runSpectrum(mobj)
+        function runPlotSpectrum(mobj)
             %create a plot of the offshore and inshore 2-D specrum surfaces 
             %for a single wave condition
             offdata = WRM_WaveModel.getForcingConditions();   %get the input conditions
@@ -161,13 +161,13 @@ classdef WRM_WaveModel < waveModels
             %create an animation of the 2-D spectrum surfaces using a
             %timeseries input
             obj = WRM_WaveModel; 
-            [tsdst,~,source] = getInputData(obj,mobj,false);
+            [tsdst,meta] = getInputData(obj,mobj);
             if isempty(tsdst), return; end   %user cancelled data selection  
-            tsdst.DataTable = rmmissing(tsdst.DataTable);%remove nans
+            %tsdst.DataTable = rmmissing(tsdst.DataTable);%remove nans
 
-            if height(tsdst)>5000
+            if height(tsdst(1))>5000
                 promptxt = sprintf('Times series contains %d records\nThis could take a while to run and genearte large file\nUse time sub-selection to extract shorter time period',...
-                                                            height(tsdst));
+                                                            height(tsdst(1)));
                 answer = questdlg(promptxt,'Time','Continue','Abort','Abort');                                  
                 if strcmp(answer,'Abort'), return; end
             end
@@ -179,26 +179,36 @@ classdef WRM_WaveModel < waveModels
                 getdialog('Spectral Transfer table not found'); return; 
              end
 
-            isout = checkWLrange(sptobj,tsdst.swl);
+            isout = checkWLrange(sptobj,tsdst(1).swl);
             if isout
                 warndlg('Water levels are outside the range of the Transfer Table')
                 return;
             end
 
-            if strcmp(source,'Measured spectra')
-                select = WRM_WaveModel.getSprectraConditions();   
-                select.freq = tsdst.Dimensions.freq;
-                if isempty(select), return; end       %user cancelled
-            else
-                select = get_model_selection(sptobj); %select spectral form and data type
-                if isempty(select), return; end       %user cancelled
-            end
-            
-            select.issave = true;
-            [SGo,SGi,Dims] = runWaves(sptobj,tsdst,select);
-            if isempty(SGo), return; end
+            [offobj,inobj] = runWaves(sptobj,tsdst,meta);
+            % [sp,results] = unpackSpectrum(inobj,offobj);
+            % results = addvars(results,sp.swl,sp.depths,'NewVariableNames',{'swl','depi'});
+            % dir = offobj(1).Spectrum.dir;
+            % freq = offobj(1).Spectrum.freq;
 
-            wrm_animation(mobj,sptobj,tsdst,SGo,SGi,Dims)
+            % if strcmp(source,'Measured spectra')
+            %     select = WRM_WaveModel.getSprectraConditions();   
+            %     select.freq = tsdst(1).Dimensions.freq;
+            %     if isempty(select), return; end       %user cancelled
+            % else
+            %     select = get_model_selection(sptobj); %select spectral form and data type
+            %     if isempty(select), return; end       %user cancelled
+            % end
+            
+            % select.issave = true;
+            % [SGo,SGi,Dims] = runWaves(sptobj,tsdst,select);
+            % if isempty(SGo), return; end
+
+
+            if strcmp(offobj(1).inpData.source,'Spectrum')
+                tsdst(1) = addvars(tsdst(1),tsdst(2).Hs,'NewVariableNames',{'Hs'});
+            end            
+            wrm_animation(mobj,sptobj,tsdst(1),offobj,inobj)
         end
 
 %%

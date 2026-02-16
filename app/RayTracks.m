@@ -89,6 +89,13 @@ function obj = runModel(mobj,src,grdobj,rayname)
                 frng = num2cell(1./runobj.PeriodRange); %
                 f = log10(logspace(frng{:},runobj.nPeriod))';
                 T = round(1./f,1); %round to one decimal place
+            elseif isnan(T)
+                flim = [0.025,0.58]; %frequency limits
+                f = [flim(1):0.005:0.1,0.11:0.01:flim(2)];  
+                Tall = sort(round(1./f,1)); %round to one decimal place
+                %this is 56 periods which is computationally excessive 
+                %reduce to every second below 10s and every other Tall above
+                T = [2:10,Tall(52:2:64)]; %reduces to 16 periods to cover range           
             end
             
             zwl = runobj.WaterLevelRange;
