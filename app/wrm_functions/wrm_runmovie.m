@@ -39,14 +39,28 @@ function wrm_runmovie(obj,src,~)
         val = ceil(src.Value);          %slider value 
         %get figure axis, extract variable and refresh plot                
         s1 = findobj(hfig,'Tag','PlotFigAxes1'); 
-        s2 = findobj(hfig,'Tag','PlotFigAxes2');                 
-        var = s1.UserData.Z;                              
-        hp1 = s1.Children;
-        hp2 = s2.Children;    
-        var1 = squeeze(var{1}(val,:,:)); %#ok<NASGU> 
+        s2 = findobj(hfig,'Tag','PlotFigAxes2');                                                  
+        hp1 = findobj(s1.Children,'Type','surface');
+        hp2 = findobj(s2.Children,'Type','surface');
+
+        var = s1.UserData.Z;       
+        var1 = squeeze(var.off(val,:,:)); %#ok<NASGU> 
         refreshdata(hp1,'caller')
-        var2 = squeeze(var{2}(val,:,:)); %#ok<NASGU> 
-        refreshdata(hp2,'caller')
+        var2 = squeeze(var.in(val,:,:)); %#ok<NASGU> 
+        refreshdata(hp2,'caller') 
+
+        if obj.MetaData             %XY plot - add markers
+            hp3 = findobj(s1.Children,'Tag','DirPk');
+            hp4 = findobj(s2.Children,'Tag','DirPk');
+
+            xyz = s1.UserData.xyz;
+            var3 = xyz.off(val,1); %#ok<NASGU>
+            var4 = xyz.off(val,2); %#ok<NASGU>
+            refreshdata(hp3,'caller')
+            var5 = xyz.in(val,1); %#ok<NASGU>
+            var6 = xyz.in(val,2); %#ok<NASGU>
+            refreshdata(hp4,'caller')
+        end
 
         %update title
         time = s1.UserData.T(val);   %time slice selected

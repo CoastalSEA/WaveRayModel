@@ -15,18 +15,18 @@ function [S,gamma] = wave_spectrum(stype,f,inputs)
 %           or 'TMA shallow water'
 %   f - frequencies at which the spectrum is to be defined <scalar or vector>
 %  inputs - a struct that depends on use. When deriving the spectrum using 
-%           wind speed and fetch the struct includes 'wind',Uw,zw,Fetch,df
+%           wind speed and fetch the struct includes 'wind',Uw,zW,Fetch,df
 %           When using wave records the fields are 'wave',Hmo,Tp,gamma,
 %   For wind input (JONSWAP and TMA only)
 %       source - 'Wind'
 %       Uw - wind speed (m/s) <scalar or vector>
-%       zw - elevation of wind speed measurement (m)
+%       zW - elevation of wind speed measurement (m)
 %       Fetch- dominant fetch length (m) <scalar or vector>
 %       df - average water depth over fetch (m) (default is deep water)
 %            <scalar or vector> but must be same length as Uw and Fetch
 %   For wave input
 %       source - 'Wave'
-%       Hmo - significant wave height [4sqrt(mo)] (m) <scalar or vector>
+%       Hs - significant wave height [4sqrt(mo)] (m) <scalar or vector>
 %       Tp - peak wave period (s)  <can be vector - same length as Hs>
 %       T2 - mean wave period or zero upcrossing period: used to calculate
 %            gamma, or gamma can be specified
@@ -53,8 +53,18 @@ function [S,gamma] = wave_spectrum(stype,f,inputs)
 % Author: Ian Townend
 % CoastalSEA (c)Feb 2023
 %--------------------------------------------------------------------------
-%
-    gamma = [];
+%   
+    S = []; gamma = [];
+    %ensure legacy compatability and format used in ctWaveSpectrum
+    if isfield(inputs,'input'), inputs.source = inputs.input; end
+
+    if strcmp(inputs.source,'Wind')            %check for valid inputs
+        if inputs.Uw==0 || inputs.Fetch==0, return; end 
+        if inputs.zW==0, inputs.zW = 10; end
+    else
+        if inputs.Hs==0 || inputs.Tp==0, return; end    
+    end
+    
     switch stype
         case 'Bretschneider open ocean'
             S = bretschneider(f,inputs);
@@ -66,7 +76,6 @@ function [S,gamma] = wave_spectrum(stype,f,inputs)
             [S,gamma] = tma(f,inputs);
         otherwise
             warndlg('Unknown spectrum type')
-            S = [];
     end
 
     %checks
@@ -179,7 +188,7 @@ function [fp,alpha,gamma] = get_input(inp,istma)
 
             %define alpha and gamma for TMA or Jonswap
             if istma
-                kp = 2*pi*U.^2./g./Lp;             %Hughes eq(24)
+                kp = 2*pi*inp.U.^2./g./Lp;         %Hughes eq(24)
                 alpha = 0.0078*kp.^0.49;           %Hughes eq(22)
                 gamma = 2.47*kp.^0.39;             %Hughes eq(23)
             else
@@ -201,7 +210,7 @@ function [fp,alpha,gamma] = get_input(inp,istma)
             else
                 if inp.gamma==0 &&  isfield(inp,'T2')
                     gamma = 70*(inp.T2/inp.Tp)^12.23;
-                elseif ~isnan(inp.gamma) && inp.gamma>0
+                elseif inp.gamma>0
                     gamma = inp.gamma;
                 else
                     gamma = 3.3;
@@ -270,7 +279,7 @@ function phi = kit_limit(f,ds)
     % JONSWAP spectrum to take accound of depth limiting effects
     % using Thompson and Vincent, 1983 approximation as given in
     % Hughes, 1984, Eq.(13) and (15)   
-    % <duplicated in ctWaveSpectra>
+    % <duplicated in ctWaveSpectrum>
     g = 9.81;
     omega = 2*pi*f.*sqrt(ds/g);
     % if omega<=1 (vectorised) or omega>2

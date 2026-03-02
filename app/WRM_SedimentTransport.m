@@ -148,15 +148,15 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
             for i=1:npnts                
                 wv = dst.(pntnames{i});                
                 bs = profileslope(wv.depi/2,wv.swl,z1km,ubs); %first argument is depth
-                Qall = littoraldrift(wv.Hsi,wv.Tpi,wv.Diri,wv.depi,...
+                Qall = littoraldrift(wv.Hs,wv.Tp,wv.Dir,wv.depi,...
                                             theta(i),bs,d50,0.0006,g,rhs,rhw,vsc);   
                 Qs(:,i) = Qall(:,driftmodel.id)*Kc;
                 % dQdx(:,1) = diff(Qs(:,1))/obj.PointDistance(i);
                 % dQdx = [dQdx;dQdx(end,1)];    %pad to make same length as Qs
                 %Note the current formulation dose NOT use Tp, Dir and theta
-                Qx(:,i) = xshore_bailard(wv.Hsi,wv.Tpi,wv.Diri,wv.depi,...
+                Qx(:,i) = xshore_bailard(wv.Hs,wv.Tp,wv.Dir,wv.depi,...
                                             theta(i),bs,d50,g,rhw,rhs,vsc);
-                alpi(:,i) = getTransportDirection(obj,wv.Diri,theta(i));
+                alpi(:,i) = getTransportDirection(obj,wv.Dir,theta(i));
                 %add point specific metadata
                 mzi(i) = mean((wv.swl-wv.depi),'omitnan');
                 mbs(i) = mean(bs,'omitnan');

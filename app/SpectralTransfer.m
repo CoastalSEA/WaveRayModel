@@ -21,7 +21,7 @@ classdef SpectralTransfer < muiDataSet
         interp                    %struct for interpolation settings
     end
     
-    methods (Access={?muiDataSet,?muiStats,?WRM_WaveModel,?ctWaveSpectra})
+    methods (Access={?muiDataSet,?muiStats,?WRM_WaveModel,?ctWaveSpectrum})
         function obj = SpectralTransfer()             
             %class constructor
         end
@@ -116,13 +116,111 @@ classdef SpectralTransfer < muiDataSet
                 meta.caserecs = caseRec(mobj.Cases,obj.CaseIndex);
             end  
         end
+
+%%
+        function runPlotSpectrum(mobj)
+            %create a plot of the offshore and inshore 2-D specrum surfaces 
+            %for a single wave condition. Uses ctWaveSpectraPlots fucntions
+            % but includes transfer to obtain inshore spectrum
+            ptype = questdlg('What type of plot','XY Polar','XY','Polar','XY'); 
+            %get the refraction transfer table
+            promptxt = 'Select a Transfer Table Case to use:'; 
+            obj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
+            if isempty(obj)
+                getdialog('Spectral Transfer table not found'); return; 
+            end
+            
+            [tsdst,meta] = waveModels.getInputData(mobj);
+            if isempty(tsdst), return; end
+            swl = tsdst(1).swl;
+            tsdst(1) = removevars(tsdst(1),'swl');          %remove swl from dstable
+            
+            %select record from dateset get spectrum and plot
+            dates = tsdst(1).DataTable.Properties.RowNames;
+            ok = 0;
+            spselect = [];
+            while ok<1 
+                irow = listdlg("PromptString",'Select event to plot',...
+                         'SelectionMode','single','ListSize',[160,300],...
+                         'ListString',dates);
+                if isempty(irow), return; end
+                spobj = ctWaveSpectraPlots;             %initialise class object
+                spobj.spModel.selection = spselect;
+                spobj = getSpectrumObject(spobj,meta.inptype,tsdst,irow);
+                getPlot(spobj,ptype,'off');
+                if ~isempty(spobj.spModel)
+                    spselect = spobj.spModel.selection;
+                end
+
+                isout = checkWLrange(obj,swl(irow));
+                if isout
+                    warndlg('Water levels are outside the range of the Transfer Table')
+                    return;
+                else
+                    spobj.inpData.swl = swl(irow);
+                end
+
+                inobj = get_inshore_spectrum(obj,spobj(1)); %returns ctWacveSpectrum object
+                inobj.Params = wave_spectrum_params(inobj);
+                inobj.Plotxt.vtxt = 'Inshore Spectral Energy (m^2s)';
+                inobj.Plotxt.ttxt = 'Inshore spectrum';
+                spobj(2) = Spectrum2SpectralPlots(inobj);      %convert to ctWaveSpectraPlots
+                %call plot function
+                getPlot(spobj(2),ptype,'off');
+                shoreNorm = obj.Data.Inshore.UserData.ShoreAngle+90;
+                addShoreNormal(spobj(2),shoreNorm);
+
+                hf = getMultiPlot(spobj);
+                %add button to access wave parameters
+                summary = vertcat(spobj(1).Params,spobj(2).Params);
+                if height(summary)==2
+                    summary.Properties.RowNames = {'Offshore','Inshore'};
+                else
+                    rnames = spobj(1).Params.Properties.RowNames;
+                    summary.Properties.RowNames = [rnames(:)',{'Inshore'}];
+                end
+                addDataButton(spobj,hf,summary);
+            end       
+        end
+
+%%
+        function runAnimation(mobj)
+            %create an animation of the 2-D spectrum surfaces using a
+            %timeseries input
+            obj = WRM_WaveModel; 
+            [tsdst,meta] = obj.getInputData(mobj);
+            if isempty(tsdst), return; end   %user cancelled data selection 
+
+            if height(tsdst(1))>5000
+                promptxt = sprintf('Times series contains %d records\nThis could take a while to run and genearte large file\nUse time sub-selection to extract shorter time period',...
+                                                            height(tsdst(1)));
+                answer = questdlg(promptxt,'Time','Continue','Abort','Abort');                                  
+                if strcmp(answer,'Abort'), return; end
+            end
+
+            %get the refraction transfer table
+            promptxt = 'Select a Transfer Table Case to use:'; 
+            obj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
+             if isempty(obj)
+                getdialog('Spectral Transfer table not found'); return; 
+             end
+
+            [offobj,inobj] = runWaves(obj,tsdst,meta);
+
+            if strcmp(offobj(1).inpData.input,'Spectrum')
+                tsdst(1) = addvars(tsdst(1),tsdst(2).Hs,'NewVariableNames',{'Hs'});
+            end   
+
+            wrm_animation(mobj,obj,tsdst(1),offobj,inobj)
+        end
+
     end
 %%
     methods
 %--------------------------------------------------------------------------
 % Model to transfer a wave timeseries or spectral data set
 %--------------------------------------------------------------------------         
-function [offobj,inobj] = runWaves(obj,tsdst,meta)
+        function [offobj,inobj] = runWaves(obj,tsdst,meta)
             %run the spectral transfer model for a timeseries of offshore
             %wave conditions and return a table of wave conditions            
             % islog = false;
@@ -131,19 +229,18 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             % if strcmp(answer,'Yes'), islog = true; end
             % filename = sprintf('Sprectra_log_%s.txt',char(datetime,"ddMMMyy_HH-mm"));
 
-            spobj = ctWaveSpectra;
-            if strcmp(meta.source,'Measured spectra')
-                spobj.inpData.form = 'Measured';             %dummy value        
-                spobj.inpData.source = 'Spectrum';           %dummy value
-                swl = tsdst(1).swl;                          %extract swl as vector
+            spobj = ctWaveSpectrum;
+            spobj.inpData.input = meta.inptype; 
+            inptype = meta.inptype; 
+            swl = tsdst(1).swl;                          %extract swl as vector
+            if strcmp(inptype,'Spectrum')      
+                spobj.inpData.output = 'Measured';           %dummy value                
                 tsdst = removevars(tsdst(1),'swl');          %remove swl from dstable
-            else                                             %needed for getDSTable to work
+                                                             %*needed for getDSTable to work
+            else
                 spobj = setSpectrumModel(spobj);  %define the model to be used (Jonswap etc)
-                spobj.inpData.source = spobj.spModel.source; %Wind/Wave - used in wave_spectrum
-                spobj.inpData.form = spobj.spModel.form;     %TMA, etc used in get_inshore_spectrum
-                swl = zeros(height(tsdst(1).DataTable),1);   %dummy needed to use parfor
-                % %force selection of source to be waves
-                % if strcmp(spobj.spModel.source,'Wind'), spobj.spModel.source='Wave'; end
+                if isempty(spobj.spModel), offobj = []; inobj = []; return; end
+                spobj.inpData.output = 'Modelled'; %TMA, etc used in get_inshore_spectrum
             end
                 
             tsdst(1).DataTable = rmmissing(tsdst(1).DataTable);%remove nans
@@ -154,22 +251,22 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             parfor i=1:nint                                %parfor loop  
                 %for each offshore wave get the inshore results
                 offspectrum = copy(spobj);
-                w_dst = getDSTable(tsdst(1),i,[]);         %variables must all be same dimensions
-                if strcmp(spobj.inpData.source,'Spectrum')
-                   w_dst = addvars(w_dst,swl(i),'NewVariableNames','swl');
+                tsdstrow = ctWaveSpectrum.getDatasetRow(tsdst,i);
+                %set input parameters for selected record
+                offspectrum = setInputParams(offspectrum,tsdstrow,inptype);
+                offspectrum.inpData.swl = swl(i);
+                %get the spectrum data for selected record
+                if strcmp(inptype,'Spectrum')
+                    offspectrum = getMeasuredSpectrum(offspectrum);
+                elseif strcmp(inptype,'Wind')
+                    offspectrum = getModelSpectrum(offspectrum);
+                else
+                    offspectrum = getMultiModalSpectrum(offspectrum);
                 end
-                offspectrum.inpData.tsdst = w_dst;         %assign data to input
-                if length(tsdst)>1
-                    %tsdst(1) defines wind-wave. get same record for swell
-                    idx = find(tsdst(2).RowNames==w_dst.RowNames);
-                    s_dst = getDSTable(tsdst(2),idx,[]);   %selected record
-                    offspectrum.inpData.tsdst(2) = s_dst; 
-                end
-
-                offspectrum = getSpectrum(offspectrum);
-                offspectrum.Spectrum.date = w_dst.RowNames;        
+                offspectrum.Spectrum.date = tsdstrow.RowNames;
                 offspectrum.Params = wave_spectrum_params(offspectrum);
                 offobj(i) = offspectrum;
+
                 %inshore spectrum and wave parameters
                 inspectrum = get_inshore_spectrum(obj,offspectrum);
                 inspectrum.Params = wave_spectrum_params(inspectrum);
@@ -182,7 +279,6 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
                 % end
                 increment(hpw);
             end
-
             delete(hpw)  
         end
 %% 
@@ -192,11 +288,11 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
         function coefficientsPlot(obj)
             %generate data to plot the coefficents as a function of
             %direction, period and water level
-            spobj = ctWaveSpectra;
-            spobj = setSpectrumModel(spobj);      %define the model to be used (Jonswap etc)
+            spobj = ctWaveSpectrum;
+            spobj = setSpectrumModel(spobj);      %define the model to be used (Jonswap etc)            
             if isempty(spobj.spModel),return; end
             %force selection of source to be waves
-            if strcmp(spobj.spModel.source,'Wind'), spobj.spModel.source='Wave'; end
+            % if strcmp(spobj.spModel.input,'Wind'), spobj.spModel.input = 'Wave'; end
      
             T = obj.Data.Offshore.Dimensions.Period;
             zwl = obj.Data.Offshore.Dimensions.WaterLevel;   
@@ -204,14 +300,15 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             ndir = length(Diri);
             nper = length(T);              
             nwls = length(zwl);
-
+            spobj.inpData = getloopinput(obj,Diri,T,zwl,1,1,1); %dummy inpData
+            hpw = PoolWaitbar(ndir, 'Processing transfer tables');
             kw = zeros(ndir,nper,nwls); kt2 = kw; ktp = kw; kd = kw; gm = kw;
             parfor i=1:ndir                     %parfor loop  
                 for j=1:nper
                     for k=1:nwls
                         %inputs
                         offobj = copy(spobj);                        
-                        offobj.inpData = getloopinput(obj,offobj,Diri,T,zwl,i,j,k);
+                        offobj.inpData = getloopinput(obj,Diri,T,zwl,i,j,k);
                         %offshore spectrum and wave parameters
                         offobj = getModelSpectrum(offobj);
                         if spobj.spModel.gamma==0
@@ -227,9 +324,11 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
                         kt2(i,j,k) = outable.kt2;
                         ktp(i,j,k) = outable.ktp;
                         kd(i,j,k) = outable.kd;
+                        increment(hpw);
                     end
                 end
             end
+            delete(hpw)
             output = struct('kw',kw,'kt2',kt2,'ktp',ktp,'kd',kd);
             if spobj.spModel.gamma==0
                 spobj.spModel.gamma = mean(gm,'all');
@@ -238,20 +337,23 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
         end
 
 %%
-        function input = getloopinput(~,spobj,Diri,T,zwl,i,j,k)
+        function input = getloopinput(~,Diri,T,zwl,i,j,k)
             %define input from arrays for use in parfor loop
-            input.source = spobj.spModel.source;
             input.Hs = 1.0;       %transfer coefficients for unit wave height
             input.Dir = Diri(i);  %limit examination of mean offshore
             input.Tp = T(j);      %directions to inshore range
             input.swl = zwl(k);
-            input.form = 'SpectralTransfer';
+            input.input = 'Wave';
+            input.output = 'SpectralTransfer';
+            input.date = 'now';
         end    
 
 %%
         function depi = inshoreDepths(obj,spobj,depi,G,swl)   
-            %determine the depths to use if the TMA spectrum or depth saturation is
-            %being used
+            %determine the depths to use if the TMA spectrum or depth 
+            %saturation is being used (eg in get_inshore_spectrum)
+            % obj - SpectralTransfer; spobj - ctWaveSpectrum; 
+            % depi - inshore depth; G - ; swl - still water level
             offdst = obj.Data.Offshore;         %offshore properties
             %check limits for valid rays based on depth and shoreline angle  
             %parfor not finding dynamic property, so use table
@@ -262,11 +364,32 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             hmn = offdst.DataTable.mindepth;       %minimum depth along ray      
             hmn(idx) = 0; 
 
-            if min(T)>3
-                addfray = [1,0.5,0.33];
-                fray = [addfray';fray];  %pad wave ray frequencies for periods 1-3s
-                hmn = [repmat(hmn(:,1,:),1,3),hmn];
+
+            Tdef = [2,3,4,5,6,7,8,9,10,11.8,13.3,15.4,18.2,22.2,28.6,40];
+            %pad the high frequencies with values from the maximum frequency
+            idx = find(Tdef<min(T));
+            if ~isempty(idx)
+                addfray = 1./Tdef(idx);
+                nadd = numel(addfray);
+                fray = [addfray';fray];  %pad wave ray frequencies to maximum (1/2s)
+                hmn = [repmat(hmn(:,1,:),1,nadd),hmn];
             end
+
+            %pad the high frequencies with values from the minimum frequency
+            idx = find(Tdef>max(T));
+            addfray = 1./Tdef(idx);
+            nadd = numel(addfray);
+            if ~isempty(idx)
+                fray = [fray;addfray'];  %pad wave ray frequencies to minimum (1/40s)
+                hmn = [hmn,repmat(hmn(:,1,:),1,nadd)];
+
+            end
+
+            % if min(T)>3
+            %     addfray = [1,0.5,0.33];
+            %     fray = [addfray';fray];  %pad wave ray frequencies for periods 1-3s
+            %     hmn = [repmat(hmn(:,1,:),1,3),hmn];
+            % end
         
             %replicate grid vectors to produce grids for interpn using
             %variable number of dimensions (offshore 2 or 3, inshore 1 or 2)
@@ -348,6 +471,7 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
                 surface_tt_plot(obj,ax,T,zwl,phi,var,options); 
             end
         end
+
 %%
         function ok = checkWLrange(obj,swl)
             %check that water level input conditions are within the range
@@ -355,92 +479,69 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             zwl = minmax(obj.Data.Offshore.Dimensions.WaterLevel);
             ok = any(swl<zwl(1) | swl>zwl(2));
         end
-%%
-        function  getSpectrumPlot(obj,SGo,SGi,Dims,ins,off,sel)
-            %plot an offshore and inshore spectrum for a single wave height
-            hfig = figure('Name','O/I Spectrum', 'Units','normalized', ...
-                            'Resize','on','HandleVisibility','on','Visible','off',...
-                            'Position',[0.38,0.42,0.30,0.42],'Tag','PlotFig');
-            figax = axes(hfig);
 
-            answer = questdlg('What type of plot','O?I spectrum','XY','Polar','XY');
-            if strcmp(answer,'XY')
-                figtype = true;          %Cartesian dir-freq plot
-            else
-                figtype = false;         %Polar dir-freq plot     
-            end
-            hfig.Visible = 'on';
-            %add offshore and inshore plots of spectra
-            [s1,s2] = off_in_plot(obj,1./Dims.freq,Dims.dir,SGo,SGi,figax,figtype);
-            
-            %offshore titles are source dependent
-            if strcmp(sel.source,'Wave')
-                sgtxt = sprintf('%s, gamma=%.2g, and %s, n=%d ',sel.form,...
-                                        sel.gamma,sel.spread,sel.nspread);
-                st1 = title(s1,sprintf('Hso=%.2f m; Tp=%.1f s; Dir=%.3g degTN; swl=%.2f mOD',...
-                                off.Hs,off.Tp,off.Dir,off.swl),'Margin',1);             
-            elseif strcmp(sel.source,'Wind')
-                sgtxt = sprintf('%s, gamma=%.2g, and %s, n=%d ',sel.form,...
-                                        sel.gamma,sel.spread,sel.nspread);
-                st1 = title(s1,sprintf('Uw=%.2f m/s; Fetch=%0.0f m; swl=%.2f mOD\nHso=%.2f m; Tp=%.1f s; Dir=%.3g degTN',...
-                      off.AvSpeed,off.Fetch,off.swl,off.Hs,off.Tp,off.Dir),'Margin',1);
-            else
-                ofd = off.tsdst;    
-                sgtxt = sprintf('Measured spectrum at %s on %s',...
-                                   ofd.Description,string(ofd.RowNames));
-                p = wave_spectrum_params(SGo,Dims.freq,Dims.dir);
-                st1 = title(s1,sprintf('Hso=%.2f m; Tz=%.1f s; Dir=%.3g degTN; swl=%.2f mOD',...
-                                ofd.Hs,ofd.Tz,p.Dir0,off.swl),'Margin',1);      
-            end
-            
-            %inshore titles
-            sgtitle(sgtxt,'FontSize',12,'Margin',1);
-            st2 = title(s2,sprintf('Hsi=%.2f m; Tp=%.1f s; Dir=%.3g degTN; hmin=%.2f m',...
-                            ins.Hsi,ins.Tpi,ins.Diri,ins.depi),'Margin',1);   
-
-            %for polar plot adjust figure size and subplot title position
-            if ~figtype
-                st1.Position(2) = -st1.Position(2)*1.2;
-                st2.Position(2) = -st2.Position(2)*1.2;
-                hfig.Position(3) = 0.6;
-            end
-        end
 %%
-        function [s1,s2] = off_in_plot(obj,T,dir,var0,vari,ax,isXY)
-            %plot offshore and inshore spectra
+        function surf_plot(~,T,phi,var,varname,ax)
+            %surface plot used in coefficients_plot and wrm_animation
             if nargin<6
                 hf = figure('Name','SpecTrans','Tag','PlotFig');
                 ax = axes(hf);
             end
-            labeli = 'Inshore direction (degTN)';
-            label0 = 'Offshore direction (degTN)';
-            labelx = 'Wave period (s)';
-            shorenorm = obj.Data.Inshore.UserData.ShoreAngle+90;         
-            grey = mcolor('light grey');
-
-            if isXY
-                s1 = subplot(2,1,1,ax);
-                surf_plot(obj,T,dir,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
-                s2 = subplot(2,1,2);
-                surf_plot(obj,T,dir,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
-                hold on
-                    xn = minmax(T); yn = [shorenorm,shorenorm]; 
-                    plot(s2,xn,yn,'Color',grey,'LineStyle','--','LineWidth',1);
-                hold off
-                s2.YLim = s1.YLim;
+            surf(ax,T,phi,var,'Tag','PlotFigSurface');
+            view(2);
+            shading interp
+            axis tight
+            %add the colorbar and labels
+            cb = colorbar;
+            cb.Label.String = varname{1};
+            xlabel(varname{2}); 
+            ylabel(varname{3}); 
+            if length(varname)>3
+                cb.Tag = varname{4};
             else
-                s1 = subplot(1,2,1,ax);
-                polar_plot(obj,T,dir,var0,{'Spectral Energy (m^2s)',labelx,label0,'Off'},s1)
-                s2 = subplot(1,2,2);
-                polar_plot(obj,T,dir,vari,{'Spectral Energy (m^2s)',labelx,labeli,'In'},s2)
-                hold on
-                    ang = compass2trig(shorenorm);
-                    xn = [0,max(T)*cos(ang)]; yn = [0,max(T)*sin(ang)];
-                    plot(s2,xn,yn,'Color',grey,'LineStyle','--','LineWidth',1);
-                hold off                
-                s2.YLim = s1.YLim;
+                cb.Tag = varname{1};
             end
-        end        
+        end
+
+%%
+        function polar_plot(~,Period,Phi,var,varname,~)
+            %surface polar plot used in wrm_animation
+            if nargin<6
+                hf = figure('Name','SpecTrans','Tag','PlotFig');
+                axes(hf);
+            end
+            wid = 'MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId';
+            radrange = [0,25];
+            %interpolate var(phi,T) onto plot domain defined by tints,rints
+            %NB this should match properties of ctWaveSpectrum
+            tints = linspace(0,2*pi,360); %theta intervals
+            rints = linspace(1,20,20);    %radual intervals
+            [Tq,Rq] = meshgrid(tints,rints); 
+            warning('off',wid)
+            vq = griddata(deg2rad(Phi),Period,var',Tq,Rq);
+            vq(isnan(vq)) = 0;  %fill blank sector so that it plots the period labels
+            warning('on',wid)
+            color = mcolor('dark blue');
+            [X,Y] = polarplot3d(vq,'plottype','surfn','TickSpacing',45,...
+                'RadLabels',4,'RadLabelLocation',{20 'top'},...
+                'GridColor',color,'TickColor',color,...
+                'RadLabelColor',mcolor('dark grey'),...
+                'RadialRange',radrange,'polardirection','cw');
+            view(2)
+            shading interp 
+            axis(gca,'off')
+            %add the colorbar and labels
+            cb = colorbar;
+            cb.Label.String = varname{1};
+            text(max(X,[],'all')/2,max(Y,[],'all')*0.95,0,varname{2});
+
+            if length(varname)>3
+                cb(1).Tag = varname{4};
+            else
+                cb(1).Tag = varname{1};
+            end
+        end
+
     end
 %%    
     methods (Access = private)
@@ -492,26 +593,7 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             end
             spectran = {offdir,h,c,cg,hav,hmn};
         end
-%%
-        % function [Sot,Sit,Dims] = packSpectra(~,Sot,Sit,Fri,Dir,Depi)
-        %     %pack spectral timeseries to minimise size of arrays        
-        %     idx = find(Fri(:,1)~=0,1,'first'); %find first non-null result
-        %     Dims.freq = squeeze(Fri(idx,:));      %dimensions used for run
-        %     Dims.dir = squeeze(Dir(idx,:));
-        %     Dims.depi = Depi(idx);
-        % 
-        %     %minimise array size - remove directions and frequencies that
-        %     %are not contributing to spectra (S<0.05 m^2/Hz)
-        %     tol = max(Sot,[],'all')/1000;
-        %     [~,idro,idco] = compact3Darray(Sot,1,tol); %pivot dim is time
-        %     [~,idri,idci] = compact3Darray(Sit,1,tol);
-        %     idr = minmax([idro;idri]);
-        %     idc = minmax([idco;idci]);
-        %     Sot = Sot(:,idr(1):idr(2),idc(1):idc(2));
-        %     Sit = Sit(:,idr(1):idr(2),idc(1):idc(2));
-        %     Dims.dir = Dims.dir(idr(1):idr(2));
-        %     Dims.freq = Dims.freq(idc(1):idc(2));    
-        % end
+
 %%       
         function options = get_selection(obj)
             %get index of period, water level and variable to use in plots or model
@@ -703,7 +785,6 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
         function coefficients_plot(obj,Dir,T,zwl,output,spobj,ki)
             %plot the coefficients for range of directions, periods and
             %water levels
-            sp = spobj.spModel;
             figure('Name','SpecTrans','Tag','PlotFig');
             labelx = 'Wave Period (s)';
             labely = 'Direction (degTN)';
@@ -723,69 +804,11 @@ function [offobj,inobj] = runWaves(obj,tsdst,meta)
             desc = obj.Data.Inshore.Description;
             sg1 = sprintf('Transfer Coefficients(Tp,Dir) for %s at swl=%g mOD',desc,zwl(ki));
             exptxt = 'Coefficients: kw-wave height; ktp-peak period; kt2-mean period';
-            modeltxt = getModelInputText(spobj);
-            sgtxt = sprintf('%s\n%s\n%s',sg1,modeltxt,exptxt);
+            spobj = setModelInputText(spobj);
+            sgtxt = sprintf('%s\n%s\n%s',sg1,spobj.Plotxt.stxt,exptxt);
             sgtitle(sgtxt,'FontSize',11,'Margin',1);
         end
-%%
-        function surf_plot(~,T,phi,var,varname,ax)
-            %check plot for data selection
-            if nargin<6
-                hf = figure('Name','SpecTrans','Tag','PlotFig');
-                ax = axes(hf);
-            end
-            surf(ax,T,phi,var,'Tag','PlotFigSurface');
-            view(2);
-            shading interp
-            axis tight
-            %add the colorbar and labels
-            cb = colorbar;
-            cb.Label.String = varname{1};
-            xlabel(varname{2}); 
-            ylabel(varname{3}); 
-            if length(varname)>3
-                cb.Tag = varname{4};
-            else
-                cb.Tag = varname{1};
-            end
-        end
-%%
-        % function polar_plot(~,Period,Phi,var,varname,~)
-        %     %check plot for data selection
-        %     if nargin<6
-        %         hf = figure('Name','SpecTrans','Tag','PlotFig');
-        %         axes(hf);
-        %     end
-        %     wid = 'MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId';
-        %     radrange = [0,25];
-        %     %interpolate var(phi,T) onto plot domain defined by tints,rints
-        %     tints = linspace(0,2*pi,360);  
-        %     rints = linspace(1,25,25);
-        %     [Tq,Rq] = meshgrid(tints,rints); 
-        %     warning('off',wid)
-        %     vq = griddata(deg2rad(Phi),Period,var',Tq,Rq);
-        %     vq(isnan(vq)) = 0;  %fill blank sector so that it plots the period labels
-        %     warning('on',wid)
-        %     color = mcolor('dark blue');
-        %     [X,Y] = polarplot3d(vq,'plottype','surfn','TickSpacing',45,...
-        %         'RadLabels',4,'RadLabelLocation',{20 'top'},...
-        %         'GridColor',color,'TickColor',color,...
-        %         'RadLabelColor',mcolor('dark grey'),...
-        %         'RadialRange',radrange,'polardirection','cw');
-        %     view(2)
-        %     shading interp 
-        %     axis(gca,'off')
-        %     %add the colorbar and labels
-        %     cb = colorbar;
-        %     cb.Label.String = varname{1};
-        %     text(max(X,[],'all')/2,max(Y,[],'all')*0.95,0,varname{2});
-        % 
-        %     if length(varname)>3
-        %         cb(1).Tag = varname{4};
-        %     else
-        %         cb(1).Tag = varname{1};
-        %     end
-        % end
+
 %%
 function dsp = modelDSproperties(~,isin) 
             %define a dsproperties struct and add the model metadata

@@ -28,7 +28,7 @@ function stats = setspectrum(obj,obsfreq,method)
 %
     if nargin<3, method = 'none'; end
     
-    if ~isa(obj,'ctWaveSpectra')
+    if ~isa(obj,'ctWaveSpectrum')
         warndlg('Incorrect input to setSpectrum'); 
         stats = []; return;
     end          

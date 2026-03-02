@@ -76,7 +76,7 @@ function an_mean_drift(obj,mobj)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    [var,isdrift] = getVariable([],dst,pntnames);
+    [var,isdrift] = getVariable(dst,pntnames);
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
     answer = questdlg('Select period','Drift','All years','Winters','Summers','All years');
@@ -133,11 +133,11 @@ function mn_mean_drift(obj,mobj)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    [var,isdrift] = getVariable([],dst,pntnames);
+    [var,isdrift] = getVariable(dst,pntnames);
     mtime = dst.(pntnames{1}).RowNames;
     
     for i=1:npnts
-        Var = dst.(pntnames{i}).(var.name);        
+        Var = dst.(pntnames{i}).(var.name);        getVariable
         Var(abs(Var)<calms.value) = NaN; %remove near zero values
         [~,binvar,bintime] = binned_variable(Var,mtime,'month','year');
         nint = size(binvar,2);
@@ -232,7 +232,7 @@ function summary_shore_drift(obj)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    [var,~] = getVariable([],dst,pntnames);
+    [var,~] = getVariable(dst,pntnames);
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
@@ -289,7 +289,7 @@ function drift_peclet(obj,mobj,msgtxt)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    [var,~] = getVariable(1,dst,pntnames);
+    [var,~] = getVariable(dst,pntnames,1);
     if isempty(var), return; end
 
     mtime = dst.(pntnames{1}).RowNames;
@@ -355,7 +355,7 @@ function cluster_peclet(obj,mobj,msgtxt)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    [var,~] = getVariable(1,dst,pntnames); %selects Qs without prompting user
+    [var,~] = getVariable(dst,pntnames,1); %selects Qs without prompting user
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
@@ -418,7 +418,7 @@ function wavedrift_table(obj,mobj)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable(1);
+    var = getVariable(dst,pntnames,1);
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
     warndlg('Not yet implemented')
@@ -432,7 +432,7 @@ function [calms,pecthr] = calmsThreshold(mobj)
     %set the calms threshold to apply to the data
     calmsthreshold = 100;  %"calms" are drift rates less than threshold
                            % 100m^3/yr ~= 3e-6 m^3/s; 
-    promptxt = {'Calms threshold (Hsi (m), Qs (m^3/yr, etc):','Peclet plotting threshold'};
+    promptxt = {'Calms threshold (Hs (m), Qs (m^3/yr, etc):','Peclet plotting threshold'};
     defaults = {num2str(calmsthreshold),'0.8'};
     answer = inputdlg(promptxt,'Drift',1,defaults);
     if isempty(answer), calms = []; pecthr = []; return; end
@@ -442,12 +442,12 @@ function [calms,pecthr] = calmsThreshold(mobj)
 end
 
 %%
-function [var,isdrift] = getVariable(sel,dst,pntnames)
+function [var,isdrift] = getVariable(dst,pntnames,sel)
     %select a variable to use in the plot
     varname = dst.(pntnames{1}).VariableNames;
     vardesc = dst.(pntnames{1}).VariableDescriptions; 
 
-    if isempty(sel)
+    if nargin<3
         [sel,ok] = listdlg('Name','Plot profile', ...
                                      'PromptString','Select variable', ...
                                      'ListSize',[200,80], ...
@@ -459,7 +459,7 @@ function [var,isdrift] = getVariable(sel,dst,pntnames)
     var.desc = vardesc{sel};
 
     isdrift = true;
-    if any(contains(varname,'Hsi')), isdrift = false; end
+    if any(contains(varname,'Hs')), isdrift = false; end
 end
 
 %%
@@ -485,7 +485,7 @@ function [cluster,userops] = absClusters(options,dst,calms,pecthr)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable(1);  %selects Qs without prompting user
+    var = getVariable(dst,pntnames,1);  %selects Qs without prompting user
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
@@ -582,7 +582,7 @@ function [cluster,userops]  = posnegClusters(options,dst,calms,pecthr)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    var = getVariable(1);  %selects Qs without prompting user
+    var = getVariable(dst,pntnames,1);  %selects Qs without prompting user
     if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 

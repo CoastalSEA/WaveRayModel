@@ -16,7 +16,7 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
 %   dir - direction vector
 %   isdirmodes - diagnostic data output if true (optonal)
 %   OR
-%   obj - instance of the ctWaveSpectra class
+%   obj - instance of the ctWaveSpectrum class
 %   isdirmodes - diagnostic data output if true (optional)
 % OUTPUT
 %   params - table containing:
@@ -33,7 +33,7 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
 %   diagnost - table containing frequency, direction and mode diagnotics
 
 % SEE ALSO
-%   SpectralTransfer.m in WaveRayModel and ctWaveSpectra in CoastalClasses
+%   SpectralTransfer.m in WaveRayModel and ctWaveSpectrum in CoastalClasses
 %   
 % Author: Ian Townend
 % CoastalSEA (c) March 2023
@@ -41,7 +41,7 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
 %
     if nargin<4, isdirmodes = false; diagnost = []; end
 
-    if isa(SG,'ctWaveSpectra') %unpack ctWaveSprectra object
+    if isa(SG,'ctWaveSpectrum') %unpack ctWaveSprectra object
         if nargin<2
             isdirmodes = false; diagnost = []; 
         else
@@ -75,7 +75,7 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
     [~,idpk] = max(SG(:,ifpk));                      %direction at peak frequency
     Dp = rad2deg(theta(idpk));
     params = table(Hs,m0,Dir,Sp,Tp,Dp,Sfdpk,Tfdpk,Dfdpk,T2);
-
+    
     if isdirmodes
         %global mean diagnostic ouput
         diagnost.rho = rho;   diagnost.R = R;   diagnost.W = W;

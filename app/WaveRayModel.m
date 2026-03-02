@@ -70,7 +70,6 @@ classdef WaveRayModel < muiModelUI
             %menu. Main menu labels are defined in sequential order and 
             %submenus in order following each brach to the lowest level 
             %before defining the next branch.         
-                                                              % << Edit menu to suit model 
             MenuLabels = {'File','Tools','Project','Setup','Run',...
                                                         'Analysis','Help'};
             menu = menuStruct(obj,MenuLabels);  %create empty menu struct
@@ -160,25 +159,27 @@ classdef WaveRayModel < muiModelUI
                                    'on','off','off','on','on','off','on'}];
             %% Plot menu --------------------------------------------------  
             menu.Analysis(1).List = {'Plots','Statistics','Plot Mesh',...
-                                     'Ray Plots','Data Plots',...
-                                     'Multi-point Plots'};
+                                     'Ray Plots','Transfer Plots',...
+                                     'Spectrum Plots','Multi-point Plots'};
+                                     
             menu.Analysis(1).Callback = [repmat({@obj.analysisMenuOptions},[1,4]),...
-                                        {'gcbo;'},{@obj.analysisMenuOptions}];
-            menu.Analysis(1).Separator = {'off','off','on','off','off','on'};
+                                        repmat({'gcbo;'},[1,2]),{@obj.analysisMenuOptions}];
+            menu.Analysis(1).Separator = {'off','off','on','off','on','off','on'};
             
-            %submenu for Spectral Analysis
-            menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients',...
-                                     'Spectrum Plots','O/I Spectrum','O/I Animation'};
-            temp = repmat({@obj.analysisMenuOptions},[1,2]);
-            menu.Analysis(2).Callback = [temp,{'gcbo;'},temp];
-            menu.Analysis(2).Separator = {'off','off','on','off','off'};
+            %submenu for Transfer tables
+            menu.Analysis(2).List = {'Transfer Table','Transfer Coefficients'};
+            menu.Analysis(2).Callback = repmat({@obj.analysisMenuOptions},[1,2]);
+            menu.Analysis(2).Separator = {'off','off'};
 
             %submenu for Spectrum Plots
-            menu.Analysis(3).List = {'Case','Model','Multi-modal','spt File',...
-                                      'cf Cases','spt v model','Animation',...
-                                      'ModelvMeasured skill','Bimodal analysis'};
-            menu.Analysis(3).Callback = repmat({@(src,evt) ctWaveSpectra.runPlotOption(src,evt,obj)},[1,9]);
-            menu.Analysis(3).Separator =  {'off','off','off','off','on','off','off','on','off'};
+            menu.Analysis(3).List = {'Case','Model','SPT File',...
+                                      'cf Cases','SPT v Model','Animation',...
+                                      'ModelvMeasured skill','Bimodal analysis',...
+                                      'O/I Spectrum','O/I Animation'};
+            menu.Analysis(3).Callback = [repmat({@(src,evt) ctWaveSpectraPlots.runPlotOption(src,evt,obj)},[1,8]),...
+                                repmat({@obj.analysisMenuOptions},[1,2])];
+            menu.Analysis(3).Separator =  {'off','off','off','on',...
+                                        'off','off','on','off','on','off'};
 
             %% Help menu --------------------------------------------------
             menu.Help.List = {'Documentation','Manual'};
@@ -387,13 +388,11 @@ classdef WaveRayModel < muiModelUI
                     [cobj,~] = selectCaseObj(obj.Cases,[],{'SpectralTransfer'},promptxt);
                     if isempty(cobj), getdialog('No Transfer tables available'); return; end
                     coefficientsPlot(cobj);
-                case 'Spectrum Plots'
-                    ctWaveSpectra.getPlotOption(obj);
                 case 'O/I Spectrum'
-                    WRM_WaveModel.runPlotSpectrum(obj);
+                    SpectralTransfer.runPlotSpectrum(obj);
                 case 'O/I Animation'
                     %ctWaveSpectra.animateCaseSpectrum(obj);
-                    WRM_WaveModel.runAnimation(obj);
+                    SpectralTransfer.runAnimation(obj);
                 case 'Multi-point Plots'
                     WRM_SedimentTransport.transportPlots(obj);
             end            

@@ -1,4 +1,4 @@
-function wrm_single_animation(mobj,sobj,ptype)
+function wrm_single_animation(obj,mobj,ptype,isfixed)
 %
 %-------function help------------------------------------------------------
 % NAME
@@ -6,11 +6,12 @@ function wrm_single_animation(mobj,sobj,ptype)
 % PURPOSE
 %   animation of model spectra timeseries
 % USAGE
-%   wrm_single_animation(mobj,tsdst,ptype)
+%   wrm_single_animation(obj,mobj,ptype,isfixed)
 % INPUTS
+%   obj - array of ctWaveSpectraPlots class or ctWaveSpectrum class
 %   mobj - instance of Model class (eg WaveRayModel, CoastalTools)
-%   sobj - array of ctWaveSpectra class
 %   ptype - XY or Polar plot options
+%   isfixed = logical flag, true if z axis is to have a fixed scale
 % OUTPUT
 %   animation figure
 % SEE ALSO
@@ -36,10 +37,10 @@ function wrm_single_animation(mobj,sobj,ptype)
     pobj.Plot.CurrentFig = hfig;
     pobj.Plot.FigNum = hfig.Number;
     pobj.ModelMovie = [];
-    pobj.Title = sobj(1).Plotxt.ttxt;
+    pobj.Title = obj(1).Plotxt.ttxt;
 
-    spectra = [sobj(:).Spectrum];        %unpack timeseries of spectra
-    params = vertcat(sobj(:).Params);    %unpack integral properties
+    spectra = [obj(:).Spectrum];        %unpack timeseries of spectra
+    params = vertcat(obj(:).Params);    %unpack integral properties
     %extract the timeseries data and dimensions for plot
     pobj.Data.X = 1./spectra(1).freq;
     pobj.Data.Y = spectra(1).dir;
@@ -54,7 +55,7 @@ function wrm_single_animation(mobj,sobj,ptype)
     pobj.Data.Z = Z;  clear Z
     pobj.Data.Waves = [params.Hs,params.Tp,params.Dir];
 
-    ax = setupAnimation(sobj,pobj,ptype);
+    ax = setupAnimation(obj,pobj,ptype,isfixed);
     if ~isvalid(pobj.Plot.CurrentFig), return; end
 
     getAnimation(pobj,ax,hfig,ptype);
@@ -71,11 +72,11 @@ function wrm_single_animation(mobj,sobj,ptype)
 end
 
 %%
-function ax = setupAnimation(sobj,pobj,ptype)
+function ax = setupAnimation(obj,pobj,ptype,isfixed)
     %initialise 3Dplot and setup animation variables
     hfig = pobj.Plot.CurrentFig;
     ax = axes(hfig);      
-    ax = getPlot(sobj(1),ptype,ax);
+    ax = getPlot(obj(1),ptype,'on',ax);
     t = pobj.Data.T;  
     w = pobj.Data.Waves;
     ax.Subtitle.String = sprintf('Time = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g',...
@@ -84,12 +85,11 @@ function ax = setupAnimation(sobj,pobj,ptype)
     hfig.Visible = 'on';
 
     %assign axes properties                
-    ax.ZLimMode = 'manual'; %fix limits of z-axis
-    zlim = minmax([pobj.Data.Z(:)]); 
-    ax.ZLim = [abs(zlim(1)),zlim(2)];  %does not work for polar plot *******
     ax.NextPlot = 'replaceChildren';
     ax.Tag = 'PlotFigAxes'; 
-    ax.CLim = ax.ZLim;
+    if isfixed
+        ax.CLim(2) = max([pobj.Data.Z(:)],[],'all')/2; %use to stop colorbar rescaling
+    end
 
     %assign data sources
     hp1 = findobj(ax.Children,'Type','surface');   
@@ -107,7 +107,7 @@ function ax = setupAnimation(sobj,pobj,ptype)
         nrec = size(So,1);
         ff = pobj.Data.X; dd = pobj.Data.Y;
         for i=1:nrec
-            Po(i,:,:) = reshapePolarGrid(ff,dd,squeeze(So(i,:,:)));
+            Po(i,:,:) = reshapePolarGrid(ff,dd,squeeze(So(i,:,:)),obj(1));
         end
         pobj.Data.Z = Po; 
     end
@@ -145,13 +145,13 @@ function getAnimation(pobj,ax,hfig,ptype)
 end 
 
 %%
-function P = reshapePolarGrid(Period,Dir,S)
+function P = reshapePolarGrid(Period,Dir,S,obj)
     %format spectral array to be in format required by polarplot3d
     wid = 'MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId';
     %interpolate var(phi,T) onto plot domain defined by tints,rints
     %intervals match those set to initialise plot in SpectralTransfer.polar_plot
-    tints = linspace(0,2*pi,360); 
-    rints = linspace(1,25,25);
+    tints = linspace(obj.Interp.tlim{:}); 
+    rints = linspace(obj.Interp.rlim{:});
     [Tq,Rq] = meshgrid(tints,rints); 
     warning('off',wid)
     P = griddata(deg2rad(Dir),Period,S',Tq,Rq);
@@ -179,10 +179,14 @@ function run_Movie(pobj,src,~)
 
     var1 = squeeze(var1(val,:,:)); %#ok<NASGU>
     refreshdata(hp,'caller')
-    var2 = [1,1]*w(val,3);  %#ok<NASGU>
-    refreshdata(hd,'caller')  
-    var3 = [1,1]*w(val,2);  %#ok<NASGU>
-    refreshdata(ht,'caller')  
+    if ~isempty(hd)
+        var2 = [1,1]*w(val,3);  %#ok<NASGU>
+        refreshdata(hd,'caller')  
+    end
+    if ~isempty(ht)
+        var3 = [1,1]*w(val,2);  %#ok<NASGU>
+        refreshdata(ht,'caller')  
+    end
     ax.Subtitle.String = sprintf('Time = %s, Hs=%.3g; Tp=%.3g; Dir=%.3g',...
                    string(t(val)),w(val,1),w(val,2),w(val,3));
     drawnow;

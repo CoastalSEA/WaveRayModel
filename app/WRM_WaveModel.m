@@ -41,10 +41,10 @@ classdef WRM_WaveModel < waveModels
 % Model code 
 %-------------------------------------------------------------------------- 
             %get the timeseries input data and site parameters
-            [tsdst,meta] = getInputData(obj,mobj);            
+            [tsdst,meta] = obj.getInputData(mobj);            
             if isempty(tsdst), return; end   %user cancelled data selection
 
-            if strcmp(meta.source,'Measured spectra')
+            if strcmp(meta.inptype,'Spectrum')
                 ModelType = 'transfer spectra';
             else
                 ModelType = 'transfer timeseries';
@@ -52,8 +52,7 @@ classdef WRM_WaveModel < waveModels
 
             %select a spectral transfer case to use
             [sptobj,sptmeta] = SpectralTransfer.getSTcase(mobj);
-            caserecs = [meta.caserecs,sptmeta.caserecs];
-            setRunParam(obj,mobj,caserecs{:})     %assign run parameters
+            setRunParam(obj,mobj,meta.caserecs{:})     %assign run parameters
             %add spectral transfer selection to meta data
             inputxt = sprintf('%s, %s',meta.inptxt,sptmeta.inptxt);
 
@@ -108,110 +107,10 @@ classdef WRM_WaveModel < waveModels
             setDataSetRecord(obj,mobj.Cases,dst,'model');
             getdialog('Run complete');
         end
-%--------------------------------------------------------------------------
+
+%% --------------------------------------------------------------------------
 % Other utilities
 %--------------------------------------------------------------------------
-%%
-        function runPlotSpectrum(mobj)
-            %create a plot of the offshore and inshore 2-D specrum surfaces 
-            %for a single wave condition
-            offdata = WRM_WaveModel.getForcingConditions();   %get the input conditions
-            if isempty(offdata); return; end
-
-            %get the refraction transfer table
-            promptxt = 'Select a Transfer Table Case to use:'; 
-            sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
-            if isempty(sptobj)
-                getdialog('Spectral Transfer table not found'); return; 
-            end
-
-            isout = checkWLrange(sptobj,offdata.swl);
-            if isout
-                warndlg('Water levels are outside the range of the Transfer Table')
-                return;
-            end
-
-            if strcmp(offdata.source,'Spectrum')               
-                select.form = 'Measured';             %initialise select properties
-                select.source = 'Spectrum';         
-                select.ismodel = false;
-                select.issat = offdata.issat;         %copy to sprectrum selection  
-                select.freq = offdata.tsdst.Dimensions.freq;
-                intable = offdata.tsdst.DataTable;
-                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,intable,select);
-                ins = get_inshore_wave(SGo,SGi,Dims,intable,select);
-            else
-                select = get_model_selection(sptobj,offdata.source); %select spectral form and data type
-                if isempty(select), return; end       %user cancelled
-
-                [SGo,SGi,Dims] = get_inshore_spectrum(sptobj,offdata,select);
-                if isempty(SGo), return; end
-    
-                if strcmp(offdata.source,'Wind')
-                    offdata = WRM_WaveModel.addWaveConditions(SGo,Dims,offdata);
-                end
-                ins = get_inshore_wave(SGo,SGi,Dims,offdata,select);
-            end
-            
-
-            getSpectrumPlot(sptobj,SGo,SGi,Dims,ins,offdata,select);            
-        end
-%%
-        function runAnimation(mobj)
-            %create an animation of the 2-D spectrum surfaces using a
-            %timeseries input
-            obj = WRM_WaveModel; 
-            [tsdst,meta] = getInputData(obj,mobj);
-            if isempty(tsdst), return; end   %user cancelled data selection  
-            %tsdst.DataTable = rmmissing(tsdst.DataTable);%remove nans
-
-            if height(tsdst(1))>5000
-                promptxt = sprintf('Times series contains %d records\nThis could take a while to run and genearte large file\nUse time sub-selection to extract shorter time period',...
-                                                            height(tsdst(1)));
-                answer = questdlg(promptxt,'Time','Continue','Abort','Abort');                                  
-                if strcmp(answer,'Abort'), return; end
-            end
-
-            %get the refraction transfer table
-            promptxt = 'Select a Transfer Table Case to use:'; 
-            sptobj = selectCaseObj(mobj.Cases,[],{'SpectralTransfer'},promptxt);
-             if isempty(sptobj)
-                getdialog('Spectral Transfer table not found'); return; 
-             end
-
-            isout = checkWLrange(sptobj,tsdst(1).swl);
-            if isout
-                warndlg('Water levels are outside the range of the Transfer Table')
-                return;
-            end
-
-            [offobj,inobj] = runWaves(sptobj,tsdst,meta);
-            % [sp,results] = unpackSpectrum(inobj,offobj);
-            % results = addvars(results,sp.swl,sp.depths,'NewVariableNames',{'swl','depi'});
-            % dir = offobj(1).Spectrum.dir;
-            % freq = offobj(1).Spectrum.freq;
-
-            % if strcmp(source,'Measured spectra')
-            %     select = WRM_WaveModel.getSprectraConditions();   
-            %     select.freq = tsdst(1).Dimensions.freq;
-            %     if isempty(select), return; end       %user cancelled
-            % else
-            %     select = get_model_selection(sptobj); %select spectral form and data type
-            %     if isempty(select), return; end       %user cancelled
-            % end
-            
-            % select.issave = true;
-            % [SGo,SGi,Dims] = runWaves(sptobj,tsdst,select);
-            % if isempty(SGo), return; end
-
-
-            if strcmp(offobj(1).inpData.source,'Spectrum')
-                tsdst(1) = addvars(tsdst(1),tsdst(2).Hs,'NewVariableNames',{'Hs'});
-            end            
-            wrm_animation(mobj,sptobj,tsdst(1),offobj,inobj)
-        end
-
-%%
         function runBatchMode(mobj)
             %run spectral transfer for multiple points and load a set of
             %dstables as datasets in a single case
@@ -221,11 +120,8 @@ classdef WRM_WaveModel < waveModels
 % Model code 
 %-------------------------------------------------------------------------- 
             %get the timeseries input data and site parameters
-            %Note: getInputData calls setRunParam
-            % [tsdst,sptrecs,inputxt,~] = getInputData(obj,mobj,true); %multi-case
-            % if isempty(tsdst), return; end   %user cancelled data selection
             muicat = mobj.Cases;
-            [tsdst,meta] = getInputData(obj,mobj);            
+            [tsdst,meta] = obj.getInputData(mobj);            
             if isempty(tsdst), return; end   %user cancelled data selection
 
             %select a spectral transfer case to use

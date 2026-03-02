@@ -10,12 +10,12 @@ function inobj = get_inshore_spectrum(obj,offobj)
 %   inobj = get_inshore_spectrum(offobj,sptobj)
 % INPUTS
 %   obj - SpectralTransfer class object
-%   offobj - instance of ctWaveSpectra that defines offshore spectrum
+%   offobj - instance of ctWaveSpectrum that defines offshore spectrum
 % OUTPUT
-%   inobj - instance of ctWaveSpectra of the associated inshore spectrum
+%   inobj - instance of ctWaveSpectrum of the associated inshore spectrum
 % NOTES
 %   used in SpectralTransfer and WRM_WaveModel as part of WaveRayModel.
-%   Modified from original version to use ctWaveSpectra to manipulate
+%   Modified from original version to use ctWaveSpectrum to manipulate
 %   spectra and only handle inshore spectrum, rather that computing
 %   offshore and inshore spectra
 %
@@ -23,7 +23,7 @@ function inobj = get_inshore_spectrum(obj,offobj)
 % CoastalSEA (c) Dec 2025
 %--------------------------------------------------------------------------
 %
-    inobj = ctWaveSpectra;
+    inobj = ctWaveSpectrum;
     [dir,freq] = spectrumDimensions(inobj); %default frequency-direction vectors
     %extract transfer tables and get shoaling coefficients
     indst = obj.Data.Inshore;               %inshore properties       
@@ -34,8 +34,6 @@ function inobj = get_inshore_spectrum(obj,offobj)
 
     if isfield(offobj.inpData,'swl')
         swl = offobj.inpData.swl;            %required water level
-    elseif isfield(offobj.inpData,'tsdst')
-        swl = offobj.inpData.tsdst(1).swl;   %required water level
     else
         errdlg('swl not set in input to get_inshore_params')
         inobj = []; return
@@ -66,7 +64,7 @@ function inobj = get_inshore_spectrum(obj,offobj)
         SGi(:,j) = SGi(:,j)+sgi;
     end 
 
-    if strcmp(offobj.inpData.form,'TMA shallow water')
+    if isfield(offobj.spModel,'form') && strcmp(offobj.spModel.form,'TMA shallow water')
         %apply saturation limit if TMA spectrum (depth determined from rays)
         if size(SGi,1) ~= numel(dir), SGi = SGi.'; end
         theta = deg2rad(mod(dir(:),360));  % [I x 1]
@@ -103,48 +101,52 @@ function [shoal,offdir] = getShoal(obj,inobj,swl,idx) %...getShoal(sptobj,dir,fr
     ci = squeeze(indst.celerity);            %inshore celerity
     cgi = squeeze(indst.cgroup);             %inshore group celerity
 
-    %REWORK THIS CODE ONCE F-D ARRAY ORDER HAS BEEN SORTED OUT
-    %pad the high frequencies with values from the minimum frequency
-    if min(T)>3
-        % addfray = [1,0.5,0.33];
-        % fray = [addfray';fray];  %pad wave ray frequencies for periods 1-3s
-        % theta = [repmat(theta(:,1,:),1,3),theta];
-        % c0 = [repmat(c0(:,1,:),1,3),c0];
-        % cg0 = [repmat(cg0(:,1,:),1,3),cg0];
-        % 
-        % if isrow(ci), ci = ci'; end          %force a column vector 
-        % if isrow(cgi), cgi = cgi'; end       %force a column vector 
-        % addci = repmat(ci(1,:),3,1);         %inshore celerities for highest frequency
-        % addcgi = repmat(cgi(1,:),3,1);
-        % cdeepwater = 9.81./addfray/2/pi;     %deepwater celerity = gT/2pi
-        % cdeep = repmat(cdeepwater',1,size(ci,2));
-        % addci = min(addci,cdeep);
-        % addcgi = min(addcgi,cdeep/2);        %deepwater group celerity = c/2
-        % 
-        % ci = [addci;ci];                                                    
-        % cgi = [addcgi;cgi];
+    
+    Tdef = [2,3,4,5,6,7,8,9,10,11.8,13.3,15.4,18.2,22.2,28.6,40];
+    %pad the high frequencies with values from the maximum frequency
+    idx = find(Tdef<min(T)); 
+    if ~isempty(idx)
+        addfray = 1./Tdef(idx);
+        nadd = numel(addfray);
+        fray = [addfray';fray];  %pad wave ray frequencies to maximum (1/2s)
+        theta = [repmat(theta(:,1,:),1,nadd),theta];
+        c0 = [repmat(c0(:,1,:),1,nadd),c0];
+        cg0 = [repmat(cg0(:,1,:),1,nadd),cg0];
+
+        if isrow(ci), ci = ci'; end          %force a column vector 
+        if isrow(cgi), cgi = cgi'; end       %force a column vector 
+        addci = repmat(ci(1,:),nadd,1);         %inshore celerities for highest frequency
+        addcgi = repmat(cgi(1,:),nadd,1);
+        cdeepwater = 9.81./addfray/2/pi;     %deepwater celerity = gT/2pi
+        cdeep = repmat(cdeepwater',1,size(ci,2));
+        addci = min(addci,cdeep);
+        addcgi = min(addcgi,cdeep/2);        %deepwater group celerity = c/2
+
+        ci = [addci;ci];                                                    
+        cgi = [addcgi;cgi];
     end
 
-    if max(T)<40
+    %pad the high frequencies with values from the minimum frequency
+    idx = find(Tdef>max(T)); 
+    if ~isempty(idx)
+        addfray = 1./Tdef(idx);
+        nadd = numel(addfray);
+        fray = [fray;addfray'];  %pad wave ray frequencies to minimum (1/40s)
+        theta = [repmat(theta(:,end,:),1,nadd),theta];
+        c0 = [c0,repmat(c0(:,end,:),1,nadd)];
+        cg0 = [cg0,repmat(cg0(:,end,:),1,nadd)];
 
-        % addfray = [1,0.5,0.33];
-        % fray = [addfray';fray];  %pad wave ray frequencies for periods 1-3s
-        % theta = [repmat(theta(:,1,:),1,3),theta];
-        % c0 = [repmat(c0(:,1,:),1,3),c0];
-        % cg0 = [repmat(cg0(:,1,:),1,3),cg0];
-        % 
-        % if isrow(ci), ci = ci'; end          %force a column vector 
-        % if isrow(cgi), cgi = cgi'; end       %force a column vector 
-        % addci = repmat(ci(1,:),3,1);         %inshore celerities for highest frequency
-        % addcgi = repmat(cgi(1,:),3,1);
-        % cdeepwater = 9.81./addfray/2/pi;     %deepwater celerity = gT/2pi
-        % cdeep = repmat(cdeepwater',1,size(ci,2));
-        % addci = min(addci,cdeep);
-        % addcgi = min(addcgi,cdeep/2);        %deepwater group celerity = c/2
-        % 
-        % ci = [addci;ci];                                                    
-        % cgi = [addcgi;cgi];
+        if isrow(ci), ci = ci'; end          %force a column vector 
+        if isrow(cgi), cgi = cgi'; end       %force a column vector 
+        addci = repmat(ci(end,:),nadd,1);      %inshore celerities for highest frequency
+        addcgi = repmat(cgi(end,:),nadd,1);
+        cdeepwater = 9.81./addfray/2/pi;     %deepwater celerity = gT/2pi
+        cdeep = repmat(cdeepwater',1,size(ci,2));
+        addci = min(addci,cdeep);
+        addcgi = min(addcgi,cdeep/2);        %deepwater group celerity = c/2
 
+        ci = [ci;addci];                                                    
+        cgi = [cgi;addcgi];
     end
 
     %replicate grid vectors to produce grids for interpn using
@@ -162,15 +164,16 @@ function [shoal,offdir] = getShoal(obj,inobj,swl,idx) %...getShoal(sptobj,dir,fr
     if iscolumn(ishoal), ishoal = ishoal'; end          %force a column vector 
     oshoal = c0fdw.*cg0fdw;                             %offshore c.cg
     shoal = oshoal./ishoal;                             %shoaling factor array 
-    %celerity tables are in ascending period and the spectrum is defined in
-    %terms of ascending frequency. Flip array to give ascending frequencies
-    shoal = fliplr(shoal); 
-    
-    % check plot of surf
-    % surfobj = ctWaveSpectra;
-    % surfobj.Spectrum.SG = shoal; 
-    % surfobj.Spectrum.freq = inobj.Spectrum.freq; 
-    % surfobj.Spectrum.dir = inobj.Spectrum.dir;
-    % surfobj.Plotxt.ttxt = 'Test shoal function';
-    % surfPlot(surfobj);
+            %celerity tables are in ascending period and the spectrum is defined in
+            %terms of ascending frequency. Flip array to give ascending frequencies
+            %shoal = fliplr(shoal); 
+            
+    %check plot of surf (make sure commented out when running 
+    %coefficientsPlot as the loop will produce thousands of plots!!)
+    surfobj = ctWaveSpectraPlots;
+    surfobj.Spectrum.SG = shoal; 
+    surfobj.Spectrum.freq = inobj.Spectrum.freq; 
+    surfobj.Spectrum.dir = inobj.Spectrum.dir;
+    surfobj.Plotxt.ttxt = 'Test shoal function';
+    surfPlot(surfobj,'on');
 end

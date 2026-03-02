@@ -2,7 +2,7 @@ function stats = get_skill_stats(obsobj,modobj,skill)
     nrec = size(obsobj,1);
     stats = initialiseStruct(nrec);
     hpw = PoolWaitbar(nrec, 'Processing skill statistics');  %and increment(hpw);
-    parfor i=1:nrec
+    parfor i=1:nrec                                          %parfor loop
         ds1 = obsobj(i).Spectrum.SG;
         ds2 = modobj(i).Spectrum.SG;
         stats(i) = DS_DifferenceStatistics(ds1,ds2);
@@ -48,8 +48,6 @@ function cRMSD = centredRMSD(ds1,ds2,cfstats)
     cMSD = sum(cSD)/nrec;
     cRMSD = sqrt(cMSD);
 end
-
-%%
 
 %%
 function score = getSkill(skill,cfstats)

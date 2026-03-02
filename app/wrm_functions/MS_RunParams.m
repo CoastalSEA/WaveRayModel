@@ -38,7 +38,7 @@ classdef MS_RunParams < muiPropertyUI
 
 %%   
     methods (Access=protected)
-        function obj = MS_RunParams(mobj)             % << Edit to classname
+        function obj = MS_RunParams(mobj)    
             %constructor code:            
             %values defined in UI function setTabProperties used to assign
             %the tabname and position on tab for the data to be displayed
