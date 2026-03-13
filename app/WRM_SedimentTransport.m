@@ -106,7 +106,10 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
                 ok = 1;
                 while ok>0
                     [obj,~] = selectCaseObj(mobj.Cases,[],{'WRM_SedimentTransport','WRM_WaveModel'},promptxt);
-                    if isempty(obj), ok = 0; continue; end
+                    if isempty(obj)
+                        getdialog('No input available'); 
+                        ok = 0; continue; 
+                    end
                     selection = listdlg("ListString",listxt,"PromptString",...
                                         'Select option:','SelectionMode','single',...
                                         'ListSize',[150,200],'Name','EDBtools');

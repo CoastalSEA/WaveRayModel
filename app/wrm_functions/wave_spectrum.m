@@ -28,9 +28,10 @@ function [S,gamma] = wave_spectrum(stype,f,inputs)
 %       source - 'Wave'
 %       Hs - significant wave height [4sqrt(mo)] (m) <scalar or vector>
 %       Tp - peak wave period (s)  <can be vector - same length as Hs>
-%       T2 - mean wave period or zero upcrossing period: used to calculate
+%       T2 - zero upcrossing wave period (sqrt(m0/m2)): used to calculate
 %            gamma, or gamma can be specified
-%       gamma - spectrum shape parameter (defaults to 3.3 if not specified)
+%       gamma - spectrum shape parameter (defaults to 3.3 if input as 0 
+%               unless T2 is also included)
 %
 %   When using 'TMA shallow water', wind or wave struct includes 
 %   ds - for tma wave: depths at site (m) <scalar or vector> 
@@ -129,52 +130,50 @@ end
 function [S,gamma] = jonswap(f,inputs)
     %construct the JONSWAP spectrum using Carter eq(16) with alpha based on
     %Hughes for wind and Carter for wave type input
-    g = 9.81;
-    [fp,alpha,gamma] = get_input(inputs,0);
+    [fp,alpha,gamma] = get_input(inputs,f,0);
     if isempty(fp), return; end
-    
-    sigma = @(f) 0.07.*(f<=fp) + 0.09.*(f>fp);           %Hughes eq(5 & 25), or
-    q = @(f) exp((-(f-fp).^2)./(2.*sigma(f).^2.*fp.^2)); %Carter eq(16)
-    const = g^2*(2*pi)^-4;
-    Jonswap = @(f) const*alpha.*(f.^-5).*(exp(-1.25*(f./fp).^-4)).*(gamma.^q(f));
-
-    S = zeros(length(fp),length(f));
-    for i=1:length(f)
-        S(:,i) = Jonswap(f(i));
-    end
+    sigma = [0.07,0.09];
+    S = getSpectrum(f,fp,alpha,gamma,sigma,[],false);
 end
 
 %%
 function [S,gamma] = tma(f,inp)
     %construct the TMA spectrum using Kitaigorodskii limit (see Bouws et al, 
     %or Hughes for details)
-    g = 9.81;
-    [fp,alpha,gamma] = get_input(inp,1);
+    [fp,alpha,gamma] = get_input(inp,f,1);
     if isempty(fp), return; end 
-
-    sigma = @(f) 0.07.*(f<=fp) + 0.09.*(f>fp);           %Hughes eq(5 & 25), or
-    q = @(f) exp((-(f-fp).^2)./(2.*sigma(f).^2.*fp.^2)); %Carter eq(16)
-    cn = g^2*(2*pi)^-4;
-    Jonswap = @(f) cn*alpha.*(f.^-5).*(exp(-1.25*(f./fp).^-4)).*(gamma.^q(f));
-
-    if isfield(inp,'ds') && ~isempty(inp.ds) && inp.ds>0
-        ds = inp.ds;
-    else
-        ds = (g./fp./2./pi)./fp/2;                %use deep water 
-    end 
-
-    Func = @(f) kit_limit(f,ds).*Jonswap(f);      %Hughes eq(15)
-    S = zeros(length(fp),length(f));
-    for i=1:length(f)
-        S(:,i) = Func(f(i));
-        % Sf(:,i) = Jonswap(f(i));
-    end
-    % figure('Tag','PlotFig'); plot(f,S,f,Sf);
-    % fprintf('TMA m0=%f, Jonswap m0=%f\n',trapz(f,S),trapz(f,Sf))
+    sigma = [0.07,0.09];
+    S = getSpectrum(f,fp,alpha,gamma,sigma,inp.ds,true);
 end
 
 %%
-function [fp,alpha,gamma] = get_input(inp,istma)
+function S = getSpectrum(f,fp,alpha,gamma,sigma,ds,istma)
+    %construct the Jonswap or TMA spectrum
+    g = 9.81;
+    sig = @(f) sigma(1).*(f<=fp) + sigma(2).*(f>fp);   %Hughes eq(5 & 25), or
+    q = @(f) exp((-(f-fp).^2)./(2.*sig(f).^2.*fp.^2)); %Carter eq(16)
+    const = g^2*(2*pi)^-4;
+    Jonswap = @(f) const*alpha.*(f.^-5).*(exp(-1.25*(f./fp).^-4)).*(gamma.^q(f));
+
+    S = zeros(length(fp),length(f));
+    if istma                                          %TMA spectrum
+        if isempty(ds) || ds<=0
+            ds = (g./fp./2./pi)./fp/2;                %use deep water 
+        end 
+        Func = @(f) kit_limit(f,ds).*Jonswap(f);      %Hughes eq(15)
+        for i=1:length(f)
+            S(:,i) = Func(f(i));                          
+        end
+
+    else                                              %Jonswap spectrum
+        for i=1:length(f)
+            S(:,i) = Jonswap(f(i));
+        end
+    end
+end
+
+%%
+function [fp,alpha,gamma] = get_input(inp,f,istma)
     %unpack inp for the wind and wave cases
     g = 9.81;
     switch inp.source
@@ -199,6 +198,8 @@ function [fp,alpha,gamma] = get_input(inp,istma)
         case 'Wave'
             Hmo = inp.Hs;
             [Tp,Lp] = peak_period(inp);    fp = 1./Tp;
+            sigma = [0.07,0.09];
+            bnds = [0.5,12];
 
             if istma
                 alpha = (pi*Hmo/Lp).^2;            %Hughes eq(29)
@@ -207,23 +208,31 @@ function [fp,alpha,gamma] = get_input(inp,istma)
                 else
                     gamma = inp.gamma;
                 end
+                if gamma<=bnds(1)|| gamma>=bnds(2),  gamma = 3.3; end  %use default
+
             else
-                if inp.gamma==0 &&  isfield(inp,'T2')
-                    gamma = 70*(inp.T2/inp.Tp)^12.23;
+                if inp.gamma==0 &&  isfield(inp,'T1')
+                    %estimate the best fit for gamma. Does not always fall
+                    %within realistic region and default of 3.3 is used                   
+                    [gamma,gamma_sensitivity] = gamma_estimation(inp,f,fp,sigma,bnds,istma);
+                    %[gamma, gamma_sensitivity] = jonswap_gamma_estimation(inp,bnds);
+                    dg = max((gamma-gamma_sensitivity));
+                    if dg>0.5
+                        fprintf('gamma sensivity is %.1f %% \n',dg*100)
+                    end
+                    % 
+                    % I0 = spectral_moment(0,gamma,sigma);       %Carter eq(18)
+                    % I1 = spectral_moment(1,gamma,sigma);
+                    % gamma = 45.3*(I0/I1)^14.6;
                 elseif inp.gamma>0
                     gamma = inp.gamma;
                 else
                     gamma = 3.3;
                 end
+                if gamma<=bnds(1)|| gamma>=bnds(2),  gamma = 1.0; end  %use default
 
-                Io = spectral_moment(0,gamma);                  %Carter eq(18)
-                alpha = (2*pi).^4*Hmo.^2.*fp.^4./(16*g.^2.*Io); %Carter eq(20)
-            end
-
-            if gamma<1
-                gamma = 0.9999;
-            elseif gamma>7.9
-                gamma = 7.9999;
+                I0 = spectral_moment(0,gamma,sigma);            %Carter eq(18)
+                alpha = (2*pi).^4*Hmo.^2.*fp.^4./(16*g.^2.*I0); %Carter eq(20)                
             end
 
         otherwise
@@ -262,10 +271,10 @@ function [Tp,Lp] = peak_period(inp)
 end
 
 %%
-function In = spectral_moment(nm,gamma)
+function In = spectral_moment(nm,gamma,sigma)
     %find the nm spectral moment of the Jonswap spectrum for given gamma
-    sigma = @(f) 0.07.*(f<=1) + 0.09.*(f>1);   
-    q = @(f) exp((-(f-1).^2)./(2.*sigma(f).^2));
+    sig = @(f) sigma(1).*(f<=1) + sigma(2).*(f>1);   
+    q = @(f) exp((-(f-1).^2)./(2.*sig(f).^2));
     Func = @(f) (f.^nm).*(f.^-5).*exp(-1.25.*f.^-4).*gamma.^q(f);
     In = integral(Func,0,Inf,'RelTol',1e-3,'AbsTol',1e-3);
 end
@@ -285,4 +294,95 @@ function phi = kit_limit(f,ds)
     % if omega<=1 (vectorised) or omega>2
     phi = 0.5*omega.^2.*(omega<=1) + 1.*(omega>2);        
     phi = phi + (1 - 0.5*(2-omega).^2).*(omega>1 & omega<=2);
+end
+
+%%
+function [gamma,gamma_sensitivity] = gamma_estimation(inp,f,fp,sigma,bnds,istma)
+    %estimate gamma using Hs, Tp and the sea state component value of T1
+    % Inputs
+    Hs = inp.Hs; T1 = inp.T1; ds = inp.ds; 
+    lb = bnds(1)-1e-3; ub = bnds(2)+1e-3; 
+    gamma_sensitivity = nan(1,3); % store gamma for alt sigma sets
+
+    % fun_I0 = @(gamma,sigma) spectral_moment(0,gamma,sigma);                         %Carter eq(18)
+    % fun_alp = @(g,s) (2*pi).^4*Hs.^2.*fp.^4./(16*g.^2.*fun_I0(g,s)); %Carter eq(20)  
+    obj1 = @(gamma) abs(computeT1(fp,gamma,sigma) - T1);
+    obj2 = @(gamma) abs(computeHs(f,fp,gamma,sigma,Hs,ds,istma) - Hs);
+    obj = @(gamma) abs(obj2(gamma)/obj1(gamma)^2 -Hs/T1^2);      %steepness
+    % search gamma in [lb,ub]    
+    gamma = fminbnd(obj, lb, ub, optimset('TolX',1e-6,'Display','off'));
+
+
+    % sensitivity: try three sigma variants
+    % gamma_sensitivity(1,1) = fminbnd(@(g) abs(computeT1(fp,g,[0.06,0.08],ds,istma)-T1),lb,ub);
+    % gamma_sensitivity(1,2) = fminbnd(@(g) abs(computeT1(Hs,f,fp,g,[0.07,0.09],ds,istma)-T1),lb,ub);
+    % gamma_sensitivity(1,3) = fminbnd(@(g) abs(computeT1(Hs,f,fp,g,[0.08,0.10],ds,istma)-T1),lb,ub);
+end
+%%
+function T1 = computeT1(fp,gamma,sigma)
+    %estimate T1 for given spectrum parameters 
+    I0 = spectral_moment(0,gamma,sigma);                %Carter eq(18)
+    I1 = spectral_moment(1,gamma,sigma);
+    T1 = I0/I1/fp;
+end
+%%
+function Hs = computeHs(f,fp,gamma,sigma,Hs,ds,istma)
+    %estimate T1 for given spectrum parameters 
+    g= 9.81;
+    % const = g^2*(2*pi)^-4;
+    I0 = spectral_moment(0,gamma,sigma);           %Carter eq(18)
+    alpha = (2*pi).^4*Hs.^2.*fp.^4./(16*g.^2.*I0); %Carter eq(20) 
+    % Hs = sqrt(16*alpha*const*(fp^-4)*I0);
+    S = getSpectrum(f,fp,alpha,gamma,sigma,ds,istma);
+    Hs = sqrt(16*trapz(f,S));
+end
+
+
+
+
+
+function [gamma, gamma_sensitivity] = jonswap_gamma_estimation(inp,bnds)
+    %estimate gamma using Hs, Tp and the sea state component value of T1
+    % Defaults
+    sigma1 = 0.07; sigma2 = 0.09;
+    % Inputs
+    Hs = inp.Hs; Tp = inp.Tp; T1 = inp.T1;
+    flim = [0.025,0.58]; %frequency limits
+    f = [flim(1):0.005:0.1,0.11:0.01:flim(2)];  %obbserved frequency intervals (spt format)
+    %f = linspace(1/(5*Tp), 2/Tp, 2000);   % frequency grid (adjust as needed)
+    ncomp = numel(Hs);
+    gamma = nan(size(Hs));
+    gamma_sensitivity = nan(size(Hs,2),3); % store gamma for alt sigma sets
+
+    for i=1:ncomp
+        Hs = Hs(i);
+        T1_obs = T1(i);
+
+        % objective: for given gamma compute model T1 and return error
+        obj = @(gamma) abs( compute_T1_from_jonswap(Hs, Tp, gamma, f, sigma1, sigma2) - T1_obs );
+
+        % search gamma in [lb,ub]
+        lb = bnds(1)-1e-3; ub = bnds(2)+1e-3; 
+        gamma_est = fminbnd(obj,lb,ub,optimset('TolX',1e-6,'Display','off'));
+        gamma(i) = gamma_est;
+
+        % sensitivity: try three sigma variants
+        gamma_sensitivity(i,1) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.06,0.08)-T1_obs),lb,ub);
+        gamma_sensitivity(i,2) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.07,0.09)-T1_obs),lb,ub);
+        gamma_sensitivity(i,3) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.08,0.10)-T1_obs),lb,ub);
+    end
+end
+
+%%
+function T1 = compute_T1_from_jonswap(Hs, Tp, gamma, f, sigma1, sigma2)
+    fp = 1/Tp;
+    sigma = sigma1*(f<=fp) + sigma2*(f>fp);
+    % JONSWAP shape (Goda / common parameterisation)
+    A = 0.0624 ./ (0.230 + 0.0336*gamma - 0.185./(1.9+gamma)); % empirical alpha prefactor
+    S = A .* Hs.^2 .* Tp.^(-4) .* f.^(-5) .* exp(-1.25*(Tp.*f).^(-4)) .* ...
+        gamma.^(exp(-((Tp.*f - 1).^2)./(2*sigma.^2)));
+    df = f(2)-f(1);
+    m0 = trapz(f, S);
+    m1 = trapz(f, f .* S);
+    T1 = m0 ./ m1;
 end
