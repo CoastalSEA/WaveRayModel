@@ -1,5 +1,5 @@
 <deployment-project plugin="plugin.apptool" plugin-version="1.0">
-  <configuration build-checksum="2479114586" file="D:\Matlab Code\muiModels\WaveRayModel\app\WaveRayModel.prj" location="D:\Matlab Code\muiModels\WaveRayModel\app" name="WaveRayModel" target="target.mlapps" target-name="Package App">
+  <configuration build-checksum="2687084578" file="D:\Matlab Code\muiModels\WaveRayModel\app\WaveRayModel.prj" location="D:\Matlab Code\muiModels\WaveRayModel\app" name="WaveRayModel" target="target.mlapps" target-name="Package App">
     <param.appname>WaveRayModel</param.appname>
     <param.authnamewatermark>Ian Townend</param.authnamewatermark>
     <param.email>i.townend@soton.ac.uk</param.email>
@@ -39,11 +39,13 @@
       <file>${PROJECT_ROOT}\WRM_FT_Params.m</file>
       <file>${PROJECT_ROOT}\WRM_Mesh.m</file>
       <file>${PROJECT_ROOT}\WRM_RunParams.m</file>
+      <file>${PROJECT_ROOT}\WRM_SedimentTransport.m</file>
       <file>${PROJECT_ROOT}\WRM_WaveModel.m</file>
     </fileset.depfun>
     <fileset.resources>
       <file>D:\Matlab Code\muiModels\muiAppLib\muiAppCoastalClasses</file>
       <file>D:\Matlab Code\muiModels\muiAppLib\muiAppCoastalFcns</file>
+      <file>D:\Matlab Code\muiModels\muiAppLib\muiAppCoastalWaves</file>
       <file>D:\Matlab Code\muiModels\muiAppLib\muiAppGridFcns</file>
       <file>${PROJECT_ROOT}\doc</file>
       <file>${PROJECT_ROOT}\example</file>
