@@ -109,4 +109,5 @@ function ax = taylor_plot_ts(ax,stats,skill,metatxt)
         % hgrd = findobj(hp,'Tag','RMSgrid'); 
         % hp = findobj(hp,'-not','Tag','RMSgrid'); 
         % newhp = vertcat(hp,hgrd(1)); 
+    fprintf('Mode score %.3f; Mean score %.3f\n',score,mn_gskill)
 end

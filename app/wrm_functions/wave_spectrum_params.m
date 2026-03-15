@@ -69,6 +69,9 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
     T1 = m0/m1; if isnan(T1), T1 = 0; end
     m2 = sum(abs(trapz(freq,SG.*(freq.^2),2)).*w); %f^2 moment
     T2 = sqrt(m0/m2); if isnan(T2), T2 = 0; end
+    m10 = sum(abs(trapz(freq,SG.*(freq.^-1),2)).*w); %f^2 moment
+    T10 = m10/m0; if isnan(T10), T10 = 0; end
+       
 
     %get the omni-directional spectrum and values at the peak
     Sf = sum(SG.*w,1);                               %omni-directional spectrum   
@@ -76,7 +79,7 @@ function [params,diagnost] = wave_spectrum_params(SG,freq,dir,isdirmodes)
     Tp = 1/freq(ifpk);                               %period at peak
     [~,idpk] = max(SG(:,ifpk));                      %direction at peak frequency
     Dp = rad2deg(theta(idpk));
-    params = table(Hs,m0,Dir,Sp,Tp,Dp,Sfdpk,Tfdpk,Dfdpk,T1,T2);
+    params = table(Hs,m0,Dir,Sp,Tp,Dp,Sfdpk,Tfdpk,Dfdpk,T1,T2,T10);
     
     if isdirmodes
         %global mean diagnostic ouput

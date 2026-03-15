@@ -199,7 +199,9 @@ function [fp,alpha,gamma] = get_input(inp,f,istma)
             Hmo = inp.Hs;
             [Tp,Lp] = peak_period(inp);    fp = 1./Tp;
             sigma = [0.07,0.09];
-            bnds = [0.5,12];
+            bnds = [1,7];
+            gamma0 = 2;
+            lambda = 0.1;
 
             if istma
                 alpha = (pi*Hmo/Lp).^2;            %Hughes eq(29)
@@ -214,22 +216,29 @@ function [fp,alpha,gamma] = get_input(inp,f,istma)
                 if inp.gamma==0 &&  isfield(inp,'T1')
                     %estimate the best fit for gamma. Does not always fall
                     %within realistic region and default of 3.3 is used                   
-                    [gamma,gamma_sensitivity] = gamma_estimation(inp,f,fp,sigma,bnds,istma);
+                    %[gamma,gamma_sensitivity] = gamma_estimation(inp,f,fp,sigma,bnds,istma);
                     %[gamma, gamma_sensitivity] = jonswap_gamma_estimation(inp,bnds);
-                    dg = max((gamma-gamma_sensitivity));
-                    if dg>0.5
-                        fprintf('gamma sensivity is %.1f %% \n',dg*100)
-                    end
+                    %gamma = fit_gamma_multimoment(inp,bnds,gamma0,lambda);
+                    % dg = max((gamma-gamma_sensitivity));
+                    % if dg>0.5
+                    %     fprintf('gamma sensivity is %.1f %% \n',dg*100)
+                    % end
                     % 
-                    % I0 = spectral_moment(0,gamma,sigma);       %Carter eq(18)
+                    % I0 = spectral_moment(0,gamma,sigma);       
                     % I1 = spectral_moment(1,gamma,sigma);
-                    % gamma = 45.3*(I0/I1)^14.6;
+                    I0I1 = inp.T1/Tp;                       %Carter eq(23)
+                    if I0I1>0.7 && I0I1<0.9
+                        gamma = 45.3*(I0I1)^14.6;           %fit to MIAS No.4, Table 1
+                    else
+                        gamma = 1.0;
+                    end
+
                 elseif inp.gamma>0
                     gamma = inp.gamma;
                 else
                     gamma = 3.3;
                 end
-                if gamma<=bnds(1)|| gamma>=bnds(2),  gamma = 1.0; end  %use default
+                %if gamma<=bnds(1)|| gamma>=bnds(2),  gamma = 1.0; end  %use default
 
                 I0 = spectral_moment(0,gamma,sigma);            %Carter eq(18)
                 alpha = (2*pi).^4*Hmo.^2.*fp.^4./(16*g.^2.*I0); %Carter eq(20)                
@@ -337,52 +346,117 @@ function Hs = computeHs(f,fp,gamma,sigma,Hs,ds,istma)
     Hs = sqrt(16*trapz(f,S));
 end
 
-
-
-
-
-function [gamma, gamma_sensitivity] = jonswap_gamma_estimation(inp,bnds)
-    %estimate gamma using Hs, Tp and the sea state component value of T1
-    % Defaults
-    sigma1 = 0.07; sigma2 = 0.09;
-    % Inputs
-    Hs = inp.Hs; Tp = inp.Tp; T1 = inp.T1;
-    flim = [0.025,0.58]; %frequency limits
-    f = [flim(1):0.005:0.1,0.11:0.01:flim(2)];  %obbserved frequency intervals (spt format)
-    %f = linspace(1/(5*Tp), 2/Tp, 2000);   % frequency grid (adjust as needed)
-    ncomp = numel(Hs);
-    gamma = nan(size(Hs));
-    gamma_sensitivity = nan(size(Hs,2),3); % store gamma for alt sigma sets
-
-    for i=1:ncomp
-        Hs = Hs(i);
-        T1_obs = T1(i);
-
-        % objective: for given gamma compute model T1 and return error
-        obj = @(gamma) abs( compute_T1_from_jonswap(Hs, Tp, gamma, f, sigma1, sigma2) - T1_obs );
-
-        % search gamma in [lb,ub]
-        lb = bnds(1)-1e-3; ub = bnds(2)+1e-3; 
-        gamma_est = fminbnd(obj,lb,ub,optimset('TolX',1e-6,'Display','off'));
-        gamma(i) = gamma_est;
-
-        % sensitivity: try three sigma variants
-        gamma_sensitivity(i,1) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.06,0.08)-T1_obs),lb,ub);
-        gamma_sensitivity(i,2) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.07,0.09)-T1_obs),lb,ub);
-        gamma_sensitivity(i,3) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.08,0.10)-T1_obs),lb,ub);
-    end
-end
-
 %%
-function T1 = compute_T1_from_jonswap(Hs, Tp, gamma, f, sigma1, sigma2)
+function gamma_est = fit_gamma_multimoment(inp,bnds,g0,lambda)%(Hs, Tp, T1_obs, T2_obs, T10_obs)
+
+    % Inputs
+    Hs = inp.Hs; Tp = inp.Tp; T1_obs = inp.T1; T2_obs = inp.T2; T10_obs = inp.T10;
+    flim = [0.025,0.58]; %frequency limits
+    f = [flim(1):0.005:0.1,0.11:0.01:flim(2)];  %observed frequency intervals (spt format)
+    % Weights and prior
+    w1  = 1; w2 = 1; w10 = 1;
+    usePrior = true;
+    % gamma0   = 3.0;
+    % lambda   = 0.2;   % tune this
+
+    % Objective in gamma
+    obj = @(g) objective_gamma(g, Hs, Tp, f, ...
+                               T1_obs, T2_obs, T10_obs, ...
+                               w1, w2, w10, usePrior, g0, lambda);
+
+    % Bounded search
+    gamma_est = fminbnd(obj, bnds(1),bnds(2), optimset('TolX',1e-6,'Display','off'));
+end
+%%
+function J = objective_gamma(gamma, Hs, Tp, f, ...
+                             T1_obs, T2_obs, T10_obs, ...
+                             w1, w2, w10, usePrior, gamma0, lambda)
+    % Standard sigmas
+    sigma1 = 0.07; sigma2 = 0.09;
     fp = 1/Tp;
     sigma = sigma1*(f<=fp) + sigma2*(f>fp);
-    % JONSWAP shape (Goda / common parameterisation)
-    A = 0.0624 ./ (0.230 + 0.0336*gamma - 0.185./(1.9+gamma)); % empirical alpha prefactor
-    S = A .* Hs.^2 .* Tp.^(-4) .* f.^(-5) .* exp(-1.25*(Tp.*f).^(-4)) .* ...
-        gamma.^(exp(-((Tp.*f - 1).^2)./(2*sigma.^2)));
-    df = f(2)-f(1);
-    m0 = trapz(f, S);
-    m1 = trapz(f, f .* S);
-    T1 = m0 ./ m1;
+
+    % JONSWAP shape (alpha chosen to match Hs via m0)
+    % Start with unit alpha, then rescale
+    Sshape = jonswap_shape_unit(f, fp, gamma, sigma);
+    m0_unit = trapz(f, Sshape);
+    alpha = (Hs/4)^2 / m0_unit;   % enforce m0 -> Hs
+
+    S = alpha * Sshape;
+
+    % Moments
+    m0  = trapz(f, S);
+    m1  = trapz(f, f    .* S);
+    m2  = trapz(f, f.^2 .* S);
+    m_1 = trapz(f, f.^(-1) .* S);
+
+    T1_mod  = m0 / m1;
+    T2_mod  = sqrt(m0 / m2);
+    T10_mod = m_1 / m0;
+
+    e1  = (T1_mod  - T1_obs ) / T1_obs;
+    e2  = (T2_mod  - T2_obs ) / T2_obs;
+    e10 = (T10_mod - T10_obs) / T10_obs;
+
+    J = w1*e1.^2 + w2*e2.^2 + w10*e10.^2;
+
+    if usePrior
+        J = J + lambda * ((gamma - gamma0)/gamma0).^2;
+    end
 end
+%%
+function Sshape = jonswap_shape_unit(f, fp, gamma, sigma)
+    % Unit-alpha JONSWAP shape (m^2/Hz per unit alpha)
+    r  = (f./fp);
+    Sshape = r.^(-5) .* exp(-1.25 * r.^(-4)) .* ...
+             gamma.^(exp(- ( (r - 1).^2 ) ./ (2*sigma.^2)));
+end
+
+
+
+% function [gamma, gamma_sensitivity] = jonswap_gamma_estimation(inp,bnds)
+%     %estimate gamma using Hs, Tp and the sea state component value of T1
+%     % Defaults
+%     sigma1 = 0.07; sigma2 = 0.09;
+%     % Inputs
+%     Hs = inp.Hs; Tp = inp.Tp; T1 = inp.T1;
+%     flim = [0.025,0.58]; %frequency limits
+%     f = [flim(1):0.005:0.1,0.11:0.01:flim(2)];  %obbserved frequency intervals (spt format)
+% 
+%     %f = linspace(1/(5*Tp), 2/Tp, 2000);   % frequency grid (adjust as needed)
+%     ncomp = numel(Hs);
+%     gamma = nan(size(Hs));
+%     gamma_sensitivity = nan(size(Hs,2),3); % store gamma for alt sigma sets
+% 
+%     for i=1:ncomp
+%         Hs = Hs(i);
+%         T1_obs = T1(i);
+% 
+%         % objective: for given gamma compute model T1 and return error
+%         obj = @(gamma) abs( compute_T1_from_jonswap(Hs, Tp, gamma, f, sigma1, sigma2) - T1_obs );
+% 
+%         % search gamma in [lb,ub]
+%         lb = bnds(1)-1e-3; ub = bnds(2)+1e-3; 
+%         gamma_est = fminbnd(obj,lb,ub,optimset('TolX',1e-6,'Display','off'));
+%         gamma(i) = gamma_est;
+% 
+%         % sensitivity: try three sigma variants
+%         gamma_sensitivity(i,1) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.06,0.08)-T1_obs),lb,ub);
+%         gamma_sensitivity(i,2) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.07,0.09)-T1_obs),lb,ub);
+%         gamma_sensitivity(i,3) = fminbnd(@(g) abs(compute_T1_from_jonswap(Hs,Tp,g,f,0.08,0.10)-T1_obs),lb,ub);
+%     end
+% end
+% 
+% %%
+% function T1 = compute_T1_from_jonswap(Hs, Tp, gamma, f, sigma1, sigma2)
+%     fp = 1/Tp;
+%     sigma = sigma1*(f<=fp) + sigma2*(f>fp);
+%     % JONSWAP shape (Goda / common parameterisation)
+%     A = 0.0624 ./ (0.230 + 0.0336*gamma - 0.185./(1.9+gamma)); % empirical alpha prefactor
+%     S = A .* Hs.^2 .* Tp.^(-4) .* f.^(-5) .* exp(-1.25*(Tp.*f).^(-4)) .* ...
+%         gamma.^(exp(-((Tp.*f - 1).^2)./(2*sigma.^2)));
+%     df = f(2)-f(1);
+%     m0 = trapz(f, S);
+%     m1 = trapz(f, f .* S);
+%     T1 = m0 ./ m1;
+% end
