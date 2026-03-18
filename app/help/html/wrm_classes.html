@@ -9,7 +9,7 @@ To make changes, update the MATLAB code and republish this document.
 <title>WaveRayModel Classes and Functions</title>
 <meta name="generator" content="MATLAB 24.2">
 <link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
-<meta name="DC.date" content="2025-08-24">
+<meta name="DC.date" content="2026-03-17">
 <meta name="DC.source" content="wrm_classes.m">
 <style type="text/css">
 html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
@@ -90,28 +90,31 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <a href="#2">WaveRayModel functions</a>
 </li>
 <li>
-<a href="#4">Additional Coastal Classes</a>
+<a href="#4">Coastal Classes and functions for wave models</a>
 </li>
 <li>
-<a href="#6">Additional Coastal Functions</a>
+<a href="#9">Additional Coastal Classes</a>
 </li>
 <li>
-<a href="#8">Grid Classes</a>
+<a href="#11">Additional Coastal Functions</a>
 </li>
 <li>
-<a href="#10">Grid Functions</a>
+<a href="#13">Grid Classes</a>
 </li>
 <li>
-<a href="#11">Core grid functions</a>
+<a href="#15">Grid Functions</a>
 </li>
 <li>
-<a href="#12">Additional utility functions</a>
+<a href="#16">Core grid functions</a>
 </li>
 <li>
-<a href="#13">Functions from Matlab&trade; Exchange Forum</a>
+<a href="#17">Additional utility functions</a>
 </li>
 <li>
-<a href="#16">See Also</a>
+<a href="#18">Functions from Matlab&trade; Exchange Forum</a>
+</li>
+<li>
+<a href="#21">See Also</a>
 </li>
 </ul>
 </div>
@@ -160,25 +163,17 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <i>curvspace</i> - evenly spaced points along an existing curve in 2D or 3D., Author: Yo Fukushima, 2005, <a href="https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace">https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace</a>
 </li>
 <li>
-<i>datawell_directional_spectra</i> - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.</li>
-<li>
-<i>directional_spreading</i> &ndash; sample a directional spreading function at selected direction intervals.</li>
-<li>
 <i>get_element</i> &ndash; define triangular polyshape based on quadrant being entered by ray.</li>
-<li>
-<i>get_inshore_spectrum</i> - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.</li>
-<li>
-<i>get_inshore_wave</i> - integrate the 2-D spectra to obtain wave parameters and transfer coefficients.</li>
 <li>
 <i>get_intersection</i> &ndash; find intersection of a triangle element and a line segment that can be a straight line or an arc segment.</li>
 <li>
 <i>get_quadrant</i> &ndash; find the quadrant that the start point lies in or on. Once first intersection has been found subsequent quadrants are defined in next_element, which calls get_quadrant if ray direction is aligned to axis.</li>
 <li>
+<i>get_transfer_coefficients</i> -</li>
+<li>
 <i>interpolate_cbrewer</i> &ndash; interpolate a colorbrewer map to ncolors levels, Charles Robert, 2011, part of cbrewer from Matlab&trade; Exchange Forum.</li>
 <li>
 <i>is_axis_point</i> &ndash; find whether point lies on an axis and is travelling in the direction of that axis.</li>
-<li>
-<i>isangletol</i> &ndash; boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.</li>
 <li>
 <i>isclosetol</i> &ndash; boolean check of whether an x,y point lies close to another x,y point</li>
 <li>
@@ -190,9 +185,9 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <li>
 <i>trigradient</i> &ndash; compute the gradients in the x and y directions using triangular mesh as input, Author: Mick Warehime, 2013, <a href="https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m">https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m</a> .</li>
 <li>
-<i>wave_spectrum</i> &ndash; calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).</li>
+<i>update_v11_to_v12</i> -</li>
 <li>
-<i>wave_spectrum_params</i> - integrate a 2-D spectra to obtain wave parameters</li>
+<i>waveraymodel_update</i> -</li>
 <li>
 <i>wrm_animation</i> - animation of model spectra timeseries.</li>
 <li>
@@ -201,7 +196,63 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <i>wrm_transport_plots</i> - uses the sediment transport results for a set of points along the coast to examine drift rates, the divergence of drift and the Peclet number (indicates balance of advection and diffusion).</li>
 </ul>
 </div>
-<h2 id="4">Additional Coastal Classes</h2>
+<h2 id="4">Coastal Classes and functions for wave models</h2>
+<p>In the folder ../muiAppCoastalWaves.</p>
+<p>
+<b>Classes</b>
+</p>
+<div>
+<ul>
+<li>
+<b>ctWaveModel</b> &ndash; model of wave propagation to a nearshore or deep-water locations</li>
+<li>
+<b>ctWaveSpectraPlots</b> - analyse wave spectra data held as spectral density as a function of direction and frequency, or loaded from a file.</li>
+<li>
+<b>ctWaveSpectrum</b> - creates and holds a wave spectrum in terms of spectral density as a function of direction and frequency</li>
+<li>
+<b>ctWindWaveModel</b>&ndash; model wind-wave generation over varying fetch lengths</li>
+<li>
+<b>waveModels</b> - Abstract class wave models to define data access methods.</li>
+</ul>
+</div>
+<p>
+<b>Functions</b>
+</p>
+<div>
+<ul>
+<li>
+<i>addwaterlevels2waves</i> - class function to add water levels to a selected wave dataset. Used by <b>waveModels</b> and <b>ctWaveData</b> when being used for derivative models such as runup in <b>CT_WaveModels</b>.</li>
+<li>
+<i>datawell_directional_spectra</i> - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.</li>
+<li>
+<i>directional_spreading</i> &ndash; sample a directional spreading function at selected direction intervals.</li>
+<li>
+<i>extract_wave_data</i> - extract Hs, Tp and Dir from a dataset that does not use default naming convention (e.g. Copernicus re-analysis data).</li>
+<li>
+<i>extract_wind_data</i> - extract AvSpeed,MaxSpeed,Dir from a dataset that does not use default naming convention.</li>
+<li>
+<i>get_inshore_spectrum</i> - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.</li>
+<li>
+<i>isangletol</i> &ndash; boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.</li>
+<li>
+<i>setspectrum</i> -reduce a detailed model spectrum to the format defined by the Datawell buoy spt file format.</li>
+<li>
+<i>subsample_spectra_ts</i> - create a timeseries by interpolating a spectrum timeseries using times from another timeseries.</li>
+<li>
+<i>taylor_plot_ts</i> - add a timeseries of test points to a Taylor diagram (assumes common reference point).</li>
+<li>
+<i>trapz_weights_periodic</i> - integration weights for periodic trapezoidal rule.</li>
+<li>
+<i>wave_spectrum</i> - calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).</li>
+<li>
+<i>wave_spectrum_gamma</i> - estiamte the JONSWAP gamma from a frequency spectrum, S(f), or a frequency&ndash;direction spectrum S(dir,f).</li>
+<li>
+<i>wave_spectrum_params</i> - integrate a 2-D spectra to obtain wave parameters.</li>
+<li>
+<i>wrm_single_animation</i> - animation of model spectra timeseries.</li>
+</ul>
+</div>
+<h2 id="9">Additional Coastal Classes</h2>
 <p>In the folder ../muiAppCoastalClasses.</p>
 <div>
 <ul>
@@ -213,7 +264,7 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <b>ctWindData</b> &ndash; import wind data</li>
 </ul>
 </div>
-<h2 id="6">Additional Coastal Functions</h2>
+<h2 id="11">Additional Coastal Functions</h2>
 <p>In the folder ../muiAppCoastalFcns.</p>
 <div>
 <ul>
@@ -229,7 +280,7 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <i>extract_wave_data</i> - extract Hs, Tp and Dir from a dataset that does not use default naming convention (e.g. Copernicus re-analysis data).</li>
 </ul>
 </div>
-<h2 id="8">Grid Classes</h2>
+<h2 id="13">Grid Classes</h2>
 <p>Classes used to manipulate cartesian grids can be found in the <i>muiAppGridFcns</i> folder and include the following:</p>
 <div>
 <ul>
@@ -241,9 +292,9 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <b>GD_ImportData</b>: class inherits <a href="matlab:doc('fgdinterface')">FGDinterface</a> abstract class (see above) to load xyz data from a file.</li>
 </ul>
 </div>
-<h2 id="10">Grid Functions</h2>
+<h2 id="15">Grid Functions</h2>
 <p>Functions used to manipulate cartesian grids can be found in the <i>muiAppGridFcns</i> folder and include the following:</p>
-<h2 id="11">Core grid functions</h2>
+<h2 id="16">Core grid functions</h2>
 <div>
 <ul>
 <li>
@@ -296,7 +347,7 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <b>gd_sn2xy</b> - map grid from curvilinear to cartesian coordinates.</li>
 </ul>
 </div>
-<h2 id="12">Additional utility functions</h2>
+<h2 id="17">Additional utility functions</h2>
 <div>
 <ul>
 <li>
@@ -305,7 +356,7 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 <b>gd_user_function</b> - function for user to define bespoke use of grids and grid tools.</li>
 </ul>
 </div>
-<h2 id="13">Functions from Matlab&trade; Exchange Forum</h2>
+<h2 id="18">Functions from Matlab&trade; Exchange Forum</h2>
 <div>
 <ul>
 <li>
@@ -322,7 +373,7 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 </div>
 <p>Further details can be found in <a href="matlab:doc('grid_class_fcns')">Grid classes and functions</a>
 </p>
-<h2 id="16">See Also</h2>
+<h2 id="21">See Also</h2>
 <p>The ModelSkill <a href="matlab:wrm_open_manual">manual</a>, which provides further details of setup and configuration of the model.</p>
 <p class="footer">
 <br>
@@ -358,27 +409,64 @@ table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px soli
 % * _celerity_mesh_ - calculate the celerity and group celerity over a bathymetry mesh for a range of wave periods and a range of water levels
 % * _compass2trig_ – convert compass directions to trigonometric angles, or vice versa.
 % * _curvspace_ -  evenly spaced points along an existing curve in 2D or 3D., Author: Yo Fukushima, 2005, https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace 
-% * _datawell_directional_spectra_ - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.
-% * _directional_spreading_ – sample a directional spreading function at selected direction intervals.
 % * _get_element_ – define triangular polyshape based on quadrant being entered by ray.
-% * _get_inshore_spectrum_ - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.
-% * _get_inshore_wave_ - integrate the 2-D spectra to obtain wave parameters and transfer coefficients. 
 % * _get_intersection_ – find intersection of a triangle element and a line segment that can be a straight line or an arc segment.
 % * _get_quadrant_ – find the quadrant that the start point lies in or on. Once first intersection has been found subsequent quadrants are defined in next_element, which calls get_quadrant if ray direction is aligned to axis.
+% * _get_transfer_coefficients_ - 
 % * _interpolate_cbrewer_ – interpolate a colorbrewer map to ncolors levels, Charles Robert, 2011, part of  cbrewer from Matlab(TM) Exchange Forum.
 % * _is_axis_point_ – find whether point lies on an axis and is travelling in the direction of that axis.
-% * _isangletol_ – boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.
 % * _isclosetol_ – boolean check of whether an x,y point lies close to another x,y point
 % * _mesh_arc_ray_ – compute the exit position and direction of a ray entering a trian.gular mesh element at the position and direction defined by the incoming.
 % * _mesh2d_ – generate triangular mesh, Author: Darren Engwirda, 2017, https://github.com/dengwirda/mesh2d. NB: the mesh2d folder in the App is empty and this set of functions needs to be downloaded from the source and installed in the designated sub-folder of the WaveRayModel App.
 % * _PoolWaitbar_ - initiallises and updates a waitbar when running a loop using parfor, Matlab(TM) Forum: Edric Ellis, 2019
 % * _trigradient_ – compute the gradients in the x and y directions using triangular mesh as input, Author: Mick Warehime, 2013, https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m .
-% * _wave_spectrum_ – calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).
-% * _wave_spectrum_params_ - integrate a 2-D spectra to obtain wave parameters
+% * _update_v11_to_v12_ - 
+% * _waveraymodel_update_ - 
 % * _wrm_animation_ - animation of model spectra timeseries.
 % * _wrm_runmovie_ - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.
 % * _wrm_transport_plots_ - uses the sediment transport results for a set of points along the coast to 
 % examine drift rates, the divergence of drift and the Peclet number (indicates balance of advection and diffusion).
+
+%% Coastal Classes and functions for wave models
+% In the folder ../muiAppCoastalWaves.
+%% 
+% *Classes*
+%%
+% * *ctWaveModel* – model of wave propagation to a nearshore or deep-water locations
+% * *ctWaveSpectraPlots* - analyse wave spectra data held as spectral density as a
+%   function of direction and frequency, or loaded from a file.
+% * *ctWaveSpectrum* - creates and holds a wave spectrum in terms of spectral density 
+%   as a function of direction and frequency
+% * *ctWindWaveModel*– model wind-wave generation over varying fetch lengths
+% * *waveModels* - Abstract class wave models to define data access methods.
+%%
+% *Functions*
+%%
+% * _addwaterlevels2waves_ - class function to add water levels to a 
+% selected wave dataset. Used by *waveModels* and *ctWaveData* when being 
+% used for derivative models such as runup in *CT_WaveModels*.
+% * _datawell_directional_spectra_ - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.
+% * _directional_spreading_ – sample a directional spreading function at selected direction intervals.
+% * _extract_wave_data_ - extract Hs, Tp and Dir from a dataset that does not use default naming
+%   convention (e.g. Copernicus re-analysis data).
+% * _extract_wind_data_ - extract AvSpeed,MaxSpeed,Dir from a dataset that does not use default naming
+%   convention.
+% * _get_inshore_spectrum_ - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.
+% * _isangletol_ – boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.
+% * _setspectrum_ -reduce a detailed model spectrum to the format defined by the Datawell 
+%   buoy spt file format.
+% * _subsample_spectra_ts_ - create a timeseries by interpolating a spectrum timeseries using times
+%   from another timeseries.
+% * _taylor_plot_ts_ - add a timeseries of test points to a Taylor diagram (assumes common
+%   reference point).
+% * _trapz_weights_periodic_ - integration weights for periodic trapezoidal
+% rule.
+% * _wave_spectrum_ - calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).
+% * _wave_spectrum_gamma_ - estiamte the JONSWAP gamma from a frequency spectrum, S(f), or a
+%   frequency–direction spectrum S(dir,f).
+% * _wave_spectrum_params_ - integrate a 2-D spectra to obtain wave
+% parameters.
+% * _wrm_single_animation_ - animation of model spectra timeseries.
 
 %% Additional Coastal Classes
 % In the folder ../muiAppCoastalClasses.

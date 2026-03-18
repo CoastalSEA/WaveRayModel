@@ -24,27 +24,64 @@
 % * _celerity_mesh_ - calculate the celerity and group celerity over a bathymetry mesh for a range of wave periods and a range of water levels
 % * _compass2trig_ – convert compass directions to trigonometric angles, or vice versa.
 % * _curvspace_ -  evenly spaced points along an existing curve in 2D or 3D., Author: Yo Fukushima, 2005, https://www.mathworks.com/matlabcentral/fileexchange/7233-curvspace 
-% * _datawell_directional_spectra_ - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.
-% * _directional_spreading_ – sample a directional spreading function at selected direction intervals.
 % * _get_element_ – define triangular polyshape based on quadrant being entered by ray.
-% * _get_inshore_spectrum_ - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.
-% * _get_inshore_wave_ - integrate the 2-D spectra to obtain wave parameters and transfer coefficients. 
 % * _get_intersection_ – find intersection of a triangle element and a line segment that can be a straight line or an arc segment.
 % * _get_quadrant_ – find the quadrant that the start point lies in or on. Once first intersection has been found subsequent quadrants are defined in next_element, which calls get_quadrant if ray direction is aligned to axis.
+% * _get_transfer_coefficients_ - 
 % * _interpolate_cbrewer_ – interpolate a colorbrewer map to ncolors levels, Charles Robert, 2011, part of  cbrewer from Matlab(TM) Exchange Forum.
 % * _is_axis_point_ – find whether point lies on an axis and is travelling in the direction of that axis.
-% * _isangletol_ – boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.
 % * _isclosetol_ – boolean check of whether an x,y point lies close to another x,y point
 % * _mesh_arc_ray_ – compute the exit position and direction of a ray entering a trian.gular mesh element at the position and direction defined by the incoming.
 % * _mesh2d_ – generate triangular mesh, Author: Darren Engwirda, 2017, https://github.com/dengwirda/mesh2d. NB: the mesh2d folder in the App is empty and this set of functions needs to be downloaded from the source and installed in the designated sub-folder of the WaveRayModel App.
 % * _PoolWaitbar_ - initiallises and updates a waitbar when running a loop using parfor, Matlab(TM) Forum: Edric Ellis, 2019
 % * _trigradient_ – compute the gradients in the x and y directions using triangular mesh as input, Author: Mick Warehime, 2013, https://www.mathworks.com/matlabcentral/fileexchange/36837-trigradient-m .
-% * _wave_spectrum_ – calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).
-% * _wave_spectrum_params_ - integrate a 2-D spectra to obtain wave parameters
+% * _update_v11_to_v12_ - 
+% * _waveraymodel_update_ - 
 % * _wrm_animation_ - animation of model spectra timeseries.
 % * _wrm_runmovie_ - callback function for animation figure buttons and slider modified from muiPlots to handle two subplots.
 % * _wrm_transport_plots_ - uses the sediment transport results for a set of points along the coast to 
 % examine drift rates, the divergence of drift and the Peclet number (indicates balance of advection and diffusion).
+
+%% Coastal Classes and functions for wave models
+% In the folder ../muiAppCoastalWaves.
+%% 
+% *Classes*
+%%
+% * *ctWaveModel* – model of wave propagation to a nearshore or deep-water locations
+% * *ctWaveSpectraPlots* - analyse wave spectra data held as spectral density as a
+%   function of direction and frequency, or loaded from a file.
+% * *ctWaveSpectrum* - creates and holds a wave spectrum in terms of spectral density 
+%   as a function of direction and frequency
+% * *ctWindWaveModel*– model wind-wave generation over varying fetch lengths
+% * *waveModels* - Abstract class wave models to define data access methods.
+%%
+% *Functions*
+%%
+% * _addwaterlevels2waves_ - class function to add water levels to a 
+% selected wave dataset. Used by *waveModels* and *ctWaveData* when being 
+% used for derivative models such as runup in *CT_WaveModels*.
+% * _datawell_directional_spectra_ - estimates the directional distribution of a wave spectrum for directions, dirs, given the mean, spread, skewness and kurtosis parameters as output by datawell buoys SPT file format.
+% * _directional_spreading_ – sample a directional spreading function at selected direction intervals.
+% * _extract_wave_data_ - extract Hs, Tp and Dir from a dataset that does not use default naming
+%   convention (e.g. Copernicus re-analysis data).
+% * _extract_wind_data_ - extract AvSpeed,MaxSpeed,Dir from a dataset that does not use default naming
+%   convention.
+% * _get_inshore_spectrum_ - construct the offshore and inshore spectra for given wave conditions or wave buoy spectral data.
+% * _isangletol_ – boolean check of whether an angle lies between upper and lower bounds defined as specific angles, or a tolerance.
+% * _setspectrum_ -reduce a detailed model spectrum to the format defined by the Datawell 
+%   buoy spt file format.
+% * _subsample_spectra_ts_ - create a timeseries by interpolating a spectrum timeseries using times
+%   from another timeseries.
+% * _taylor_plot_ts_ - add a timeseries of test points to a Taylor diagram (assumes common
+%   reference point).
+% * _trapz_weights_periodic_ - integration weights for periodic trapezoidal
+% rule.
+% * _wave_spectrum_ - calculate the spectral energy at a number of frequencies using a selection of spectrum definitions (Bretschneider open ocean, Pierson-Moskowitz fully developed, JONSWAP fetch limited, and TMA shallow water).
+% * _wave_spectrum_gamma_ - estiamte the JONSWAP gamma from a frequency spectrum, S(f), or a
+%   frequency–direction spectrum S(dir,f).
+% * _wave_spectrum_params_ - integrate a 2-D spectra to obtain wave
+% parameters.
+% * _wrm_single_animation_ - animation of model spectra timeseries.
 
 %% Additional Coastal Classes
 % In the folder ../muiAppCoastalClasses.
