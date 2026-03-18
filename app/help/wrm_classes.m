@@ -4,7 +4,6 @@
 
 %% WaveRayModel classes
 % * *WaveRayModel*: defines the behaviour of the main UI.
-% * *MS_RunParams*: UI to set pareameters used for the skill score
 % * *Ray*: creates individual ray objects. Called by RayTracks and uses arc_ray function.
 % * *RayTracks*: constructing array of wave ray tracks as a function of wave direction, wave period and water level, working in forward or backward ray tracking mode. 
 % * *SpectralTransfer*: builds the offshore and inshore Transfer Tables from a backward ray tracking data set (class RayTracks) for use in WRM_WaveModel. Also has a method to create plots of the transfer coefficients for a unit wave height.
@@ -15,6 +14,8 @@
 % * *WRM_RunParams*: run parameters for the WaveRayModel.
 % * *WRM_SedimentTransport*: compute alongshore and cross-shore transport for an array of points on the edge of the surf zone. Uses the output of a Batch Wave Run as the nearshore wave input.
 % * *WRM_WaveModel*: Class for wave refraction using backward ray transfer function. Constructs inshore time series from an offshore timeseries. Also includes methods to plot the offshore and inshore spectra.
+% * *muiSkill_RunParams*: UI to set parameters used for the skill score in
+% <matlab:doc('muitoolbox') muitoolbox> 
 
 %% WaveRayModel functions
 % Functions to construct rays, wave sprectra and generate plots
