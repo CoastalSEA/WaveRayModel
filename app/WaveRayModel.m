@@ -85,19 +85,24 @@ classdef WaveRayModel < muiModelUI
             menu.Tools(1).Callback = {@obj.refresh, 'gcbo;'};  
             
             % submenu for 'Clear all'
-            menu.Tools(2).List = {'Model','Figures','Cases'};
-            menu.Tools(2).Callback = repmat({@obj.toolsMenuOptions},[1,3]);
+            menu.Tools(2).List = {'Project','Figures','Data','Models'};
+            menu.Tools(2).Callback = [{@obj.toolsMenuOptions},{'gcbo;'},...
+                                     repmat({@obj.toolsMenuOptions},[1,2])];
+
+            menu.Tools(3).List = {'UI Figures','Tag Figures'};
+            menu.Tools(3).Callback = repmat({@obj.toolsMenuOptions},[1,2]);  
 
             %% Project menu -----------------------------------------------
             menu.Project(1).List = {'Project Info','Cases','Export/Import'};
             menu.Project(1).Callback = {@obj.editProjectInfo,'gcbo;','gcbo;'};
             
             %list as per muiModelUI.projectMenuOptions
-            % submenu for Scenarios
-            menu.Project(2).List = {'Edit Description','Edit Data Set',...
-                                    'Save Data Set','Delete Case','Reload Case',...
-                                    'View Case Settings'};                                               
-            menu.Project(2).Callback = repmat({@obj.projectMenuOptions},[1,6]);
+            menu.Project(2).List = {'Edit Description','Edit DS properties',...
+                                    'Edit Data Set','Save Data Set',...
+                                    'Delete Case','Delete Dataset',...
+                                    'Delete Variable',...
+                                    'Reload Case','View Case Settings'};                                               
+            menu.Project(2).Callback = repmat({@obj.projectMenuOptions},[1,9]);
             
             % submenu for 'Export/Import'                                          
             menu.Project(3).List = {'Export Case','Import Case'};
@@ -303,11 +308,18 @@ classdef WaveRayModel < muiModelUI
 %%
         function loadMenuOptions(obj,src,~)
             %callback functions to import timeseries data
+            mode = 'single';
             switch src.Parent.Text
                 case 'Bathymetry'
                     classname = 'GD_ImportData';
                 case 'Waves'
-                    classname = 'ctWaveData';
+                    answer = questdlg('Wave properties or spectra?','Waves',...
+                                      'Properties','Spectra','Properties');
+                    if strcmp(answer,'Properties')
+                        classname = 'ctWaveData';
+                    else
+                        classname = 'ctWaveSpectrumData';
+                    end
                 case 'Water levels'
                     classname = 'ctWaterLevelData';
                 case 'Winds'
@@ -319,11 +331,15 @@ classdef WaveRayModel < muiModelUI
                     fname = sprintf('%s.loadData',classname);
                     callStaticFunction(obj,classname,fname); 
                 case 'Add'
-                    useCase(obj.Cases,'single',{classname},'addData');
+                    if strcmp(classname,'ctWaveSpectrumData')
+                        useCase(obj.Cases,mode,{classname},'addMultiFiles');
+                    else
+                        useCase(obj.Cases,mode,{classname},'addData');
+                    end
                 case 'Delete'
-                    useCase(obj.Cases,'single',{classname},'deleteGrid');
+                    useCase(obj.Cases,mode,{classname},'deleteGrid');
                 case 'Quality Control'
-                    useCase(obj.Cases,'single',{classname},'qcData');
+                    useCase(obj.Cases,mode,{classname},'qcData');
             end
             DrawMap(obj);
         end
