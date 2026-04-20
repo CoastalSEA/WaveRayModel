@@ -241,14 +241,21 @@ classdef SpectralTransfer < muiDataSet
                 spobj = setSpectrumModel(spobj);  %define the model to be used (Jonswap etc)
                 if isempty(spobj.spModel), offobj = []; inobj = []; return; end
                 spobj.inpData.output = 'Modelled'; %TMA, etc used in get_inshore_spectrum
+
             end
                 
             tsdst(1).DataTable = rmmissing(tsdst(1).DataTable);%remove nans
-            nint = height(tsdst(1).DataTable);
-            hpw = PoolWaitbar(nint, 'Processing timeseries');
-            offobj(nint) = copy(spobj);
-            inobj(nint) = copy(spobj);
-            parfor i=1:nint                                %parfor loop  
+            nrec = height(tsdst(1).DataTable);
+            seas = zeros(nrec,1);                         %needed in parfor to match loop size
+            if ~isempty(meta.variables) && ~isempty(meta.variables.seastate)...
+                                   && isa(meta.variables.seastate,'dstable')
+                seas = meta.variables.seastate.DataTable; %required for parfor loop
+            end
+
+            hpw = PoolWaitbar(nrec, 'Processing timeseries');
+            offobj(nrec) = copy(spobj);
+            inobj(nrec) = copy(spobj);
+            parfor i=1:nrec                                %parfor loop  
                 %for each offshore wave get the inshore results
                 offspectrum = copy(spobj);
                 tsdstrow = ctWaveSpectrum.getDatasetRow(tsdst,i);
@@ -261,7 +268,7 @@ classdef SpectralTransfer < muiDataSet
                 elseif strcmp(inptype,'Wind')
                     offspectrum = getModelSpectrum(offspectrum);
                 else
-                    offspectrum = getMultiModalSpectrum(offspectrum);
+                    offspectrum = getMultiModalSpectrum(offspectrum,seas(i,:));
                 end
                 offspectrum.Spectrum.date = tsdstrow.RowNames;
                 offspectrum.Params = wave_spectrum_params(offspectrum);

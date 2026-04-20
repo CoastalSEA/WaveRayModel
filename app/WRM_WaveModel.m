@@ -57,48 +57,53 @@ classdef WRM_WaveModel < waveModels
             inputxt = sprintf('%s, %s',meta.inptxt,sptmeta.inptxt);
 
             [offobj,inobj] = runWaves(sptobj,tsdst,meta);
+            if isempty(inobj), obj = []; return; end
 %--------------------------------------------------------------------------
 % Assign model output to a dstable using the defined dsproperties meta-data
 %--------------------------------------------------------------------------    
-            [sp,results] = unpackSpectrum(inobj,offobj);
-            results = addvars(results,sp.swl,sp.depths,'NewVariableNames',{'swl','depi'});
-            dir = offobj(1).Spectrum.dir;
-            freq = offobj(1).Spectrum.freq;
-
-            answer = questdlg('Save the spectra?','Wave model','Yes','No','No');
-            if strcmp(answer,'Yes'), issave=true; else, issave=false; end
-            %check whether wave spectra should also be saved
-            Sot = sp.Sot; %#ok<NASGU>
-            sze = 2*getfield(whos('Sot'),'bytes')*9.53674e-7;
-            if issave
-                questxt = sprintf('Save the full wave spectra (arrays are %.1f Mb) or spt format',sze);
-                answer = questdlg(questxt,'Wave model','Full','SPT format','SPT format');
-                source = sprintf('Class %s, using %s',metaclass(obj).Name,ModelType);                        
-                if strcmp(answer,'SPT format')
-                    dst.OffshoreSpectra = saveSpectrum(offobj);
-                    dst.OffshoreSpectra.Source = source;
-                    dst.OffshoreSpectra.MetaData = inputxt; 
-                    dst.InshoreSpectra = saveSpectrum(inobj);
-                    dst.InshoreSpectra.Description = sprintf('Inshore using %s',dst.OffshoreSpectra.Description);
-                    dst.InshoreSpectra.Source = source;
-                    dst.InshoreSpectra.MetaData = inputxt;  
-                else
-                    dst.oiSpectra = dstable(sp.Sot,sp.Sit,'RowNames',sp.time,'DSproperties',dspec); 
-                    dst.oiSpectra.Dimensions.dir = dir;    %NB order is X,Y and must
-                    dst.oiSpectra.Dimensions.freq = freq;  %match variable dimensions  
-                    %assign metadata about model
-                    dst.oiSpectra.Source = source;
-                    dst.oiSpectra.MetaData = inputxt;                    
-                end                    
-            end
-
-            dst.Properties = dstable(results,'RowNames',sp.time,'DSproperties',dsprop);                      
+            [results,mytime] = unpackProperties(inobj,offobj);
+            dst.Properties = dstable(results,'RowNames',mytime,'DSproperties',dsprop);                      
             %assign metadata about model            
             dst.Properties.Source =  sprintf('Class %s, using %s',metaclass(obj).Name,...
                                                          ModelType);
             dst.Properties.MetaData = inputxt;   
-            %add depths of inshore point for which there are backward rays
-            dst.Properties.UserData = sp.depths;
+            % %add depths of inshore point for which there are backward rays
+            % dst.Properties.UserData = depths;  
+            clear results
+
+            %check whether wave spectra should also be saved
+            nrec = numel(inobj);
+            if nrec<=15000
+                %only save results is arrays size is manageable
+                answer = questdlg('Save the spectra?','Wave model','Yes','No','No');
+                if strcmp(answer,'Yes')    
+                    Sot = offobj(1).Spectrum.SG; %#ok<NASGU>
+                    sze = 2*nrec*getfield(whos('Sot'),'bytes')*9.53674e-7;
+                    questxt = sprintf('Save the full wave spectra (arrays are %.1f Mb) or spt format',sze);
+                    answer = questdlg(questxt,'Wave model','Full','SPT format','SPT format');
+                    source = sprintf('Class %s, using %s',metaclass(obj).Name,ModelType);                        
+                    if strcmp(answer,'SPT format')
+                        dst.OffshoreSpectra = saveSpectrum(offobj);
+                        dst.OffshoreSpectra.Source = source;
+                        dst.OffshoreSpectra.MetaData = inputxt; 
+                        dst.InshoreSpectra = saveSpectrum(inobj);
+                        dst.InshoreSpectra.Description = sprintf('Inshore using %s',dst.OffshoreSpectra.Description);
+                        dst.InshoreSpectra.Source = source;
+                        dst.InshoreSpectra.MetaData = inputxt;  
+                    else
+                        dir = offobj(1).Spectrum.dir;
+                        freq = offobj(1).Spectrum.freq;                        
+                        sp = unpackSpectrum(inobj,offobj);
+                        clear inobj offobj
+                        dst.oiSpectra = dstable(sp.Sot,sp.Sit,'RowNames',sp.time,'DSproperties',dspec); 
+                        dst.oiSpectra.Dimensions.dir = dir;    %NB order is X,Y and must
+                        dst.oiSpectra.Dimensions.freq = freq;  %match variable dimensions  
+                        %assign metadata about model
+                        dst.oiSpectra.Source = source;
+                        dst.oiSpectra.MetaData = inputxt;                    
+                    end                    
+                end
+            end
 %--------------------------------------------------------------------------
 % Save results
 %--------------------------------------------------------------------------  
@@ -231,7 +236,7 @@ classdef WRM_WaveModel < waveModels
 
             dsprop.Variables = struct(...   
                 'Name',{'Hs','m0','Dir','Sp','Tp','Dp',...
-                        'Sfdpk','Tfdpk','Dfdpk','T2',...
+                        'Sfdpk','Tfdpk','Dfdpk','T1','T2','T10'...
                         'kw','kt2','ktp','kd','swl','depi'},...
                 'Description',{'Inshore wave height',...
                                'Inshore zero moment',...
@@ -242,24 +247,27 @@ classdef WRM_WaveModel < waveModels
                                'Inshore f-d spectral density peak',...
                                'Inshore f-d peak period',...
                                'Inshore f-d peak direction',...
-                               'Inshore mean period',...
+                               'Inshore mean period (T1)',...
+                               'Inshore zero-upcross period (T2)',...
+                               'Inshore energy period (T-10)',...
                                'Wave transfer coefficient',...
                                'Mean period coefficient',...
                                'Peak period coefficient',...
                                'Mean direction shift',...
                                'Still water level',...
                                'Inshore depth'},...                               
-                'Unit',{'m','m^2','degTN','m^2/Hz','s','degTN','m^2/Hz',...
-                            's','degTN','s','-','-','-','deg','mOD','m'},...
+                'Unit',{'m','m^2','degTN','m^2/Hz','s','degTN','m^2/Hz','s',...
+                            'degTN','s','s','s','-','-','-','deg','mOD','m'},...
                 'Label',{'Wave height (m)','Zero moment (m^2)',...
                          'Wave direction (degTN)','Spectral density (m^2/Hz)',...                
                          'Wave period (s)','Wave direction (degTN)',... 
                          'Spectral density (m^2/Hz)','Wave period (s)',... 
                          'Wave direction (degTN)','Wave period (s)',...
+                         'Wave period (s)','Wave period (s)',...
                          'Transfer coefficient, kw','Transfer coefficient, kt2',...
                          'Transfer coefficient, ktp','Direction shift (deg)',...
                          'Water level (mOD)','Water depth (m)'},...
-                'QCflag',repmat({'model'},1,16)); 
+                'QCflag',repmat({'model'},1,18)); 
             dsprop.Row = struct(...
                 'Name',{'Time'},...
                 'Description',{'Time'},...
