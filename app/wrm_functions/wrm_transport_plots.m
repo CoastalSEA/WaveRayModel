@@ -137,7 +137,7 @@ function mn_mean_drift(obj,mobj)
     mtime = dst.(pntnames{1}).RowNames;
     
     for i=1:npnts
-        Var = dst.(pntnames{i}).(var.name);        getVariable
+        Var = dst.(pntnames{i}).(var.name);  
         Var(abs(Var)<calms.value) = NaN; %remove near zero values
         [~,binvar,bintime] = binned_variable(Var,mtime,'month','year');
         nint = size(binvar,2);
