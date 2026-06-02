@@ -81,7 +81,8 @@ function an_mean_drift(obj,mobj)
     mtime = dst.(pntnames{1}).RowNames;
     answer = questdlg('Select period','Drift','All years','Winters','Summers','All years');
 
-    meanVar = zeros(1,npnts); upper = meanVar; lower = upper; peclet = upper;
+    meanVar = zeros(1,npnts); upper = meanVar; lower = upper; 
+    peclet = upper; uppct = upper; lowpct = upper;
     for i=1:npnts
         Var = dst.(pntnames{i}).(var.name);
         Var(abs(Var)<calms.value) = NaN; %remove near zero values
@@ -99,6 +100,8 @@ function an_mean_drift(obj,mobj)
         upper(i) = meanVar(i)+stdVar;
         lower(i) = meanVar(i)-stdVar;
         peclet(i) = meanVar(i)./stdVar;
+        uppct(i) = prctile(Var,95);
+        lowpct(i) = prctile(Var,5);
     end
     downcoast = meanVar; upcoast = meanVar;
     downcoast(peclet>-1) = NaN;     %downcoast advection fo Pe<-1
@@ -116,6 +119,8 @@ function an_mean_drift(obj,mobj)
         plot(ax,loc,downcoast,'-og','DisplayName','Pe<-1','LineWidth',0.8,'MarkerSize',4);
         plot(ax,loc,upcoast,'-ob','DisplayName','Pe>1','LineWidth',0.8,'MarkerSize',4);
     end
+    plot(ax,loc,uppct,'-.b','DisplayName',sprintf('95 percentile %s',var.name));
+    plot(ax,loc,lowpct,'-.b','DisplayName',sprintf('5 percentile %s',var.name));
     hold off
     xlabel('Position along shore')
     ylabel(var.desc)
@@ -227,7 +232,7 @@ end
 
 %%
 function summary_shore_drift(obj)
-    %summary plot of selected statistical propoerty and period for all 
+    %summary plot of selected statistical property and period for all 
     %alongshore points
     dst = obj.Data;
     pntnames = fieldnames(dst);
@@ -881,7 +886,7 @@ function idcls = getVarClusters(dst,opts)
     returnflag = 0; %0:returns indices of peaks; 1:returns values       
     idpks = peaksoverthreshold(var,opts.threshold,opts.method,...
                                         mtime,hours(opts.tint),returnflag);
-    % find clusters based on results from peak selection
+    % find clustecrs based on results from peak selection
     pk_date = mtime(idpks);    %datetime of peak
     pk_vals = var(idpks);  %value of peak
     idcls = clusters(pk_date,pk_vals,days(opts.clint));
