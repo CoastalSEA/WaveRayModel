@@ -36,12 +36,11 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
     end
 
 %%   
-    methods (Access=protected)
-        function obj = WRM_SedimentTransport(mobj)             
+    methods (Access={?muiDataSet,?muiPropertyUI,?muiStats,?muiPlots})
+        function obj = WRM_SedimentTransport()             
             %constructor code:            
             %TabDisplay values defined in UI function setTabProperties used to assign
-            %the tabname and position on tab for the data to be displayed
-            obj = setTabProps(obj,mobj);  %muiPropertyUI function
+            %the tabname and position on tab for the data to be displayed            
         end 
     end
 
@@ -49,7 +48,8 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
     methods (Static)  
         function obj = setInput(mobj,editflag)
             %gui for user to set Parameter Input values
-            obj = WRM_SedimentTransport(mobj);    
+            obj = WRM_SedimentTransport();    
+            obj = setTabProps(obj,mobj);  %muiPropertyUI function
             %use muiPropertyUI function to generate UI
             if nargin<2 || editflag
                 %add nrec to limit length of props UI (default=12)
@@ -99,9 +99,9 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
             %derived plots from the sediment transport and wave data at 
             %multiple alongshore points
             promptxt = 'Sediment Tranport Plots - select Case to use:';
-            listxt = {'Annual Mean Drift','Monthly Mean Drift',...
+            listxt = {'Annual Mean Drift','Binned Mean Drift',...
                       'Summary Point Drift','Summary Shore Drift',...
-                      'Monthly Peclet Ratio','Cluster Peclet Ratio',...
+                      'Binned Peclet Ratio','Cluster Peclet Ratio',...
                       'Wave-Drift Tables'};
                 ok = 1;
                 while ok>0
@@ -159,7 +159,7 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
                 %Note the current formulation dose NOT use Tp, Dir and theta
                 Qx(:,i) = xshore_bailard(wv.Hs,wv.Tp,wv.Dir,wv.depi,...
                                             theta(i),bs,d50,g,rhw,rhs,vsc);
-                [~,~,~,R2] = runup(bs,wv.Hs,wv.Tp); %for gravel beaches
+                [~,~,~,R2] = runup(bs,wv.Hs,wv.Tp);      %for gravel beaches
                 zR2(:,i) = R2+wv.swl;                    %runup elevation
                 alpi(:,i) = getTransportDirection(obj,wv.Dir,theta(i));
                 %add point specific metadata
@@ -208,17 +208,12 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
             if nfiles<1, return; end
             xypnts = readmatrix([path,fname]); 
             plines = gd_lines2points([xypnts;NaN,NaN]);
+            %get plinedir - 3-point mean direction of line at each point in x,y space
             [plinedir,~,cumlen] = gd_curvelineprops({plines},1);
-            plinedir = [plinedir{1}(1),plinedir{1}(1:end-1),plinedir{1}(end-1)];
-            for j=2:length(plinedir)-1
-                theta(j-1) = sum(plinedir(j-1:j+1))/3*180/pi(); %#ok<AGROW>
-            end
-            obj.ShorelineAngle = theta;
-            % dist = diff(cumlen{1}(1:end-1)); 
-            % obj.PointDistance = [dist,dist(end)];   %pad to make same length  
+            %convert to degrees True North
+            obj.ShorelineAngle = mod(90-plinedir{1}(1:end-1)*180/pi(),360);  
             obj.PointDistances = cumlen{1}(1:end-1);  %remove traling NaN
         end
-
 
 %%
         function phi = getTransportDirection(~,Diri,theta)
