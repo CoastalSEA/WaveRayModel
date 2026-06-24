@@ -292,7 +292,7 @@ function drift_peclet(obj,msgtxt)
             % dst = obj.Data;
             % pntnames = fieldnames(dst);
             % npnts = length(pntnames);
-            % [var,~] = getVariable(dst,pntnames,1);
+            % var = getVariable(dst,pntnames,1);
             % if isempty(var), return; end
         
             % mtime = dst.(pntnames{1}).RowNames;
@@ -405,8 +405,8 @@ function cluster_peclet(obj,msgtxt)
     dst = obj.Data;
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    [var,~] = getVariable(dst,pntnames,1); %selects Qs without prompting user
-    if isempty(var), return; end
+    varsel = getVariable(dst,pntnames,1); %selects Qs without prompting user
+    if isempty(varsel), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
     ans0 = questdlg('Use absolute values of drift or +/- values?','Clusters',...
