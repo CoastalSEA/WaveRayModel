@@ -60,7 +60,7 @@ function wrm_transport_plots(obj,mobj,option)
         case 'Summary Shore Drift'
             summary_shore_drift(obj);
         case 'Binned Peclet Ratio'
-            drift_peclet(obj,msgtxt);
+            monthly_drift_peclet(obj,msgtxt);
         case 'Cluster Peclet Ratio'
             cluster_peclet(obj,msgtxt);
         case 'Wave Rose Plots'
@@ -275,7 +275,7 @@ function summary_shore_drift(obj)
 end
 
 %%
-function drift_peclet(obj,msgtxt)
+function monthly_drift_peclet(obj,msgtxt)
     %plots to examine Peclet ratio using monthly/annual sampling(see Kahl, et al, 2024)
     if ~isa(obj,'WRM_SedimentTransport'), getdialog(msgtxt); return; end
 
@@ -288,25 +288,16 @@ function drift_peclet(obj,msgtxt)
     selection = get_var_sampling([4,2,1,1],false);  %no stats selection
     if isempty(selection), return; end              
     [binvar,bintime] = subsample_variable(dst,varsel,selection);
-            % 
-            % dst = obj.Data;
-            % pntnames = fieldnames(dst);
-            % npnts = length(pntnames);
-            % var = getVariable(dst,pntnames,1);
-            % if isempty(var), return; end
-        
-            % mtime = dst.(pntnames{1}).RowNames;
-            % monthlyMean = zeros(npnts,nper*nint); 
-            % monthlyStdev = monthlyMean; monthlyPeclet = monthlyMean;
-            % annualMean = zerod(npnts,nper); 
-            % annualStdev = annualMean; annualPeclet = annualMean;
+
+    hw = waitbar(0,'Processing point 0');
     for i=1:npnts
                 % Var = dst.(pntnames{i}).(varsel.name);        
-                % Var(abs(Var)<calms.value) = NaN; %remove near zero values
+                % Var(abs(Var)<varsel.calms.value) = NaN; %remove near zero values
                 % [~,binvar,bintime] = binned_variable(Var,mtime,'week','year');
         nint = size(binvar,3);           %number of intervals
         nper = size(binvar,2);           %number of periods
         nyr = 0;
+        
         for j=1:nper
             for k=1:nint
                 meanVar = mean(binvar{i,j,k},'omitnan');
@@ -341,9 +332,11 @@ function drift_peclet(obj,msgtxt)
                 peclet = 0;
             end
             annualPeclet(i,j) = peclet;
-            nyr = nyr+nint;
+            nyr = nyr+nint;            
         end
+        waitbar(i/npnts,hw,sprintf('Processing point %d',i));
     end
+    delete(hw)
 
     bins = {'All','Year', 'Quarter', 'Month', 'Week', 'Dai', 'Hour'};
     bintxt = bins{selection{1}};
@@ -351,10 +344,14 @@ function drift_peclet(obj,msgtxt)
     subtxt = @(w,x,y,z) sprintf('%sly %s (Calms <%s m^3/yr) %s',w,x,y,z);
     % startdate = datetime(year(bintime.periods(1)),1,1);   %force full year
     % enddate = datetime(year(bintime.periods(end)),12,31); %to match variable
-    bins = datenum(bintime.intstart);  
+    bins = datenum(bintime.intstart);  %#ok<DATNM>
     [X,Y] = meshgrid(1:npnts,bins);
     pointdown = intervalPeclet; pointup = intervalPeclet;
     pointdown(pointdown>-varsel.pecthr) = NaN; pointup(pointup<varsel.pecthr) = NaN;
+
+    %----------------------------------------------------------------------
+    % plots
+    %----------------------------------------------------------------------
 
     %plot monthly mean peclet ratio as a scatter plot (position,time)
     desctxt = sprintf('Peclet ratio (<-%.1f or >%.1f)',varsel.pecthr,varsel.pecthr);
@@ -372,7 +369,7 @@ function drift_peclet(obj,msgtxt)
     axa = plotPeclet(annualPeclet,bintime.periods,desc,1);
     subtitle(axa,subtxt('Annual','peclet',varsel.calms.text,ptxt))
 
-    %plot monthly mean as a surface plot (position,time)
+    %plot monthly mean as a surface plot (position,time) with scatter points
     desc = struct('case',dst.(pntnames{1}).Description,'var','Monthly mean');
     axm = plotPeclet(intervalMean,bins,desc,1);  
     hold on
@@ -416,9 +413,9 @@ function cluster_peclet(obj,msgtxt)
     %additional variables used in mergeSelection for posnegClusters
     options = setClusterOptions(dst.(pntnames{1}).(varsel.name));
     if strcmp(ans0,'abs(Qs)')        
-        [cluster,options] = absClusters(options,dst,calms,pecthr);
+        [cluster,options] = absClusters(options,dst,varsel);
     else
-        [cluster,options] = posnegClusters(options,dst,calms,pecthr);        
+        [cluster,options] = posnegClusters(options,dst,varsel);        
     end
 
     clustpoint = []; clustpec = []; clustints = [];
@@ -430,25 +427,45 @@ function cluster_peclet(obj,msgtxt)
     end
   
     %plot cluster mean peclet ratio as a surface plot (position,time)
-    desctxt = sprintf('Peclet ratio (<-%.1f or >%.1f)',pecthr,pecthr);
+    desctxt = sprintf('Peclet ratio (<-%.1f or >%.1f)',varsel.pecthr,varsel.pecthr);
     desc = struct('case',dst.(pntnames{1}).Description,'var',desctxt);
     bintime = mtime(1):caldays(1):mtime(end);
     x = 1:npnts;
+    y = datenum(bintime); %#ok<DATNM>
+    subtxt = @(x,y,z) sprintf('%s (Calms <%s m^3/yr) %s',x,y,z);
+    ptxt = ': (Peclet ratio: >1 blue o; <1 yellow o)';
+    %----------------------------------------------------------------------
+    % plots
+    %----------------------------------------------------------------------    
     % Define a grid for interpolation
-    [xq, yq] = meshgrid(x, datenum(bintime));    %#ok<DATNM>
+    [xq, yq] = meshgrid(x,y);  
     % Interpolate scattered data onto the grid
     zq = griddata(clustpoint,datenum(clustints),clustpec, xq, yq, 'linear'); %#ok<DATNM> % 'linear', 'nearest', or 'cubic'
     axc = plotPeclet(zq',bintime,desc,1);    
     axc.CLim = [-2,2];
-    % save('clusterplot',"xq","yq","zq","bintime","desc");
+
+    clup = zq; cldn = -zq;
+    clup(clup<varsel.pecthr) = NaN; cldn(cldn<varsel.pecthr) = NaN;
+        %pointdown(pointdown>-varsel.pecthr) = NaN; pointup(pointup<varsel.pecthr) = NaN;
+    axm = plotPeclet(clup',y,desc,0); 
+    hold(axm,'on')
+    scatter3(axm,xq,yq,cldn,10,'y','filled','MarkerEdgeColor','k')
+    hold(axm,'off') 
+    view(2)
+    datetick('y', 'yyyy'); %#ok<DATIC>
+    subtitle(axm,subtxt('peclet ratio',varsel.calms.text,ptxt))
+
+    %----------------------------------------------------------------------
+    % Summary output UI
+    %----------------------------------------------------------------------
     txt1 = 'Clusters: Downdrift advection (Pe>1); Updrift advection (Pe<-1)';
     if strcmp(ans0,'abs(Qs)') 
         txt2 = sprintf('Absolute - Calms <%s m^3/yr; Threshold: %0.4f; Interval: %dd; Min duration: %dd',...
-                    calms.text,options.threshold,...
+                    varsel.calms.text,options.threshold,...
                     options.clint,options.mincluster);
     else
         txt2 = sprintf('Pos/Neg - Calms <%s m^3/yr; Threshold: %0.4f/%0.4f;\n          Interval: %dd/%dd; Min duration: %dd/%dd',...
-                    calms.text,...
+                    varsel.calms.text,...
                     options.pos.threshold,options.neg.threshold,...
                     options.pos.clint, options.neg.clint,...
                     options.pos.mincluster, options.neg.mincluster);
@@ -506,12 +523,17 @@ function multi_rose_plots(obj)
             dir = dst.(pntnames{ipnt}).(varname{idvar(seldir)}); %selected direction variable
             var = dst.(pntnames{ipnt}).(varsel.name);            %selected variable    
             casedesc = dst.(pntnames{ipnt}).Description;
-            %title using variable-case-point
-            %titletxt = sprintf('%s for %s at %s',varsel.desc,casedesc,pntnames{ipnt});
-            %title using case-point-shore_angle
-            titletxt = sprintf('%s at %s, theta=%d dTN',casedesc,pntnames{ipnt},rose.theta(i));
+            if isempty(rose.theta)
+                %title using variable-case-point
+                titletxt = sprintf('%s for %s at %s',varsel.desc,casedesc,pntnames{ipnt});
+                theta = [];
+            else
+                %title using case-point-shore_angle
+                titletxt = sprintf('%s at %s, theta=%d dTN',casedesc,pntnames{ipnt},rose.theta(i));
+                theta = rose.theta(i);
+            end
             wind_rose(dir,var,'parent',figax,'dtype','meteo',...
-                'shore',rose.theta(i),'nd',rose.nd,'di',rose.di,'ci',rose.ci,...
+                'shore',theta,'nd',rose.nd,'di',rose.di,'ci',rose.ci,...
                 'labtitle',titletxt,'lablegend',varsel.labl);
         end
     end
@@ -529,12 +551,12 @@ end
 %% ------------------------------------------------------------------------
 % Utility functions for data sampling
 %--------------------------------------------------------------------------
-function [cluster,userops] = absClusters(options,dst,calms,pecthr)
+function [cluster,userops] = absClusters(options,dst,varsel)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    varsel = getVariable(dst,pntnames,1);  %selects Qs without prompting user
-    if isempty(var), return; end
+    % varsel = getVariable(dst,pntnames,1);  %selects Qs without prompting user
+    % if isempty(varsel), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
     ans2 = questdlg('Check settings for selected points?','Clusters','Yes','No','Quit','Yes');
@@ -579,9 +601,10 @@ function [cluster,userops] = absClusters(options,dst,calms,pecthr)
     if strcmp(ans2,'Quit'), return; end
 
     userops.isplot = false; %supress plots in for loop
+    hw = waitbar(0,'Processing point 0');
     for i=1:npnts        
         Var = dst.(pntnames{i}).(varsel.name);        
-        Var(abs(Var)<calms.value) = NaN; %remove near zero values
+        Var(abs(Var)<varsel.calms.value) = NaN; %remove near zero values
         vardst = getDSTable(dst.(pntnames{i}),'VariableNames',varsel.name);
         vardst.(varsel.name) = abs(vardst.(varsel.name)); %use absolute values for intervals
 
@@ -611,7 +634,7 @@ function [cluster,userops] = absClusters(options,dst,calms,pecthr)
             %set diffusion values to 0
             if isnan(peclet) || isinf(peclet)
                 peclet = 0;
-            elseif peclet>-pecthr && peclet<pecthr %#ok<BDSCI>
+            elseif peclet>-varsel.pecthr && peclet<varsel.pecthr %#ok<BDSCI>
                 peclet = 0;
             end
             % %limit the maximum advection values
@@ -626,16 +649,18 @@ function [cluster,userops] = absClusters(options,dst,calms,pecthr)
             cluster.Stdev{i,j} = stdVar;
             cluster.Peclet{i,j} = peclet;
         end
+        waitbar(i/npnts,hw,sprintf('Processing point %d',i));
     end
+    delete(hw)
 end
 
 %%
-function [cluster,userops]  = posnegClusters(options,dst,calms,pecthr)
+function [cluster,userops]  = posnegClusters(options,dst,varsel)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    varsel = getVariable(dst,pntnames,1);  %selects Qs without prompting user
-    if isempty(var), return; end
+    % varsel = getVariable(dst,pntnames,1);  %selects Qs without prompting user
+    % if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
     %default to use same options for postive and negative drift
@@ -690,7 +715,7 @@ function [cluster,userops]  = posnegClusters(options,dst,calms,pecthr)
     options.isplot = false;
     for i=1:npnts        
         Var = dst.(pntnames{i}).(varsel.name);        
-        Var(abs(Var)<calms.value) = NaN; %remove near zero values
+        Var(abs(Var)<varsel.calms.value) = NaN; %remove near zero values
         posdst = getDSTable(dst.(pntnames{i}),'VariableNames',varsel.name);
 
         % find clusters based on results from peak selection
@@ -723,7 +748,7 @@ function [cluster,userops]  = posnegClusters(options,dst,calms,pecthr)
             %set diffusion values to 0
             if isnan(peclet) || isinf(peclet)
                 peclet = 0;
-            elseif peclet>-pecthr && peclet<pecthr %#ok<BDSCI>
+            elseif peclet>-varsel.pecthr && peclet<varsel.pecthr %#ok<BDSCI>
                 peclet = 0;
             end
             % %limit the maximum advection values
@@ -1015,6 +1040,7 @@ end
 %%
 function plotEdges(var,mtime,medges,titxt)
     %plot the merged edges to be used to compute the statitics
+    %ie the start or end of each cluster
     mvar = max(abs(var),[],'omitnan')/4;
     hf = figure('Name','SedTrans','Tag','PlotFig');
     ax = axes(hf); 
