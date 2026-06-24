@@ -6,8 +6,9 @@ function wrm_transport_plots(obj,mobj,option)
 % PURPOSE
 %   Use sediment transport results for a set of points along the coast to 
 %   examine drift rates, the divergence of drift and the Peclet number
-%   (indicates balance of advection and diffusion). The mean and summary
-%   plot options can also be used to plot multi-point wave data.
+%   (indicates balance of advection and diffusion). 
+%   The mean and summary plot options can also be used to plot multi-point 
+%   wave data and wave roses.
 % USAGE
 %   wrm_transport_plotsl(obj,mobj,option)
 % INPUT
@@ -33,12 +34,12 @@ function wrm_transport_plots(obj,mobj,option)
 %               and over time using monthly/annual sampling (see Kahl, et al, 2024)
 %            'Cluster Peclet Ratio'- plots to examine Peclet ratio along-shore
 %               and over time using cluster sampling (see Kahl, et al, 2024)
-%            'Wave-Drift Tables' - not yet implemented
-                      
+%            'Wave-Drift Tables' - not yet implemented                      
 % OUTPUT 
 %   plot options for drift at multiple points as detailed above
 % NOTES
-%    called as part of WaveRayModel from WRM_SedimentTranport
+%   called as part of WaveRayModel from WRM_SedimentTranport
+%   also referred to in menu options as 'Multi-point Plots'
 % SEE ALSO
 %   Kahl, et al (2024). Characterizing longshore transport potential and 
 %   divergence of drift to inform beach loss trends. Coastal Engineering, 
@@ -62,8 +63,8 @@ function wrm_transport_plots(obj,mobj,option)
             drift_peclet(obj,msgtxt);
         case 'Cluster Peclet Ratio'
             cluster_peclet(obj,msgtxt);
-        case 'Wave-Drift Tables'
-            wavedrift_table(obj);
+        case 'Wave Rose Plots'
+            multi_rose_plots(obj);
     end
 end
 
@@ -75,6 +76,7 @@ function ann_mean_drift(obj)
     npnts = length(pntnames);
     varsel = getVariable(dst,pntnames);
     if isempty(varsel), return; end
+
     %select summmer/winter and +ve/-ve drift
     selection = get_var_sampling([1,1,1,1],false);  %no stats selection
     if isempty(selection), return; end              
@@ -135,6 +137,7 @@ function bin_mean_drift(obj)
     npnts = length(pntnames);
     varsel = getVariable(dst,pntnames);
     if isempty(varsel), return; end
+
     %select summmer/winter and +ve/-ve drift
     selection = get_var_sampling([4,2,1,1],false);  %no stats selection
     if isempty(selection), return; end              
@@ -453,17 +456,74 @@ function cluster_peclet(obj,msgtxt)
     subtitle(axc,sprintf('%s\n%s',txt1,txt2))   
 end
 %%
-function wavedrift_table(obj)
-    %
-
+function multi_rose_plots(obj)
+    %plot multiple wave roses in single go
     dst = obj.Data;
     pntnames = fieldnames(dst);
-    npnts = length(pntnames);
-    varsel = getVariable(dst,pntnames,1);
-    if isempty(var), return; end
-    mtime = dst.(pntnames{1}).RowNames;
-    warndlg('Not yet implemented')
+    varname = dst.(pntnames{1}).VariableNames;
+    vardesc = dst.(pntnames{1}).VariableDescriptions;
 
+    promptxt = {'To add reference line, enter angle to degTN:',...
+                'Variable intensity subdivisions (eg 0 0.5 1 ...)',...
+                'Percentage circles to draw (eg 10 20 30)',...
+                'Number of direction intervals (default is 36)'};
+    rinp = {'','','',''};
+
+    ok = 0;
+    while ok<1
+        %get the variable and points to use
+        varsel = getVariable(dst,pntnames,[],0); %select from all and don't prompt for thresholds
+        if isempty(varsel), ok = 1; continue; end
+        [selpnt,sok] = listdlg('Name','Plot profile', ...
+                            'PromptString','Select variable', ...
+                            'ListSize',[200,300], ...
+                            'SelectionMode','multiple', ...
+                            'ListString',pntnames);
+        if sok==0, ok = 1; continue; end
+
+        %get the direction to use
+
+        idvar = find(contains(vardesc,'direction'));
+        seldir = 1;
+        if numel(idvar)>1  %user needs to select direction
+            seldir = listdlg('Name','Directions', ...
+            'PromptString','Select direction to use','ListSize',[300,150],... ...
+            'SelectionMode','single','ListString',vardesc(idvar));
+        end
+        if isempty(seldir), seldir = 1; end
+
+        %set the rose plot scaling settings
+        rinp = inputdlg(promptxt,'Rose plot',1,rinp);
+        rose.theta = parseInput(rinp{1}); %if vector should be same length as numel(selpnt)
+        rose.di = parseInput(rinp{2});
+        rose.ci = parseInput(rinp{3});
+        rose.nd = parseInput(rinp{4});
+        %loop to create plots for selected points
+        for i=1:numel(selpnt)
+            ipnt = selpnt(i);
+            hfig = figure('Name','Rose plot','Tag','PlotFig');
+            figax = axes(hfig); %#ok<LAXES>
+            dir = dst.(pntnames{ipnt}).(varname{idvar(seldir)}); %selected direction variable
+            var = dst.(pntnames{ipnt}).(varsel.name);            %selected variable    
+            casedesc = dst.(pntnames{ipnt}).Description;
+            %title using variable-case-point
+            %titletxt = sprintf('%s for %s at %s',varsel.desc,casedesc,pntnames{ipnt});
+            %title using case-point-shore_angle
+            titletxt = sprintf('%s at %s, theta=%d dTN',casedesc,pntnames{ipnt},rose.theta(i));
+            wind_rose(dir,var,'parent',figax,'dtype','meteo',...
+                'shore',rose.theta(i),'nd',rose.nd,'di',rose.di,'ci',rose.ci,...
+                'labtitle',titletxt,'lablegend',varsel.labl);
+        end
+    end
+
+    %-nested function------------------------------------------
+    function var = parseInput(vartxt)
+        if isempty(vartxt)
+            var = [];
+        else
+            var = str2num(vartxt); %#ok<ST2NM> parsing scalar and vector
+        end
+    end
 end
 
 %% ------------------------------------------------------------------------
@@ -857,13 +917,13 @@ function [calms,pecthr] = calmsThreshold()
 end
 
 %%
-function varsel = getVariable(dst,pntnames,sel)
+function varsel = getVariable(dst,pntnames,sel,isthr)
     %select a variable to use in the plot
     varname = dst.(pntnames{1}).VariableNames;
     vardesc = dst.(pntnames{1}).VariableDescriptions; 
     varlabl = dst.(pntnames{1}).VariableLabels; 
 
-    if nargin<3
+    if nargin<3 || isempty(sel)
         [sel,ok] = listdlg('Name','Plot profile', ...
                                      'PromptString','Select variable', ...
                                      'ListSize',[200,80], ...
@@ -878,8 +938,10 @@ function varsel = getVariable(dst,pntnames,sel)
 
     varsel.isdrift = false;
     if contains(varsel.name,'Q'), varsel.isdrift = true; end
-
-    [varsel.calms,varsel.pecthr] = calmsThreshold();
+    % 
+    if nargin<4 || isthr
+        [varsel.calms,varsel.pecthr] = calmsThreshold();
+    end
 end
 
 %%
@@ -1023,7 +1085,7 @@ function ax = plotPeriodLines(mtime,point,varsel,plotxt)
     hold off
     xlabel(plotxt{4})
     ylabel(varsel.labl)
-    title(sprintf('Drift potential for %s (%s) %s',plotxt{1:3}));             
+    title(sprintf('%s for %s (%s) %s',varsel.desc,plotxt{1:3}));             
     subtitle(sprintf('%sly Means for each year of data set',plotxt{4}))
     legend
 end
@@ -1048,7 +1110,7 @@ function ax = plotPeriodSurface(mtime,point,mnmxMn,varsel,plotxt)
     idx = str2double(sax.YTickLabel);
     sax.YTickLabel = mtime.per(idx);
     sax.CLim = mnmxMn;
-    title(sprintf('Drift potential for %s (%s) %s',plotxt{1:3})); 
+    title(sprintf('%s for %s (%s) %s',varsel.desc,plotxt{1:3})); 
     subtitle(sprintf('%sly Means (Peclet ratio: >1 blue o; <1 yellow o)',plotxt{4}))
     hold on
     %add points where peclet exceeds above the surface
@@ -1077,7 +1139,7 @@ function ax = plotPeriodPeclet(mtime,point,varsel,plotxt)
     idx = str2double(sax.YTickLabel);
     sax.YTickLabel = mtime.per(idx);
     sax.CLim = [-2,2];
-    title(sprintf('Drift potential for %s (%s) %s',plotxt{1:3}));
+    title(sprintf('%s for %s (%s) %s',varsel.desc,plotxt{1:3}));
     subtitle(sprintf('%sly peclet ratio (Peclet ratio: >1 filled red o; <1 red o)',plotxt{4}))
     hold on
     %add points where peclet excceeds above the surface
