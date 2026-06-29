@@ -159,7 +159,7 @@ classdef WRM_SedimentTransport < muiPropertyUI & muiDataSet & matlab.mixin.Copya
                 %Note the current formulation dose NOT use Tp, Dir and theta
                 Qx(:,i) = xshore_bailard(wv.Hs,wv.Tp,wv.Dir,wv.depi,...
                                             theta(i),bs,d50,g,rhw,rhs,vsc);
-                [~,~,~,R2] = runup(bs,wv.Hs,wv.Tp);      %for gravel beaches
+                [~,~,~,R2] = runup(ubs,wv.Hs,wv.Tp);     %for gravel beaches
                 zR2(:,i) = R2+wv.swl;                    %runup elevation
                 alpi(:,i) = getTransportDirection(obj,wv.Dir,theta(i));
                 %add point specific metadata
