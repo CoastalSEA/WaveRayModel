@@ -54,8 +54,12 @@ function [binvar,bintime] = subsample_variable(dst,varsel,binsel)
         %apply seasonal subsampling if selected
         if binsel{3}>1                  %summer or winter selected
             [vari,bintime] = getAllSummerWinter(vari,mtime,binsel);
-        else
+        elseif binsel{1}>binsel{2}
             [~,vari,bintime] = binned_variable(vari,mtime,bininterval,binperiod);
+        else
+            binvar = []; bintime = [];
+            warndlg('Bin interval must be less than recurrence period')
+            return
         end
         
         %apply direction subsampling if selected
