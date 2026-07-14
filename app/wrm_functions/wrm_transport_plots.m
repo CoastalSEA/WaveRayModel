@@ -367,9 +367,6 @@ function monthly_drift_peclet(obj,msgtxt)
 
     hw = waitbar(0,'Processing point 0');
     for i=1:npnts
-                % Var = dst.(pntnames{i}).(varsel.name);        
-                % Var(abs(Var)<varsel.calms.value) = NaN; %remove near zero values
-                % [~,binvar,bintime] = binned_variable(Var,mtime,'week','year');
         nint = size(binvar,3);           %number of intervals
         nper = size(binvar,2);           %number of periods
         nyr = 0;
@@ -379,21 +376,10 @@ function monthly_drift_peclet(obj,msgtxt)
             for k=1:nint
                 meanVar = mean(binvar{i,j,k},'omitnan');
                 stdVar = std(binvar{i,j,k},'omitnan');
-                    % nint = size(binvar,2);           %number of months
-                    % nper = size(binvar,1);           %number of years
-                    % nyr = 0;
-                    % for j=1:nper
-                    %     for k=1:nint
                 ptle95 =  prctile(binvar{i,j,k},95);
                 ptle05 =  prctile(binvar{i,j,k},5);
-                    % meanVar = mean(binvar{j,k},'omitnan');
-                    % stdVar = std(binvar{j,k},'omitnan');
                 peclet = meanVar/stdVar;
-                if isnan(peclet) || isinf(peclet)
-                    peclet = 0;
-                elseif peclet>-varsel.pecthr && peclet<varsel.pecthr
-                    peclet = 0;
-                end
+                peclet = checkPecletLimits(peclet,varsel,NaN,peclet);
                 interval95tile(i,nyr+k) = ptle95;
                 interval05tile(i,nyr+k) = ptle05;
                 intervalMean(i,nyr+k) = meanVar;
@@ -403,13 +389,9 @@ function monthly_drift_peclet(obj,msgtxt)
             end   
             annualMean(i,j) = mean(annualData,'omitnan');
             annualStdev(i,j) = std(annualData,'omitnan');
-            peclet = annualMean(i,j)/annualStdev(i,j);
-            if isnan(peclet) || isinf(peclet)
-                peclet = 0;
-            elseif peclet>-varsel.pecthr && peclet<varsel.pecthr
-                peclet = 0;
-            end
-            annualPeclet(i,j) = peclet;
+            annpeclet = annualMean(i,j)/annualStdev(i,j);
+            annpeclet = checkPecletLimits(annpeclet,varsel,0,0);
+            annualPeclet(i,j) = annpeclet;
             nyr = nyr+nint; 
         end
         waitbar(i/npnts,hw,sprintf('Processing point %d',i));
@@ -421,23 +403,27 @@ function monthly_drift_peclet(obj,msgtxt)
     Direction = {'All','+ve only','-ve only'};
     bintxt = {bins{selection{1}}, bins{selection{2}}};
     seltxt = sprintf('%s for %s directions',Season{selection{3}},Direction{selection{4}});
-    ptxt = 'Peclet ratio: >1 blue o; <1 yellow o';
+    ptxt = 'Peclet ratio: >1 blue; <1 yellow';
     varsubtxt = @(w,x,y,z) sprintf('%sly %s (Calms <%s m^3/yr) %s',w,x,y,z);
     pecsubtxt = @(v,w,x,y,z) sprintf('%sly %s (Calms <%s m^3/yr) %s\n%s',v,w,x,y,z);
-    % startdate = datetime(year(bintime.periods(1)),1,1);   %force full year
-    % enddate = datetime(year(bintime.periods(end)),12,31); %to match variable
     bins = datenum(bintime.intstart);  %#ok<DATNM>
     [X,Y] = meshgrid(1:npnts,bins);
-    intervalPeclet(intervalPeclet>2) = 2;
-    intervalPeclet(intervalPeclet<-2) = -2;
-    intervalPeclet(intervalPeclet==0) = NaN;
-    pointdown = intervalPeclet; pointup = intervalPeclet;
+    zq = intervalPeclet';
+    zq(zq>2) = 2;
+    zq(zq<-2) = -2;
+    zq(zq==0) = NaN;
+    pointdown = zq; pointup = zq;
     pointdown(pointdown>-varsel.pecthr) = NaN; pointup(pointup<varsel.pecthr) = NaN;
-    clup = annualPeclet; cldn = -annualPeclet;
+    clup = annualPeclet'; cldn = -annualPeclet';
     clup(clup<varsel.pecthr) = NaN; cldn(cldn<varsel.pecthr) = NaN; 
     clup = clup./clup*2; cldn = cldn./cldn*2;
+
+    %----------------------------------------------------------------------
+    % plots selected options
+    %----------------------------------------------------------------------
     plotoptions = {'Peclet points','Peclet surface','Annual mean','Interval mean',...
-                   'Interval St.dev','Interval percentiles'};
+                   'Interval St.dev','Interval percentiles','Reach summary'};
+    yellow = [0.929,0.694,0.125];
     ok = 0;
     while ok<1
         selection = listdlg('Name','Plot options', ...
@@ -445,17 +431,14 @@ function monthly_drift_peclet(obj,msgtxt)
             'SelectionMode','single','ListString',plotoptions);
         if isempty(selection) || strcmp(selection,'Quit'), ok = 1; continue; end
 
-        %------------------------------------------------------------------
-        % plots as selection options
-        %------------------------------------------------------------------
         switch plotoptions{selection}
             case 'Peclet points'
             %plot interval peclet ratio as a scatter plot (position,time)
             desctxt = sprintf('Peclet ratio (<-%.1f or >%.1f)',varsel.pecthr,varsel.pecthr);
             desc = struct('case',dst.(pntnames{1}).Description,'var',desctxt);    
-            axm = plotPeclet(pointup,bins,desc,0);  
+            axm = plotPeclet(pointup',bins,desc,0);  
             hold on
-            scatter3(axm,X,Y,-pointdown',10,'y','filled','MarkerEdgeColor','k')
+            scatter3(axm,X,Y,-pointdown,10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
             hold off  
             view(2)
             datetick('y', 'yyyy'); %#ok<DATIC>
@@ -465,15 +448,16 @@ function monthly_drift_peclet(obj,msgtxt)
             case 'Peclet surface'
             %plot peclet ratio as a color map surface (position,time)
             hfig = figure('Tag','PlotFig');
-            axp = axes(hfig);
-            pcolor(axp,X,Y,intervalPeclet','EdgeColor','none','FaceColor','flat');
+            axp = axes(hfig); %#ok<LAXES>
+            zqnan = checkPecletLimits(zq,varsel,NaN,NaN);
+            pcolor(axp,X,Y,zqnan,'EdgeColor','none','FaceColor','flat');
             cmap = colormap('turbo');
             colormap(flipud(cmap));
             datetick('y', 'yyyy'); %#ok<DATIC>
             xlabel('Position along shore')
             ylabel('Year')
             pectxt = 'Peclet ratio: >1 blue; <1 red';
-            title(sprintf('Case: %s',desc.case));  
+            title(sprintf('Case: %s',dst.(pntnames{1}).Description));  
             subtitle(axp,pecsubtxt(bintxt{1},'peclet ratio',varsel.calms.text,seltxt,pectxt))
             setAxisLimits(axp,npnts,'1980','2025'); %bespoke ********************
             
@@ -486,8 +470,8 @@ function monthly_drift_peclet(obj,msgtxt)
             [xq, yq] = meshgrid(1:npnts,annbins); 
             axa = plotPeclet(annualMean,annbins,desc,1); 
             hold(axa,'on')
-            scatter3(axa,xq,yq,clup'*axa.ZLim(2),10,'b','filled','MarkerEdgeColor','w')
-            scatter3(axa,xq,yq,cldn'*axa.ZLim(2),10,'y','filled','MarkerEdgeColor','k')
+            scatter3(axa,xq,yq,clup*axa.ZLim(2),10,'b','filled','Marker','square','MarkerEdgeColor','none')
+            scatter3(axa,xq,yq,cldn*axa.ZLim(2),10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
             hold(axa,'off') 
             subtitle(axa,pecsubtxt('Year','mean',varsel.calms.text,seltxt,ptxt))
             % axa.CLim = [-2,2];
@@ -499,8 +483,8 @@ function monthly_drift_peclet(obj,msgtxt)
                              [bintxt{1},'ly mean of ',lower(varsel.labl)]);
             axc = plotPeclet(intervalMean,bins,desc,1);  
             hold on
-            scatter3(axc,X,Y,-pointdown'*axc.ZLim(2),10,'y','filled','MarkerEdgeColor','k')
-            scatter3(axc,X,Y,pointup'*axc.ZLim(2),10,'b','filled','MarkerEdgeColor','w')    
+            scatter3(axc,X,Y,-pointdown*axc.ZLim(2),10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+            scatter3(axc,X,Y,pointup*axc.ZLim(2),10,'b','filled','Marker','square','MarkerEdgeColor','none')  
             hold off
             subtitle(axc,pecsubtxt(bintxt{1},'mean',varsel.calms.text,seltxt,ptxt))
             setAxisLimits(axc,npnts,'1980','2025'); %bespoke ******************
@@ -517,7 +501,7 @@ function monthly_drift_peclet(obj,msgtxt)
             case 'Interval percentiles'
             %plot interval 95%tile as a surface plot (position,time)
             desc = struct('case',dst.(pntnames{1}).Description,'var',...
-                  [bintxt{1},'ly 95 & 5 percentile of ',lower(varsel.labl)]co);
+                  [bintxt{1},'ly 95 & 5 percentile of ',lower(varsel.labl)]);
             interval95tile(abs(interval95tile)<1e-3) = 0;
             interval05tile(abs(interval05tile)<1e-3) = 0;
             monthlyPrctile = interval95tile+interval05tile; %assumes no overlap
@@ -525,6 +509,11 @@ function monthly_drift_peclet(obj,msgtxt)
             axp = plotPeclet(monthlyPrctile,bins,desc,1);  
             subtitle(axp,pecsubtxt(bintxt{1},'percentile',varsel.calms.text,seltxt,'95%(+ve) and 5%(-ve)'))
             setAxisLimits(axp,npnts,'1980','2025'); %bespoke ******************
+
+            case 'Reach summary'
+            desc.case = dst.(pntnames{1}).Description; 
+            desc.subtitle = varsubtxt(bintxt{1},'mean',varsel.calms.text,seltxt);
+            reachPlot(npnts,bintime.intstart,intervalPeclet',varsel,desc);
         end
     end
 end
@@ -569,73 +558,93 @@ function cluster_peclet(obj,msgtxt)
     x = 1:npnts;
     y = datenum(bintime); %#ok<DATNM>
     subtxt = @(x,y,z) sprintf('%s (Calms <%s m^3/yr) %s',x,y,z);
-    ptxt = ': (Peclet ratio: >1 blue o; <1 yellow o)';
+    ptxt = ': (Peclet ratio: >1 blue; <1 yellow)';
     %----------------------------------------------------------------------
     % plots
-    %----------------------------------------------------------------------    
-  
+    %---------------------------------------------------------------------- 
     % Define a grid for interpolation
     [xq, yq] = meshgrid(x,y);  
     % Interpolate scattered data onto the grid
-    zq = griddata(clustpoint,datenum(clustints),clustpec, xq, yq, 'linear'); %#ok<DATNM> % 'linear', 'nearest', or 'cubic'
+    F = scatteredInterpolant(clustpoint,datenum(clustints),clustpec,'linear'); %#ok<DATNM> %faster than griddata
+    zq = F(xq,yq);
     %get up and down drift peclets
     clup = zq; cldn = -zq;
     clup(clup<varsel.pecthr) = NaN; cldn(cldn<varsel.pecthr) = NaN;   
     clup = clup./clup*2; cldn = cldn./cldn*2;
 
-    % %plot just the  peclet points when >1
-    % axm = plotPeclet(clup',y,desc,0); 
-    % hold(axm,'on')
-    % scatter3(axm,xq,yq,cldn,10,'y','filled','MarkerEdgeColor','k')
-    % hold(axm,'off') 
-    % view(2)
-    % datetick('y', 'yyyy'); %#ok<DATIC>
-    % subtitle(axm,subtxt('Peclet ratio',varsel.calms.text,ptxt))
-    % setAxisLimits(axm,npnts,'1980','2025'); %bespoke ******************
-    % 
-    % %plot peclet ratio as a color map surface (position,time)
-    % hfig = figure('Tag','PlotFig');
-    % axp = axes(hfig);
-    % zq(zq<0.9 & zq>-0.9) = NaN;  
-    % pcolor(axp,xq,yq,zq,'EdgeColor','none','FaceColor','flat');
-    % cmap = colormap('turbo');
-    % colormap(flipud(cmap));
-    % datetick('y', 'yyyy'); %#ok<DATIC>
-    % xlabel('Position along shore')
-    % ylabel('Year')
-    % pectxt = ': (Peclet ratio: >1 blue; <1 red)';
-    % title(sprintf('Case: %s',desc.case));  
-    % subtitle(axp,subtxt('Clusters peclet ratio',varsel.calms.text,pectxt))
-    % axp.CLim = [-2,2];
-    % setAxisLimits(axp,npnts,'1980','2025'); %bespoke ****
+    plotoptions = {'Peclet points','Peclet surface','Cluster mean','Reach summary'};
+    yellow = [0.929,0.694,0.125];
+    ok = 0;
+    while ok<1
+        selection = listdlg('Name','Plot options', ...
+            'PromptString','Select plot type:','ListSize',[200,150],... ...
+            'SelectionMode','single','ListString',plotoptions);
+        if isempty(selection) || strcmp(selection,'Quit'), ok = 1; continue; end
 
-    %plot surface of interval values with peclet points when >1
-    desc.var = varsel.labl;
-    zq = griddata(clustpoint,datenum(clustints),varints, xq, yq, 'linear'); %#ok<DATNM> % 'linear', 'nearest', or 'cubic'
-    axc = plotPeclet(zq',y,desc,1);  
-    %axc.CLim = [-options.threshold*3,options.threshold*3];
-    hold(axc,'on')
-    scatter3(axc,xq,yq,clup,10,'b','filled','MarkerEdgeColor','w')
-    scatter3(axc,xq,yq,cldn,10,'y','filled','MarkerEdgeColor','k')
-    hold(axc,'off') 
-    setAxisLimits(axc,npnts,'1980','2025'); %bespoke ******************
+        %------------------------------------------------------------------
+        % plots as selection options
+        %------------------------------------------------------------------
+        switch plotoptions{selection}
+            case 'Peclet points' 
+                %plot just the  peclet points when >1
+                axm = plotPeclet(clup',y,desc,0); 
+                hold(axm,'on')
+                scatter3(axm,xq,yq,cldn,10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+                hold(axm,'off') 
+                view(2)
+                datetick('y', 'yyyy'); %#ok<DATIC>
+                subtitle(axm,subtxt('Peclet ratio',varsel.calms.text,ptxt))
+                setAxisLimits(axm,npnts,'1980','2025'); %bespoke ******************
 
-    %----------------------------------------------------------------------
-    % Summary output UI
-    %----------------------------------------------------------------------
-    txt1 = 'Clusters: Downdrift advection (Pe>1); Updrift advection (Pe<-1)';
-    if strcmp(ans0,'abs(Qs)') 
-        txt2 = sprintf('Absolute; Calms <%s m^3/yr; Threshold: %0.4f; Interval: %dd; Min duration: %dd',...
-                    varsel.calms.text,options.threshold,...
-                    options.clint,options.mincluster);
-    else
-        txt2 = sprintf('Pos/Neg; Calms <%s m^3/yr; Threshold: %0.4f/%0.4f;\n          Interval: %dd/%dd; Min duration: %dd/%dd',...
-                    varsel.calms.text,...
-                    options.pos.threshold,options.neg.threshold,...
-                    options.pos.clint, options.neg.clint,...
-                    options.pos.mincluster, options.neg.mincluster);
+            case 'Peclet surface'
+                %plot peclet ratio as a color map surface (position,time)
+                hfig = figure('Tag','PlotFig');
+                axp = axes(hfig); %#ok<LAXES>
+                zqnan = checkPecletLimits(zq,varsel,NaN,NaN);  
+                pcolor(axp,xq,yq,zqnan,'EdgeColor','none','FaceColor','flat');
+                cmap = colormap('turbo');
+                colormap(flipud(cmap));
+                datetick('y', 'yyyy'); %#ok<DATIC>
+                xlabel('Position along shore')
+                ylabel('Year')
+                pectxt = ': (Peclet ratio: >1 blue; <1 red)';
+                title(sprintf('Case: %s',desc.case));  
+                subtitle(axp,subtxt('Clusters peclet ratio',varsel.calms.text,pectxt))
+                axp.CLim = [-2,2];
+                setAxisLimits(axp,npnts,'1980','2025'); %bespoke **********
+
+            case 'Cluster mean'
+                %plot surface of interval values with peclet points when >1
+                desc.var = varsel.labl;                
+                F = scatteredInterpolant(clustpoint,datenum(clustints),varints,'linear'); %#ok<DATNM> %faster than griddata
+                zqc = F(xq,yq);
+                axc = plotPeclet(zqc',y,desc,1);  
+                %axc.CLim = [-options.threshold*3,options.threshold*3];
+                hold(axc,'on')
+                scatter3(axc,xq,yq,clup,10,'b','filled','Marker','square','MarkerEdgeColor','none')
+                scatter3(axc,xq,yq,cldn,10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+                hold(axc,'off') 
+                setAxisLimits(axc,npnts,'1980','2025'); %bespoke ******************
+                
+                % Summary output text
+                txt1 = 'Clusters: Downdrift advection (Pe>1, blue); Updrift advection (Pe<-1, yellow)';
+                if strcmp(ans0,'abs(Qs)') 
+                    txt2 = sprintf('Absolute; Calms <%s m^3/yr; Threshold: %0.4f; Interval: %dd; Min duration: %dd',...
+                                varsel.calms.text,options.threshold,...
+                                options.clint,options.mincluster);
+                else
+                    txt2 = sprintf('Pos/Neg; Calms <%s m^3/yr; Threshold: %0.4f/%0.4f;\n          Interval: %dd/%dd; Min duration: %dd/%dd',...
+                                varsel.calms.text,...
+                                options.pos.threshold,options.neg.threshold,...
+                                options.pos.clint, options.neg.clint,...
+                                options.pos.mincluster, options.neg.mincluster);
+                end
+                subtitle(axc,sprintf('%s\n%s',txt1,txt2))   
+            case 'Reach summary'            
+                desc.subtitle = subtxt('Peclet ratio cluster mean',varsel.calms.text,'');
+                reachPlot(npnts,bintime,zq,varsel,desc);
+        end
     end
-    subtitle(axc,sprintf('%s\n%s',txt1,txt2))   
 end
 
 %%
@@ -796,19 +805,7 @@ function [cluster,userops] = absClusters(options,dst,varsel)
             meanVar = mean(binvar,'omitnan');
             stdVar = std(binvar,'omitnan');
             peclet = meanVar./stdVar;
-
-            %set diffusion values to 0
-            if isnan(peclet) || isinf(peclet)
-                peclet = 0;
-            elseif peclet>-varsel.pecthr && peclet<varsel.pecthr %#ok<BDSCI>
-                peclet = 0;
-            end
-            % %limit the maximum advection values
-            % if peclet<-2
-            %     peclet = -2;
-            % elseif peclet>2
-            %     peclet = 2;
-            % end
+            peclet = checkPecletLimits(peclet,varsel,NaN,peclet);
 
             cluster.Ints{i,j} = intstart(j); %#ok<*AGROW>
             cluster.Mean{i,j} = meanVar;
@@ -912,17 +909,7 @@ function [cluster,userops]  = posnegClusters(options,dst,varsel)
             peclet = meanVar./stdVar;
 
             %set diffusion values to 0
-            if isnan(peclet) || isinf(peclet)
-                peclet = 0;
-            elseif peclet>-varsel.pecthr && peclet<varsel.pecthr %#ok<BDSCI>
-                peclet = 0;
-            end
-            % %limit the maximum advection values
-            % if peclet<-2
-            %     peclet = -2;
-            % elseif peclet>2
-            %     peclet = 2;
-            % end
+            peclet = checkPecletLimits(peclet,varsel,0,0);
 
             cluster.Ints{i,j} = intstart(j); %#ok<*AGROW>
             cluster.Mean{i,j} = meanVar;
@@ -973,9 +960,9 @@ function idcls = getVarClusters(dst,opts)
     returnflag = 0; %0:returns indices of peaks; 1:returns values       
     idpks = peaksoverthreshold(var,opts.threshold,opts.method,...
                                         mtime,hours(opts.tint),returnflag);
-    % find clustecrs based on results from peak selection
+    % find clusters based on results from peak selection
     pk_date = mtime(idpks);    %datetime of peak
-    pk_vals = var(idpks);  %value of peak
+    pk_vals = var(idpks);      %value of peak
     idcls = clusters(pk_date,pk_vals,days(opts.clint));
 end
 
@@ -1170,6 +1157,41 @@ function seltxt = getSelectionText(selection)
     end
 end
 
+
+%%
+function [nrch,stpnts] = getReachPoints(ndpnt)
+    %UI to get definition of reaches for summary peclet plot    
+    promptxt = {'Number of reaches',sprintf('ID of start points (<%d)',ndpnt)};
+    defaults = {'1','1'};
+     ok = 0;
+     while ok<1   
+        inp = inputdlg(promptxt,'Reaches',1,defaults);
+        if isempty(inp), return; end
+        nrch = str2double(inp{1});
+        stpnts = str2num(inp{2}); %#ok<ST2NM> vector input
+        if numel(stpnts)==nrch
+            ok = 1;
+        else
+            warndlg('Number of start points must match number of reaches')
+        end
+    end
+end
+
+%%
+function peclet = checkPecletLimits(peclet,varsel,nullvalue,diffvalue)
+    %check peclet value and set to nullvalue if test 1 fails and to
+    %diffvalue if test 2 fails
+    if isscalar(peclet)
+        if isnan(peclet) || isinf(peclet)
+            peclet = nullvalue;
+        elseif peclet>-varsel.pecthr && peclet<varsel.pecthr
+            peclet = diffvalue;
+        end
+    elseif any(peclet>-varsel.pecthr & peclet<varsel.pecthr)
+        peclet(peclet>-varsel.pecthr & peclet<varsel.pecthr) = diffvalue;
+    end
+end
+
 %% ------------------------------------------------------------------------
 % Utility functions for plotting 
 %--------------------------------------------------------------------------
@@ -1236,7 +1258,7 @@ function [ax,hs] = plotPeclet(var,bintime,desc,issurf)
         hc = colorbar;
         hc.Label.String = desc.var;        
     else
-        hs = scatter3(ax,X,Y,var',10,'b','filled','MarkerEdgeColor','w');
+        hs = scatter3(ax,X,Y,var',10,'b','filled','Marker','square','MarkerEdgeColor','none');
     end
     view(2)
     axis tight
@@ -1311,6 +1333,68 @@ function ax = plotPeriodSurface(mtime,point,mnmxMn,varsel,plotxt)
     hold off
 end
 
+%%
+function reachPlot(npnts,bintime,intervalPeclet,varsel,desc)
+    %plot summary mean values for selected reaches 
+    [nrch,stpnts] = getReachPoints(npnts);
+    ndpnts = [stpnts(2:end)-1,npnts];  
+    ntime = numel(bintime);
+    rchmean = zeros(ntime,nrch); rchpecp = NaN(ntime,nrch); rchpecn = rchpecp;
+    for i=1:ntime
+        for j=1:nrch
+            rchmean(i,j) = mean(intervalPeclet(i,stpnts(j):ndpnts(j)),'omitnan');
+            if any(intervalPeclet(i,stpnts(j):ndpnts(j))>varsel.pecthr)
+                rchpecp(i,j) = nrch-j+1; 
+            end
+            if any(intervalPeclet(i,stpnts(j):ndpnts(j))<-varsel.pecthr)
+                rchpecn(i,j) = -(nrch-j+1); 
+            end
+        end
+    end
+    %plot results
+    hfig = figure('Tag','PlotFig');
+    axs = axes(hfig);
+    hold(axs,'on')
+    for j=1:nrch
+        plot(axs,bintime,rchmean(:,j),'DisplayName',sprintf('Reach %d',j))
+    end
+    ypec = [1,1]*varsel.pecthr;
+    hp = plot(axs,axs.XLim,ypec,'--','Color',[0.75,0.75,0.75]);
+    hp.Annotation.LegendInformation.IconDisplayStyle = 'off';
+    hp = plot(axs,axs.XLim,-ypec,'--','Color',[0.75,0.75,0.75]);
+    hp.Annotation.LegendInformation.IconDisplayStyle = 'off';
+    hold(axs,'off')
+    xlabel('Time')
+    ylabel('Peclet ratio')
+    title(sprintf('Case: %s',desc.case))
+    subtitle(desc.subtitle)
+    legend
+
+    hfig = figure('Tag','PlotFig');
+    axb = axes(hfig);
+    colorlist = axb.ColorOrder;
+    axb.ColorOrder = colorlist(1:nrch,:);
+    axb.YTickLabel = string([1:nrch,0,fliplr(1:nrch)]');
+    axb.YTick = -nrch:1:nrch;
+
+    hold(axb,'on')
+    for j=1:nrch
+        %jj = nrch-j+1; %reverse plotting order
+        hs1 = stem(axb,bintime,rchpecp(:,j),'Linewidth',1,...
+                               'Marker','.','DisplayName',sprintf('Reach %d',j));
+        hs1.SeriesIndex = j;
+        hs2 = stem(axb,bintime,rchpecn(:,j),'LineWidth',1,'Marker','.');
+        hs2.SeriesIndex =  hs1.SeriesIndex;  %force the same color
+        hs2.Annotation.LegendInformation.IconDisplayStyle = 'off';
+    end
+    hold(axb,'off')
+    xlabel('Time')
+    ylabel('Reach number & Peclet event -1>P>1')
+    title(sprintf('Case: %s',desc.case))
+    desc.subtitle = replace(desc.subtitle,'mean','events');
+    subtitle(desc.subtitle)
+    legend
+end
 
 %%
 function setAxisLimits(ax,npnts,std,nnd)
@@ -1318,6 +1402,7 @@ function setAxisLimits(ax,npnts,std,nnd)
     ax.XLim = [1,npnts];
     ax.YLim = [datenum(['01-01-',std]),datenum(['12-31-',nnd])]; %#ok<DATNM>
 end
+
 %%
 function ax = plotPeriodPeclet(mtime,point,varsel,plotxt)
     %plot a surface of the period peclet value and the peclet events
