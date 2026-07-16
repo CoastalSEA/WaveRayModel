@@ -1,4 +1,4 @@
-function wrm_transport_plots(obj,mobj,option)
+function wrm_transport_plots(obj,mobj,option) %#ok<INUSD>
 %                                                                          **************************
 %-------function help------------------------------------------------------Currently under development
 % NAME
@@ -297,19 +297,26 @@ function duration_exceedance(obj)
     tdur = years(1);       %annual
     tstep = years(0.08);   %monthly
 
-    txt = sprintf('Set thresohld and sampling durations\nDefine threshold:');
-    promptxt = {txt,'Sampling period (y,d,h,m,s):',...
+    txt = sprintf('Set threshold and sampling durations\nDefine threshold:');
+    promptxt = {txt,'Positive or Negative (1/0)','Sampling period (y,d,h,m,s):',...
                 'Time step interval (y,d,h,m,s)','Method (mean, sum,... xx prctile}'};
-    defaults = ['0',cellstr(tdur),cellstr(tstep),'mean'];  %'95 prctile'
+    defaults = ['0','1',cellstr(tdur),cellstr(tstep),'mean'];  %'95 prctile'
     answer = inputdlg(promptxt,'MovingTime',1,defaults);
     if isempty(answer), return; end
     threshold = str2double(answer{1});
-    tdur = str2duration(answer{2});
-    tstep = str2duration(answer{3});
-    method = answer{4};
-    
+    ispos = logical(str2double(answer{2}));
+    tdur = str2duration(answer{3});
+    tstep = str2duration(answer{4});
+    method = answer{5};
+
     for i=1:npnts
         var = dst.(pntnames{i}).(varsel.name);
+        if ~ispos % for peak negative values invert variable
+            var = -var;
+            %invert threshold if specified as a negative value
+            if threshold<0; threshold = -threshold; end
+        end
+
         [stid,edid] = zero_crossing(var,threshold);
         if isempty(stid)
             hw = warndlg('No zero-crossings found'); waitfor(hw); continue;
@@ -341,8 +348,9 @@ function duration_exceedance(obj)
     desc = struct('case',dst.(pntnames{1}).Description,'var',vartxt);  
     vm(vm==0) = NaN;
     [ax,~] = plotPeclet(vm',tm,desc,1);
-    ax.Subtitle.String = sprintf('Sampling period %s; Time step %s',...
-                                                        char(tdur),char(tstep));
+    if ispos, sgntxt = 'Positive'; else, sgntxt = 'Negative'; end
+    ax.Subtitle.String = sprintf('%s %s; Sampling period %s; Time step %s',...
+                                sgntxt,varsel.name,char(tdur),char(tstep));
     ax.Title.String = sprintf('%s: %.3g threshold',ax.Title.String,threshold);
 end
 
@@ -438,7 +446,7 @@ function monthly_drift_peclet(obj,msgtxt)
             desc = struct('case',dst.(pntnames{1}).Description,'var',desctxt);    
             axm = plotPeclet(pointup',bins,desc,0);  
             hold on
-            scatter3(axm,X,Y,-pointdown,10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+            scatter3(axm,X,Y,-pointdown,6,yellow,'filled','Marker','square','MarkerEdgeColor','none')
             hold off  
             view(2)
             datetick('y', 'yyyy'); %#ok<DATIC>
@@ -470,8 +478,8 @@ function monthly_drift_peclet(obj,msgtxt)
             [xq, yq] = meshgrid(1:npnts,annbins); 
             axa = plotPeclet(annualMean,annbins,desc,1); 
             hold(axa,'on')
-            scatter3(axa,xq,yq,clup*axa.ZLim(2),10,'b','filled','Marker','square','MarkerEdgeColor','none')
-            scatter3(axa,xq,yq,cldn*axa.ZLim(2),10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+            scatter3(axa,xq,yq,clup*axa.ZLim(2),6,'b','filled','Marker','square','MarkerEdgeColor','none')
+            scatter3(axa,xq,yq,cldn*axa.ZLim(2),6,yellow,'filled','Marker','square','MarkerEdgeColor','none')
             hold(axa,'off') 
             subtitle(axa,pecsubtxt('Year','mean',varsel.calms.text,seltxt,ptxt))
             % axa.CLim = [-2,2];
@@ -483,8 +491,8 @@ function monthly_drift_peclet(obj,msgtxt)
                              [bintxt{1},'ly mean of ',lower(varsel.labl)]);
             axc = plotPeclet(intervalMean,bins,desc,1);  
             hold on
-            scatter3(axc,X,Y,-pointdown*axc.ZLim(2),10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
-            scatter3(axc,X,Y,pointup*axc.ZLim(2),10,'b','filled','Marker','square','MarkerEdgeColor','none')  
+            scatter3(axc,X,Y,-pointdown*axc.ZLim(2),6,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+            scatter3(axc,X,Y,pointup*axc.ZLim(2),6,'b','filled','Marker','square','MarkerEdgeColor','none')  
             hold off
             subtitle(axc,pecsubtxt(bintxt{1},'mean',varsel.calms.text,seltxt,ptxt))
             setAxisLimits(axc,npnts,'1980','2025'); %bespoke ******************
@@ -589,7 +597,7 @@ function cluster_peclet(obj,msgtxt)
                 %plot just the  peclet points when >1
                 axm = plotPeclet(clup',y,desc,0); 
                 hold(axm,'on')
-                scatter3(axm,xq,yq,cldn,10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+                scatter3(axm,xq,yq,cldn,6,yellow,'filled','Marker','square','MarkerEdgeColor','none')
                 hold(axm,'off') 
                 view(2)
                 datetick('y', 'yyyy'); %#ok<DATIC>
@@ -621,8 +629,8 @@ function cluster_peclet(obj,msgtxt)
                 axc = plotPeclet(zqc',y,desc,1);  
                 %axc.CLim = [-options.threshold*3,options.threshold*3];
                 hold(axc,'on')
-                scatter3(axc,xq,yq,clup,10,'b','filled','Marker','square','MarkerEdgeColor','none')
-                scatter3(axc,xq,yq,cldn,10,yellow,'filled','Marker','square','MarkerEdgeColor','none')
+                scatter3(axc,xq,yq,clup,6,'b','filled','Marker','square','MarkerEdgeColor','none')
+                scatter3(axc,xq,yq,cldn,6,yellow,'filled','Marker','square','MarkerEdgeColor','none')
                 hold(axc,'off') 
                 setAxisLimits(axc,npnts,'1980','2025'); %bespoke ******************
                 
@@ -793,6 +801,11 @@ function [cluster,userops] = absClusters(options,dst,varsel)
             % return;
         else
             medges = [mtime(1),medges,mtime(end)];
+            %check that ends are not too short a duration
+            cldt = hours(diff(medges));
+            mincls = userops.mincluster*24/hours(mode(diff(mtime)));
+            idx = cldt<mincls;
+            if any(idx), medges(idx) = []; end
         end
         
         %find the indices of the variable within each interval
@@ -802,10 +815,14 @@ function [cluster,userops] = absClusters(options,dst,varsel)
         for j=1:nint
             idint = intervals==j;
             binvar = Var(idint);
-            meanVar = mean(binvar,'omitnan');
-            stdVar = std(binvar,'omitnan');
-            peclet = meanVar./stdVar;
-            peclet = checkPecletLimits(peclet,varsel,NaN,peclet);
+            if isempty(binvar)
+                meanVar = NaN; stdVar = NaN; peclet = NaN;
+            else
+                meanVar = mean(binvar,'omitnan');
+                stdVar = std(binvar,'omitnan');
+                peclet = meanVar./stdVar;
+                peclet = checkPecletLimits(peclet,varsel,NaN,peclet);
+            end
 
             cluster.Ints{i,j} = intstart(j); %#ok<*AGROW>
             cluster.Mean{i,j} = meanVar;
@@ -909,7 +926,8 @@ function [cluster,userops]  = posnegClusters(options,dst,varsel)
             peclet = meanVar./stdVar;
 
             %set diffusion values to 0
-            peclet = checkPecletLimits(peclet,varsel,0,0);
+            peclet = checkPecletLimits(peclet,varsel,NaN,peclet);
+            %peclet = checkPecletLimits(peclet,varsel,0,0);
 
             cluster.Ints{i,j} = intstart(j); %#ok<*AGROW>
             cluster.Mean{i,j} = meanVar;
@@ -1016,7 +1034,7 @@ function medges = mergePosNegClusters(var,mtime,idpos,idneg,opts)
     else
         medges = sort(unique([mdates.posstart,mdates.posend,mdates.negstart,mdates.negend]));
     end
-    medges = sort(unique([mdates.posstart,mdates.posend]));
+    %medges = sort(unique([mdates.posstart,mdates.posend]));
 
     if ~isempty(medges) && opts.isplot
         plotEdges(var,mtime,medges,'Intervals to used for statistics');
@@ -1186,6 +1204,8 @@ function peclet = checkPecletLimits(peclet,varsel,nullvalue,diffvalue)
             peclet = nullvalue;
         elseif peclet>-varsel.pecthr && peclet<varsel.pecthr
             peclet = diffvalue;
+        % elseif peclet<-varsel.pecthr*2 || peclet>varsel.pecthr*2
+        %     peclet = sign(peclet)*varsel.pecthr*2;
         end
     elseif any(peclet>-varsel.pecthr & peclet<varsel.pecthr)
         peclet(peclet>-varsel.pecthr & peclet<varsel.pecthr) = diffvalue;
@@ -1258,7 +1278,7 @@ function [ax,hs] = plotPeclet(var,bintime,desc,issurf)
         hc = colorbar;
         hc.Label.String = desc.var;        
     else
-        hs = scatter3(ax,X,Y,var',10,'b','filled','Marker','square','MarkerEdgeColor','none');
+        hs = scatter3(ax,X,Y,var',6,'b','filled','Marker','square','MarkerEdgeColor','none');
     end
     view(2)
     axis tight
@@ -1328,8 +1348,9 @@ function ax = plotPeriodSurface(mtime,point,mnmxMn,varsel,plotxt)
     subtitle(sprintf('%sly Means (Peclet ratio: >1 blue o; <1 yellow o)',plotxt{4}))
     hold on
     %add points where peclet exceeds above the surface
-    scatter3(sax,X,Y,-point.down*2,20,'y','filled','MarkerEdgeColor','k')
-    scatter3(sax,X,Y,point.up*2,20,'b','filled','MarkerEdgeColor','w')
+    yellow = [0.929,0.694,0.125];
+    scatter3(sax,X,Y,-point.down*2,25,yellow,'LineWidth',1)
+    scatter3(sax,X,Y,point.up*2,25,'b','LineWidth',1)
     hold off
 end
 
@@ -1347,7 +1368,7 @@ function reachPlot(npnts,bintime,intervalPeclet,varsel,desc)
                 rchpecp(i,j) = nrch-j+1; 
             end
             if any(intervalPeclet(i,stpnts(j):ndpnts(j))<-varsel.pecthr)
-                rchpecn(i,j) = -(nrch-j+1); 
+                rchpecn(i,j) = -j;%-(nrch-j+1); 
             end
         end
     end
@@ -1363,6 +1384,8 @@ function reachPlot(npnts,bintime,intervalPeclet,varsel,desc)
     hp.Annotation.LegendInformation.IconDisplayStyle = 'off';
     hp = plot(axs,axs.XLim,-ypec,'--','Color',[0.75,0.75,0.75]);
     hp.Annotation.LegendInformation.IconDisplayStyle = 'off';
+    hp = plot(axs,axs.XLim,[0,0],'--','Color',[0.5,0.5,0.5]);
+    hp.Annotation.LegendInformation.IconDisplayStyle = 'off';
     hold(axs,'off')
     xlabel('Time')
     ylabel('Peclet ratio')
@@ -1374,17 +1397,18 @@ function reachPlot(npnts,bintime,intervalPeclet,varsel,desc)
     axb = axes(hfig);
     colorlist = axb.ColorOrder;
     axb.ColorOrder = colorlist(1:nrch,:);
-    axb.YTickLabel = string([1:nrch,0,fliplr(1:nrch)]');
+    axb.YTickLabel = string([-fliplr(1:nrch),0,fliplr(1:nrch)]');
     axb.YTick = -nrch:1:nrch;
 
     hold(axb,'on')
     for j=1:nrch
-        %jj = nrch-j+1; %reverse plotting order
         hs1 = stem(axb,bintime,rchpecp(:,j),'Linewidth',1,...
                                'Marker','.','DisplayName',sprintf('Reach %d',j));
         hs1.SeriesIndex = j;
-        hs2 = stem(axb,bintime,rchpecn(:,j),'LineWidth',1,'Marker','.');
-        hs2.SeriesIndex =  hs1.SeriesIndex;  %force the same color
+        jj = nrch-j+1; %reverse plotting order
+        hs2 = stem(axb,bintime,rchpecn(:,jj),'LineWidth',1,'Marker','.');
+        %hs2.SeriesIndex =  hs1.SeriesIndex;  %force the same color
+        hs2.SeriesIndex = jj;
         hs2.Annotation.LegendInformation.IconDisplayStyle = 'off';
     end
     hold(axb,'off')
@@ -1401,34 +1425,4 @@ function setAxisLimits(ax,npnts,std,nnd)
     %format the axes limits to fixed ranges 
     ax.XLim = [1,npnts];
     ax.YLim = [datenum(['01-01-',std]),datenum(['12-31-',nnd])]; %#ok<DATNM>
-end
-
-%%
-function ax = plotPeriodPeclet(mtime,point,varsel,plotxt)
-    %plot a surface of the period peclet value and the peclet events
-    hf = figure('Name','SedTrans','Tag','PlotFig');
-    sax = axes(hf);
-    [m,n] = size(point.pec);
-    [X,Y] = meshgrid(1:n,1:m);
-    surf(sax,X,Y,point.pec)
-    shading interp
-    view(2)
-    axis tight
-    ax.Layer = 'top';
-    colormap(cmap_selection(19));
-    hc = colorbar;
-    hc.Label.String = varsel.labl;
-    xlabel(plotxt{4})
-    ylabel('Year')
-    idx = str2double(sax.YTickLabel);
-    sax.YTickLabel = mtime.per(idx);
-    sax.CLim = [-2,2];
-    title(sprintf('%s for %s (%s) %s',varsel.desc,plotxt{1:3}));
-    subtitle(sprintf('%sly peclet ratio (Peclet ratio: >1 filled red o; <1 red o)',plotxt{4}))
-    hold on
-    %add points where peclet excceeds above the surface
-
-    scatter3(sax,X,Y,point.down./point.down*2,20,'r')
-    scatter3(sax,X,Y,point.up./point.up*2,20,'r','filled')
-    hold off
 end
