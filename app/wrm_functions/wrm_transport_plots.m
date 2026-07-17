@@ -336,9 +336,6 @@ function duration_exceedance(obj)
         if i==1 || numel(vmi)==size(vm,1)            
             tm = tmi;
         else
-            % [idx, ~] = ismember(tm, tmi);
-            % vm(:,i) = NaN(size(vm,1),1);
-            % vm(idx,i) = vmi;
             vmi = interp1(tmi,vmi,tm,'linear');
         end
         vm(:,i) = vmi;
@@ -471,7 +468,6 @@ function monthly_drift_peclet(obj,msgtxt)
             
             case 'Annual mean'
             %annual mean of variable as a surface plot + peclet ratio points (position,time)
-            % annualPeclet(annualPeclet==0) = NaN;
             desc = struct('case',dst.(pntnames{1}).Description,'var',...
                                     ['Annual mean of ',lower(varsel.labl)]);
             annbins = datenum(bintime.periods); %#ok<DATNM>
@@ -549,6 +545,7 @@ function cluster_peclet(obj,msgtxt)
     else
         [cluster,options] = posnegClusters(options,dst,varsel);        
     end
+    if isempty(cluster), return; end
 
     clustpoint = []; clustpec = []; clustints = []; varints = [];
     for i=1:npnts
@@ -682,7 +679,6 @@ function multi_rose_plots(obj)
         if sok==0, ok = 1; continue; end
 
         %get the direction to use
-
         idvar = find(contains(vardesc,'direction'));
         seldir = 1;
         if numel(idvar)>1  %user needs to select direction
@@ -761,17 +757,17 @@ function [cluster,userops] = absClusters(options,dst,varsel)
                 Var = dst.(pntnames{sel}).(varsel.name); 
                 vardst = getDSTable(dst.(pntnames{sel}),'VariableNames',varsel.name);
                 vardst.(varsel.name) = abs(vardst.(varsel.name));
-                [idcls,userops] = getclusters(vardst,options);
+                promptxt = sprintf('Cluster definition for %s at Point %d',...
+                                       vardst.VariableNames{1},sel);
+                [idcls,userops] = getclusters(vardst,options,promptxt);
                 userops.mincluster = options.mincluster;
                 userops.isplot = options.isplot;
-                mergeAbsClusters(Var,mtime,idcls,userops);
-                medges = mergeAbsClusters(Var,mtime,idcls,userops);
+                userops.point = sel;
+                [medges,isok] = mergeAbsClusters(Var,mtime,idcls,userops);
                 if isempty(medges)
                     getdialog('No clusters found. Change threshold or minimum duration of cluster')
-                else
-                    ans1 = questdlg('Use selected options or examine another point?',...
-                             'Clusters','Use selected','New point','Use selected');
-                    if strcmp(ans1,'Use selected'), ok = 0; end
+                elseif isok
+                    ok = 0;
                 end
         end
     
@@ -781,7 +777,7 @@ function [cluster,userops] = absClusters(options,dst,varsel)
         userops = options;
     end
 
-    if strcmp(ans2,'Quit'), return; end
+    if strcmp(ans2,'Quit'), cluster = []; return; end
 
     userops.isplot = false; %supress plots in for loop
     hw = waitbar(0,'Processing point 0');
@@ -797,15 +793,6 @@ function [cluster,userops] = absClusters(options,dst,varsel)
         medges = mergeAbsClusters(Var,mtime,idcls,userops);
         if isempty(medges)
             medges = [mtime(1),mtime(end)];
-            % warndlg(sprintf('No clusters found for point %d\nTry changing the threshold',i));
-            % return;
-        else
-            medges = [mtime(1),medges,mtime(end)];
-            %check that ends are not too short a duration
-            cldt = hours(diff(medges));
-            mincls = userops.mincluster*24/hours(mode(diff(mtime)));
-            idx = cldt<mincls;
-            if any(idx), medges(idx) = []; end
         end
         
         %find the indices of the variable within each interval
@@ -839,8 +826,6 @@ function [cluster,userops]  = posnegClusters(options,dst,varsel)
     %select varaiable and get time data
     pntnames = fieldnames(dst);
     npnts = length(pntnames);
-    % varsel = getVariable(dst,pntnames,1);  %selects Qs without prompting user
-    % if isempty(var), return; end
     mtime = dst.(pntnames{1}).RowNames;
 
     %default to use same options for postive and negative drift
@@ -850,7 +835,7 @@ function [cluster,userops]  = posnegClusters(options,dst,varsel)
     %set a minimum trheold to remove zero values
     ans2 = questdlg('Check settings for selected points?','Clusters','Yes','No','Quit','Yes');
     if strcmp(ans2,'Quit')
-        return; 
+        cluster = []; return; 
     elseif strcmp(ans2,'Yes')
         promptxt = {'Accept figures are used to adjust the threshold selection';...
                     'The first plot sets the positive threshold';...
@@ -869,19 +854,25 @@ function [cluster,userops]  = posnegClusters(options,dst,varsel)
 
                 Var = dst.(pntnames{sel}).(varsel.name); 
                 posdst = getDSTable(dst.(pntnames{sel}),'VariableNames',varsel.name);
-                [idpos,userops.pos] = getclusters(posdst,options);
+                promptxt = sprintf('Positive %s cluster definition for Point %d',...
+                                       posdst.VariableNames{1},sel); 
+                [idpos,userops.pos] = getclusters(posdst,options,promptxt);
                 userops.pos.mincluster = options.mincluster;
                 userops.pos.isplot = options.isplot;
+                userops.pos.point = sel;
                 negdst = posdst;
                 negdst.(varsel.name) = negdst.(varsel.name)*-1;
-                [idneg,userops.neg] = getclusters(negdst,options);
+                promptxt = sprintf('Negative %s cluster definition for Point %d',...
+                                       negdst.VariableNames{1},sel); 
+                [idneg,userops.neg] = getclusters(negdst,options,promptxt);
                 userops.neg.mincluster = options.mincluster;
                 userops.neg.isplot = options.isplot;
-                mergePosNegClusters(Var,mtime,idpos,idneg,options);
-
-                ans1 = questdlg('Use selected options or examine another point?',...
-                         'Clusters','Use selected','New point','Use selected');
-                if strcmp(ans1,'Use selected'), ok = 0; end
+                [medges,isok] = mergePosNegClusters(Var,mtime,idpos,idneg,userops);
+                if isempty(medges)
+                    getdialog('No clusters found. Change threshold or minimum duration of cluster')
+                elseif isok
+                    ok = 0;
+                end
         end
 
         ans2 = questdlg('Proceed with analysis of all points using last set of options?',...
@@ -890,9 +881,9 @@ function [cluster,userops]  = posnegClusters(options,dst,varsel)
         %use same options for postive and negative drift
     end
 
-    if strcmp(ans2,'Quit'), return; end
+    if strcmp(ans2,'Quit'), cluster = []; return; end
 
-    options.isplot = false;
+    userops.pos.isplot = false; userops.neg.isplot = false;
     for i=1:npnts        
         Var = dst.(pntnames{i}).(varsel.name);        
         Var(abs(Var)<varsel.calms.value) = NaN; %remove near zero values
@@ -905,13 +896,9 @@ function [cluster,userops]  = posnegClusters(options,dst,varsel)
         idnegcls = getVarClusters(negdst,userops.neg);
 
         %merge any overlaps to define intervals to be used
-        medges = mergePosNegClusters(Var,mtime,idposcls,idnegcls,options); %only uses mincluster field in options
+        medges = mergePosNegClusters(Var,mtime,idposcls,idnegcls,userops); %only uses mincluster field in options
         if isempty(medges)
-            medges = [mtime(1),mtime(end)];
-            % warndlg(sprintf('No clusters found for point %d\nTry changing the threshold',i));
-            % return;
-        else
-            medges = [mtime(1),medges,mtime(end)];
+            medges = [mtime(1),mtime(end)];       
         end
         
         %find the indices of the variable within each interval
@@ -941,8 +928,7 @@ end
 function options = setClusterOptions(data,opts)
     %define the options used in a peaks and cluster data selection
     if nargin<2 || isempty(opts)
-        default = {num2str(mean(data,'omitnan')+std(data,'omitnan')),...
-                   '1','0','15','5'};
+        default = {num2str(mean(data,'omitnan')),'1','0','15','5'};                   
     else
         default{1} = num2str(opts.threshold);
         default{2} = num2str(opts.method);
@@ -985,7 +971,7 @@ function idcls = getVarClusters(dst,opts)
 end
 
 %%
-function medges = mergeAbsClusters(var,mtime,idpos,opts)
+function [medges,isok] = mergeAbsClusters(var,mtime,idpos,opts)
     %merge  absolute cluster selections to a single set of edges
     mincluster = opts.mincluster*24;      %min length of a cluster (h)
     dt = mode(diff(mtime));
@@ -995,25 +981,34 @@ function medges = mergeAbsClusters(var,mtime,idpos,opts)
     posshort = cellfun(func,postimes,"UniformOutput",false);
     postimes([posshort{:}]) = [];
 
-    mdates.posstart = cellfun(@(x) x(1),postimes);
-    mdates.posend = cellfun(@(x) x(end),postimes);
-    medges = sort(unique([mdates.posstart,mdates.posend]));
+    mdates.posstart = cellfun(@(x) x(1),postimes); %first date in each cell
+    mdates.posend = cellfun(@(x) x(end),postimes); %last date in each cell
+    medges = sort(unique([mdates.posstart,mdates.posend])); %sorted edges
 
     if ~isempty(medges) && opts.isplot
-        plotEdges(var,mtime,medges,'Intervals to used for statistics');
+        %plotEdges(var,mtime,medges,opts,'Intervals to used for statistics');
+        isok = get_plotEdges(var,mtime,medges,opts,'Intervals to use for statistics');
+    else
+        isok = true;
     end
 end
 
 %%
-function medges = mergePosNegClusters(var,mtime,idpos,idneg,opts)
+function [medges,isok] = mergePosNegClusters(var,mtime,idpos,idneg,opts)
     %merge positive and negative cluster selections to a single set of edges
-    mincluster = opts.mincluster*24;      %min length of a cluster (h)
     dt = mode(diff(mtime));
+    
+
+    mincluster = opts.pos.mincluster*24;      %min length of a cluster (h)
     mincls = floor(mincluster/hours(dt));  
     func = @(x) length(x)<mincls;
     postimes = {idpos(:).date};
     posshort = cellfun(func,postimes,"UniformOutput",false);
     postimes([posshort{:}]) = [];
+
+    mincluster = opts.neg.mincluster*24;      %min length of a cluster (h)
+    mincls = floor(mincluster/hours(dt));  
+    func = @(x) length(x)<mincls;    
     negtimes = {idneg(:).date};
     negshort = cellfun(func,negtimes,"UniformOutput",false);
     negtimes([negshort{:}]) = [];
@@ -1034,66 +1029,99 @@ function medges = mergePosNegClusters(var,mtime,idpos,idneg,opts)
     else
         medges = sort(unique([mdates.posstart,mdates.posend,mdates.negstart,mdates.negend]));
     end
-    %medges = sort(unique([mdates.posstart,mdates.posend]));
 
-    if ~isempty(medges) && opts.isplot
-        plotEdges(var,mtime,medges,'Intervals to used for statistics');
+    if ~isempty(medges) && opts.pos.isplot
+        isok = get_plotEdges(var,mtime,medges,opts,'Intervals to use for statistics');
+    else
+        isok = true;
     end
 end
 
 %%
 function mdates = mergeOverlaps(var,mtime,mdates,opts)
     %find any overlaps and merge any that are short
-    posstart = mdates.posstart;
-    posend = mdates.posend;
-    negstart = mdates.negstart;
-    negend = mdates.negend;
+    pos.start = mdates.posstart;
+    pos.end = mdates.posend;
+    neg.start = mdates.negstart;
+    neg.end = mdates.negend;
 
-    overlaps = findOverlaps(posstart,posend,negstart,negend);
-    if any(overlaps,'all')
-        
+    overlaps = findOverlaps(pos,neg);
+    if any(overlaps,'all')        
         [row, col] = find(overlaps);
         %plotMergedVar(var,mtime,posstart(row),posend(row),negstart(col),negend(col),'Unmerged cluster overlaps');
-        for k = 1:length(row)
-            overlap_start = max(posstart(row(k)), negstart(col(k)));
-            overlap_end = min(posend(row(k)), negend(col(k)));
-            overlap_length = hours(overlap_end-overlap_start);
-            if overlap_length<opts.mincluster*24    %split between the two
-                if posstart(row(k))<negstart(col(k)) && posend(row(k))<negend(col(k))
-                    posend(row(k)) = posend(row(k))-hours(overlap_length/2+0.0);
-                    negstart(col(k)) = negstart(col(k))+hours(overlap_length/2+0.0);
-                elseif posstart(row(k))>negstart(col(k)) && posend(row(k))>negend(col(k))
-                    posstart(row(k)) = posstart(row(k))+hours(overlap_length/2+0.0);
-                    negend(col(k)) = negend(col(k))-hours(overlap_length/2+0.0);
-                end
-            else
-                fprintf('Overlap %d: %s to %s\n', k, overlap_start, overlap_end);
-            end            
+        poso.start = pos.start(row); poso.end = pos.end(row);
+        nego.start = neg.start(col); nego.end = neg.end(col);
+        plotMergedVar(var,mtime,poso,nego,opts,'Unmerged cluster overlaps');
+        for k = 1:numel(row)
+            pn = [pos.start(row(k)), neg.start(col(k)), pos.end(row(k)), neg.end(col(k))];
+            pos.start(row(k)) = min(pn); %assign to pos and remove neg
+            neg.start(col(k)) = NaT;      %makes no difference as pos&neg going
+            pos.end(row(k)) = max(pn);   %be merged
+            neg.end(col(k)) = NaT;
         end
-        overlaps = findOverlaps(posstart,posend,negstart,negend);
-        [row, col] = find(overlaps);
-        if ~isempty(row)
-            if opts.isplot
-                plotMergedVar(var,mtime,posstart(row),posend(row),negstart(col),negend(col),'Cluster overlaps to be subdivided');
-            end
-            fprintf('%d overlaps have been subdivided into discrete intervals\n', length(row));
-        end
+        neg.start(isnat(neg.start)) = [];
+        neg.end(isnat(neg.end)) = [];
+        % for k = 1:length(row)
+        %     overlap_start = max(pos.start(row(k)), neg.start(col(k)));
+        %     overlap_end = min(pos.end(row(k)), neg.end(col(k)));
+        %     overlap_length = hours(overlap_end-overlap_start);
+        %     mincluster = (opts.pos.mincluster+opts.neg.mincluster)/2;
+        %     if overlap_length<mincluster*24    %split between the two
+        %         if pos.start(row(k))<neg.start(col(k)) && pos.end(row(k))<neg.end(col(k))
+        %             pos.end(row(k)) = pos.end(row(k))-hours(overlap_length/2+0.0);
+        %             neg.start(col(k)) = neg.start(col(k))+hours(overlap_length/2+0.0);
+        %         elseif pos.start(row(k))>neg.start(col(k)) && pos.end(row(k))>neg.end(col(k))
+        %             pos.start(row(k)) = pos.start(row(k))+hours(overlap_length/2+0.0);
+        %             neg.end(col(k)) = neg.end(col(k))-hours(overlap_length/2+0.0);
+        %         end
+        %     else
+        %         overlap_start = min(pos.start(row(k)), neg.start(col(k)));
+        %         overlap_end = max(pos.end(row(k)), neg.end(col(k)));
+        %         pos = removeOverlap(pos,overlap_start,overlap_end,row(k));
+        %         neg = removeOverlap(neg,overlap_start,overlap_end,col(k));
+        %         fprintf('Overlaps from %d: %s to %s merged\n', k, ...
+        %                                        overlap_start, overlap_end);
+        %     end            
+        % end
+        fprintf('%d overlaps have been merged\n', numel(row));
+        %check that all have been removed
+        % overlaps = findOverlaps(pos,neg);
+        % [row, col] = find(overlaps);
+        % if ~isempty(row)
+        %     if opts.pos.isplot
+        %         poso.start = pos.start(row); poso.end = pos.end(row);
+        %         nego.start = neg.start(col); nego.end = neg.end(col);
+        %         plotMergedVar(var,mtime,poso,nego,opts,'Cluster overlaps to be subdivided');
+        %     end            
+        % end
         %update struct with merged intervals
-        mdates = struct('posstart',posstart,'posend',posend,'negstart',negstart,'negend',negend);
+        mdates = struct('posstart',pos.start,'posend',pos.end,'negstart',neg.start,'negend',neg.end);
     end
 
     %-nested function------------------------------------------------------
-    function overlaps = findOverlaps(posstart,posend,negstart,negend)
+    function overlaps = findOverlaps(pos,neg)
         % Initialize a logical matrix to store overlaps
-        overlaps = false(length(posstart), length(negstart));
+        pstart = numel(pos.start);
+        nstart = numel(neg.start);
+        overlaps = false(pstart,nstart);
         
         % Check for overlaps between intervals
-        for i = 1:length(posstart)
-            for j = 1:length(negstart)
-                overlaps(i, j) = (posstart(i) <= negend(j)) && (negstart(j) <= posend(i));
+        for i = 1:pstart
+            for j = 1:nstart
+                overlaps(i, j) = (pos.start(i) <= neg.end(j)) && (neg.start(j) <= pos.end(i));
             end
         end
     end
+
+    % %-nested function------------------------------------------------------
+    % function var = removeOverlap(var,lapstart,lapend,idv)
+    %     if isbetween(var.start(idv),lapstart,lapend,'open')
+    %         var.start(idv) = [];
+    %     end
+    %     if isbetween(var.end(idv),lapstart,lapend,'open')
+    %         var.end(idv) = [];
+    %     end
+    % end
 end
 
 %% ------------------------------------------------------------------------
@@ -1175,7 +1203,6 @@ function seltxt = getSelectionText(selection)
     end
 end
 
-
 %%
 function [nrch,stpnts] = getReachPoints(ndpnt)
     %UI to get definition of reaches for summary peclet plot    
@@ -1216,28 +1243,30 @@ end
 % Utility functions for plotting 
 %--------------------------------------------------------------------------
 
-function plotMergedVar(var,mtime,pstart,pend,nstart,nend,titxt)
+function plotMergedVar(var,mtime,pos,neg,opts,titxt)
     %plot the merged selection
-    hf = figure('Name','SedTrans','Tag','PlotFig');
+    hf = figure('Name','SedTrans','Tag','StatFig');
     ax = axes(hf); 
     plot(ax,mtime,var,'Color',[0.75,0.75,0.75],'LineWidth',0.2)
     yy = ylim;
     posy = [0,yy(2)];
     negy = [0,yy(1)];
     hold on
-    if length(pstart)==2 
+    plot(ax,ax.XLim,[1,1]*opts.pos.threshold,'Color',[0.7,0.7,0.7])
+    plot(ax,ax.XLim,[-1,-1]*opts.neg.threshold,'Color',[0.7,0.7,0.7])
+    if numel(pos.start)==2 
          %needed if there are only 2 points to avoid plotting diagonal
         for i=1:2
-            plot([pstart(i), pstart(i)],posy,'-','Color',"#77AC30",'LineWidth',0.8);%#7E2F8E
-            plot([pend(i),pend(i)],posy,'--','Color',"#77AC30",'LineWidth',0.8);
-            plot([nstart(i),nstart(i)],negy,'-','Color','#A2142F','LineWidth',0.8);
-            plot([nend(i),nend(i)],negy,'--','Color','#A2142F','LineWidth',0.8); 
+            plot([pos.start(i), pos.start(i)],posy,'-','Color',"#77AC30",'LineWidth',1);%#7E2F8E
+            plot([pos.end(i),pos.end(i)],posy,'--','Color',"#77AC30",'LineWidth',1);
+            plot([neg.start(i),neg.start(i)],negy,'-','Color','#A2142F','LineWidth',1);
+            plot([neg.end(i),neg.end(i)],negy,'--','Color','#A2142F','LineWidth',1); 
         end
     else
-        plot([pstart', pstart'],posy,'-','Color',"#77AC30",'LineWidth',0.8);%#7E2F8E
-        plot([pend',pend'],posy,'--','Color',"#77AC30",'LineWidth',0.8);
-        plot([nstart',nstart'],negy,'-','Color','#A2142F','LineWidth',0.8);
-        plot([nend',nend'],negy,'--','Color','#A2142F','LineWidth',0.8);  
+        plot([pos.start', pos.start'],posy,'-','Color',"#77AC30",'LineWidth',1);%#7E2F8E
+        plot([pos.end',pos.end'],posy,'--','Color',"#77AC30",'LineWidth',1);
+        plot([neg.start',neg.start'],negy,'-','Color','#A2142F','LineWidth',1);
+        plot([neg.end',neg.end'],negy,'--','Color','#A2142F','LineWidth',1);  
     end
     hold off
     xlabel('Time')
@@ -1246,20 +1275,80 @@ function plotMergedVar(var,mtime,pstart,pend,nstart,nend,titxt)
 end
 
 %%
-function plotEdges(var,mtime,medges,titxt)
+function isaccept = get_plotEdges(var,mtime,medges,opts,figtitle)
+    %plot figure of edges with yes/no accept buttons
+    promptxt = 'Accept edges definition';
+    [h_plt,h_but] = acceptfigure(figtitle,promptxt,'StatFig');%StatFig is Tag to allow group delete
+    h_ax = axes(h_plt);
+    plotEdges(var,mtime,medges,opts,h_ax);
+
+    waitfor(h_but,'Tag');
+    if ~ishandle(h_but)   %this handles the user deleting figure window
+        isaccept = []; 
+    elseif strcmp(h_but.Tag,'Yes')
+        isaccept = true;
+        panelText(h_but,opts);
+    else
+        isaccept = false;
+    end  
+
+    function panelText(h_but,opts)
+        %set text to display selected parameters
+        hbyn = findobj(h_but,'Tag','YesNo');
+        delete(hbyn)
+        if isfield(opts,'pos')
+            npoint = opts.pos.point;
+            threshold = sprintf('%.5f / %.5f',opts.pos.threshold,opts.neg.threshold);
+            method = sprintf('%d / %d',opts.pos.method,opts.neg.method);
+            tint = sprintf('%g / %g',opts.pos.tint,opts.neg.tint);
+            clint = sprintf('%g / %g',opts.pos.clint,opts.neg.clint);
+        else
+            npoint = opts.point;
+            threshold = sprintf('%.5f',opts.threshold);
+            method = sprintf('%g',opts.method);
+            tint = sprintf('%g',opts.tint);
+            clint = sprintf('%g',opts.clint);
+        end
+        h_but.Title = sprintf('Selected parameters for Point %d',npoint);
+        txt1 = sprintf('Threshold for peaks = %s',threshold);
+        txt2 = sprintf('Selection method = %s',method);
+        txt3 = sprintf('Time between peaks = %s hours',tint);
+        txt4 = sprintf('Cluster time interval = %s days',clint);
+        selparams = sprintf('%s; %s; %s; %s',txt1,txt2,txt3,txt4);
+        uicontrol('Parent',h_but,'Tag','YesNo',...
+            'Style', 'text', 'String', selparams,...
+            'Units','normalized', ...
+            'Position', [0.01 0.01 0.99 0.8]);
+    end
+end
+
+%%
+function ax = plotEdges(var,mtime,medges,opts,ax)
     %plot the merged edges to be used to compute the statitics
     %ie the start or end of each cluster
+    if nargin<5   
+        hf = figure('Name','SedTrans','Tag','StatFig');
+        ax = axes(hf); 
+    end
     mvar = max(abs(var),[],'omitnan')/4;
-    hf = figure('Name','SedTrans','Tag','PlotFig');
-    ax = axes(hf); 
-    plot(ax,mtime,var,'Color',[0.75,0.75,0.75],'LineWidth',0.2)
-    hold on 
-        plot([medges',medges'],[-mvar,mvar],'-','Color',"#0072BD")
-        plot(medges,0,'.','Color',"#0072BD",'MarkerSize',4)
-    hold off
+    if isfield(opts,'pos')
+        posthreshold = opts.pos.threshold;
+        negthreshold = opts.neg.threshold;
+    else
+        posthreshold = opts.threshold;
+        negthreshold = opts.threshold;
+    end
+    posvar = var; posvar(var<posthreshold) = NaN;
+    negvar = var; negvar(var>-negthreshold) = NaN;
+    hold(ax,'on')
+        plot(ax,mtime,posvar,'Color',[0.75,0.75,0.75],'LineWidth',0.2)     %positive cluster variable
+        plot(ax,mtime,negvar,'Color',[0.75,0.75,0.75],'LineWidth',0.2)     %negative cluster variable
+        plot(ax,[medges(1:2:end)',medges(1:2:end)'],[-mvar,mvar],'-','Color',"#77AC30")  %cluster edges
+        plot(ax,[medges(2:2:end)',medges(2:2:end)'],[-mvar,mvar],'-','Color',"#D95319")  %cluster edges
+        plot(ax,medges,0,'.','Color',"#0072BD",'MarkerSize',4)
+    hold(ax,'off')
     xlabel('Time')
     ylabel('Selected drift variable')
-    title(titxt)
 end
 
 %%
